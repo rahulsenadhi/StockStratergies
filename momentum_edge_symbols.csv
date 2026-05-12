@@ -1,0 +1,157 @@
+Ticker,Company,Segment
+RELIANCE.NS,Reliance Industries,Nifty50
+HDFCBANK.NS,HDFC Bank,Nifty50
+ICICIBANK.NS,ICICI Bank,Nifty50
+INFY.NS,Infosys,Nifty50
+TCS.NS,Tata Consultancy Services,Nifty50
+BHARTIARTL.NS,Bharti Airtel,Nifty50
+SBIN.NS,State Bank of India,Nifty50
+HINDUNILVR.NS,Hindustan Unilever,Nifty50
+ITC.NS,ITC,Nifty50
+LT.NS,Larsen & Toubro,Nifty50
+KOTAKBANK.NS,Kotak Mahindra Bank,Nifty50
+AXISBANK.NS,Axis Bank,Nifty50
+BAJFINANCE.NS,Bajaj Finance,Nifty50
+MARUTI.NS,Maruti Suzuki,Nifty50
+SUNPHARMA.NS,Sun Pharmaceutical,Nifty50
+TITAN.NS,Titan Company,Nifty50
+ASIANPAINT.NS,Asian Paints,Nifty50
+WIPRO.NS,Wipro,Nifty50
+HCLTECH.NS,HCL Technologies,Nifty50
+TORNTPHARM.NS,Torrent Pharmaceuticals,Nifty50
+TRENT.NS,Trent,Nifty50
+BAJAJFINSV.NS,Bajaj Finserv,Nifty50
+NTPC.NS,NTPC,Nifty50
+POWERGRID.NS,Power Grid Corporation,Nifty50
+ONGC.NS,Oil & Natural Gas Corporation,Nifty50
+COALINDIA.NS,Coal India,Nifty50
+DRREDDY.NS,Dr Reddy's Laboratories,Nifty50
+CIPLA.NS,Cipla,Nifty50
+DIVISLAB.NS,Divi's Laboratories,Nifty50
+BPCL.NS,Bharat Petroleum,Nifty50
+TATASTEEL.NS,Tata Steel,Nifty50
+JSWSTEEL.NS,JSW Steel,Nifty50
+GRASIM.NS,Grasim Industries,Nifty50
+EICHERMOT.NS,Eicher Motors,Nifty50
+HEROMOTOCO.NS,Hero MotoCorp,Nifty50
+BRITANNIA.NS,Britannia Industries,Nifty50
+M&M.NS,Mahindra & Mahindra,Nifty50
+NESTLEIND.NS,Nestle India,Nifty50
+ADANIENT.NS,Adani Enterprises,Nifty50
+ADANIPORTS.NS,Adani Ports & SEZ,Nifty50
+ULTRACEMCO.NS,UltraTech Cement,Nifty50
+HDFCLIFE.NS,HDFC Life Insurance,Nifty50
+SBILIFE.NS,SBI Life Insurance,Nifty50
+TATACONSUM.NS,Tata Consumer Products,Nifty50
+HAL.NS,Hindustan Aeronautics,Nifty50
+APOLLOHOSP.NS,Apollo Hospitals,Nifty50
+INDUSINDBK.NS,IndusInd Bank,Nifty50
+BAJAJ-AUTO.NS,Bajaj Auto,Nifty50
+HINDALCO.NS,Hindalco Industries,Nifty50
+ETERNAL.NS,Zomato (Eternal),Nifty50
+TECHM.NS,Tech Mahindra,NiftyNext50
+SHREECEM.NS,Shree Cement,NiftyNext50
+ABB.NS,ABB India,NiftyNext50
+BANKBARODA.NS,Bank of Baroda,NiftyNext50
+BEL.NS,Bharat Electronics,NiftyNext50
+BHEL.NS,Bharat Heavy Electricals,NiftyNext50
+BOSCHLTD.NS,Bosch,NiftyNext50
+CANBK.NS,Canara Bank,NiftyNext50
+CHOLAFIN.NS,Cholamandalam Investment,NiftyNext50
+COLPAL.NS,Colgate-Palmolive India,NiftyNext50
+DABUR.NS,Dabur India,NiftyNext50
+DLF.NS,DLF,NiftyNext50
+GODREJCP.NS,Godrej Consumer Products,NiftyNext50
+HAVELLS.NS,Havells India,NiftyNext50
+HINDZINC.NS,Hindustan Zinc,NiftyNext50
+INDUSTOWER.NS,Indus Towers,NiftyNext50
+IOC.NS,Indian Oil Corporation,NiftyNext50
+IRCTC.NS,Indian Railway Catering,NiftyNext50
+IRFC.NS,Indian Railway Finance,NiftyNext50
+JINDALSTEL.NS,Jindal Steel & Power,NiftyNext50
+MUTHOOTFIN.NS,Muthoot Finance,NiftyNext50
+NAUKRI.NS,Info Edge (Naukri),NiftyNext50
+NHPC.NS,NHPC,NiftyNext50
+NMDC.NS,NMDC,NiftyNext50
+OBEROIRLTY.NS,Oberoi Realty,NiftyNext50
+OFSS.NS,Oracle Financial Services,NiftyNext50
+PAGEIND.NS,Page Industries,NiftyNext50
+PIIND.NS,PI Industries,NiftyNext50
+PNB.NS,Punjab National Bank,NiftyNext50
+RECLTD.NS,REC,NiftyNext50
+SHRIRAMFIN.NS,Shriram Finance,NiftyNext50
+SIEMENS.NS,Siemens India,NiftyNext50
+SRF.NS,SRF,NiftyNext50
+TATAPOWER.NS,Tata Power,NiftyNext50
+TVSMOTOR.NS,TVS Motor Company,NiftyNext50
+VEDL.NS,Vedanta,NiftyNext50
+VOLTAS.NS,Voltas,NiftyNext50
+ZEEL.NS,Zee Entertainment,NiftyNext50
+FEDERALBNK.NS,Federal Bank,NiftyNext50
+FORTIS.NS,Fortis Healthcare,NiftyNext50
+ALKEM.NS,Alkem Laboratories,Midcap
+AUROPHARMA.NS,Aurobindo Pharma,Midcap
+BERGEPAINT.NS,Berger Paints,Midcap
+BSE.NS,BSE,Midcap
+CDSL.NS,CDSL,Midcap
+CROMPTON.NS,Crompton Greaves Consumer,Midcap
+DEEPAKNTR.NS,Deepak Nitrite,Midcap
+DIXON.NS,Dixon Technologies,Midcap
+EMAMILTD.NS,Emami,Midcap
+ESCORTS.NS,Escorts Kubota,Midcap
+GLAND.NS,Gland Pharma,Midcap
+JUBLFOOD.NS,Jubilant FoodWorks,Midcap
+KAYNES.NS,Kaynes Technology,Midcap
+LAURUSLABS.NS,Laurus Labs,Midcap
+LTTS.NS,L&T Technology Services,Midcap
+LUPIN.NS,Lupin,Midcap
+MARICO.NS,Marico,Midcap
+MAXHEALTH.NS,Max Healthcare Institute,Midcap
+MOTHERSON.NS,Samvardhana Motherson,Midcap
+MPHASIS.NS,Mphasis,Midcap
+NYKAA.NS,FSN E-Commerce (Nykaa),Midcap
+PERSISTENT.NS,Persistent Systems,Midcap
+PHOENIXLTD.NS,Phoenix Mills,Midcap
+PIDILITIND.NS,Pidilite Industries,Midcap
+POLICYBZR.NS,PB Fintech (PolicyBazaar),Midcap
+POLYCAB.NS,Polycab India,Midcap
+SCHAEFFLER.NS,Schaeffler India,Midcap
+SONACOMS.NS,Sona BLW Precision,Midcap
+TATAELXSI.NS,Tata Elxsi,Midcap
+TRIDENT.NS,Trident,Midcap
+UJJIVANSFB.NS,Ujjivan Small Finance Bank,Midcap
+VGUARD.NS,V-Guard Industries,Midcap
+VINATIORGA.NS,Vinati Organics,Midcap
+ZYDUSLIFE.NS,Zydus Lifesciences,Midcap
+JSWENERGY.NS,JSW Energy,Midcap
+GRINDWELL.NS,Grindwell Norton,Midcap
+KPIL.NS,Kalpataru Projects,Midcap
+SAFARI.NS,Safari Industries,Midcap
+MEDANTA.NS,Medanta (Global Health),Midcap
+PATANJALI.NS,Patanjali Foods,Midcap
+WELSPUNLIV.NS,Welspun Living,Midcap
+UNITDSPR.NS,United Spirits,Midcap
+GODREJPROP.NS,Godrej Properties,Midcap
+LICI.NS,LIC of India,Largecap
+ADANIGREEN.NS,Adani Green Energy,Largecap
+ATGL.NS,Adani Total Gas,Largecap
+ADANIENSOL.NS,Adani Energy Solutions,Largecap
+RITES.NS,RITES,PSU
+RVNL.NS,Rail Vikas Nigam (RVNL),PSU
+HUDCO.NS,Housing & Urban Dev Corp,PSU
+IREDA.NS,Indian Renewable Energy Dev,PSU
+NBCC.NS,NBCC India,PSU
+SJVN.NS,SJVN,PSU
+PRESTIGE.NS,Prestige Estates Projects,Realty
+BRIGADE.NS,Brigade Enterprises,Realty
+SOBHA.NS,Sobha,Realty
+METROPOLIS.NS,Metropolis Healthcare,Healthcare
+THYROCARE.NS,Thyrocare Technologies,Healthcare
+SYNGENE.NS,Syngene International,Healthcare
+AARTIIND.NS,Aarti Industries,Chemicals
+APLAPOLLO.NS,APL Apollo Tubes,Industrials
+NIACL.NS,New India Assurance,Insurance
+ICICIGI.NS,ICICI Lombard General Insurance,Insurance
+HDFCAMC.NS,HDFC Asset Management,Finance
+ANGELONE.NS,Angel One,Finance
+CAMS.NS,CAMS,Finance
