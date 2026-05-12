@@ -530,7 +530,14 @@ def compute_signals(filters_active: dict, min_score: int,
         df_out = df_out[df_out['Score'] >= min_score]
         funnel['final'] = len(df_out)
 
-    return df_out, funnel, is_bull_today
+    # Find the latest date across all loaded CSVs so we can warn if data is stale
+    latest_date = None
+    for df_d in ohlcv.values():
+        d = df_d.index[-1]
+        if latest_date is None or d > latest_date:
+            latest_date = d
+
+    return df_out, funnel, is_bull_today, latest_date
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1666,7 +1673,7 @@ def main():
 
         # ── Load data ──────────────────────────────────────────────────────────
         with st.spinner('Computing signals across universe…'):
-            sigs, funnel, is_bull = compute_signals(
+            sigs, funnel, is_bull, latest_date = compute_signals(
                 filters_active={k: controls[k] for k in ('regime','f1','f2','f3','f4','f5','f6','vol')},
                 min_score=controls['min_score'],
                 exchange_filter=controls['exchange'],
@@ -1678,6 +1685,21 @@ def main():
         if sel and (sigs.empty or sel not in sigs['Ticker'].values):
             st.session_state['selected_ticker'] = None
             sel = None
+
+        # ── Data Staleness Warning ─────────────────────────────────────────────
+        if latest_date is not None:
+            from datetime import date as _date
+            today_d = _date.today()
+            data_d  = latest_date.date() if hasattr(latest_date, 'date') else latest_date
+            lag     = (today_d - data_d).days
+            if lag >= 2:
+                st.warning(
+                    f"⚠️ **Data is {lag} days old** — last updated **{data_d}**, today is **{today_d}**. "
+                    f"Signals shown below reflect market conditions on {data_d}, NOT today. "
+                    f"Stocks that barely passed filters on {data_d} may have already moved off their levels. "
+                    f"Run **`python nse_bse_downloader.py`** to download fresh data before checking signals.",
+                    icon=None,
+                )
 
         # ── Market Regime Banner ───────────────────────────────────────────────
         if is_bull:
