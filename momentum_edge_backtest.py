@@ -83,8 +83,8 @@ CFG = {
     'stop_loss_pct':       0.15,        # hard stop: 15% below entry
 
     # ── Minimum bars ─────────────────────────────────────────────────────────
-    # B1 FIX: spec requires 300 days minimum data, not 260
-    'min_bars':            300,
+    'min_bars':            252,
+    'min_close_price':     50.0,
 
     # ── Liquidity filter ──────────────────────────────────────────────────────
     # B5 FIX: skip stocks where avg daily volume < 100,000 (last 30 days)
@@ -319,6 +319,9 @@ def compute_indicators(df: pd.DataFrame, cfg: dict) -> pd.DataFrame | None:
     close  = df['Close']
     volume = df['Volume']
 
+    if close.iloc[-1] < cfg.get('min_close_price', 50.0):
+        return None
+
     # B5 FIX: absolute liquidity filter — skip stocks with avg daily vol < 100,000 (last 30d)
     min_vol = cfg.get('min_avg_volume', 100_000)
     if volume.iloc[-30:].mean() < min_vol:
@@ -394,35 +397,35 @@ def compute_indicators(df: pd.DataFrame, cfg: dict) -> pd.DataFrame | None:
 def check_filters(row: pd.Series, cfg: dict) -> tuple[bool, int]:
     """
     Apply all 6 entry filters. Returns (passed_all, last_filter_passed).
-    Uses _s (shifted) columns to prevent look-ahead bias.
+    F1-F4 use day-T values per spec; F5 window ends T-1 per spec; F6 uses T-1.
     """
-    # Guard: all required shifted columns must be present and non-NaN
-    required_s = ('sma50_s', 'sma150_s', 'ema220_s', 'low52w_s', 'vol_avg20_s')
-    for col in required_s:
+    # Guard: required columns must be non-NaN
+    required = ('sma50', 'sma150', 'ema220', 'low52w', 'close', 'vol_avg50_s')
+    for col in required:
         if pd.isna(row.get(col)):
             return False, 0
 
-    # F1: SMA150 > EMA220 — long-term trend is bullish
-    if not (row['sma150_s'] > row['ema220_s']):
+    # F1: SMA150 > EMA220 — long-term trend is bullish (day T)
+    if not (row['sma150'] > row['ema220']):
         return False, 1
 
-    # F2: Close > SMA50 — short-term strength
-    if not (row['close_s'] > row['sma50_s']):
+    # F2: Close > SMA50 — short-term strength (day T)
+    if not (row['close'] > row['sma50']):
         return False, 2
 
-    # F3: SMA50 > SMA150 — short-term MA above long-term MA
-    if not (row['sma50_s'] > row['sma150_s']):
+    # F3: SMA50 > SMA150 — MA alignment (day T)
+    if not (row['sma50'] > row['sma150']):
         return False, 3
 
-    # F4: Close >= 1.25× 52-week low — not a beaten-down stock
-    if not (row['close_s'] >= cfg['min_price_vs_low'] * row['low52w_s']):
+    # F4: Close >= 1.25× 52-week low — not a beaten-down stock (day T)
+    if not (row['close'] >= cfg['min_price_vs_low'] * row['low52w']):
         return False, 4
 
-    # F5: Had EMA dip in last 90 days — shakeout confirmed
+    # F5: Had EMA dip in last 90 days — window T-1 to T-89 per spec
     if not bool(row.get('had_ema_dip_s', False)):
         return False, 5
 
-    # F6: Choppiness < 61.8 — clean trending chart
+    # F6: Choppiness < 61.8 — clean trending chart (T-1 per spec)
     chop = row.get('choppiness_s')
     if chop is not None and not pd.isna(chop):
         if chop > cfg['choppiness_threshold']:
@@ -441,20 +444,14 @@ def check_volume_and_breakout(row: pd.Series, cfg: dict) -> bool:
 
     B10 FIX: Strict > comparison (spec says Close > 52W_High.shift(1), not >=).
     """
-    # Volume confirmation — today's volume vs shifted averages
+    # Volume confirmation — 50-day only per spec
     if cfg.get('vol_filter', True):
-        vol_avg_s = row.get('vol_avg20_s', 0)
-        vol_today = row.get('volume', row.get('volume_s'))   # prefer today's volume
-        if vol_avg_s <= 0 or pd.isna(vol_today):
-            return False
-        # Existing 20-day check (unchanged)
-        if vol_today < cfg['vol_threshold'] * vol_avg_s:
-            return False
-        # Additional 50-day check (vol_today >= VOLUME_MULTIPLIER × avg_vol_50)
+        vol_today   = row.get('volume', row.get('volume_s'))
         vol_avg50_s = row.get('vol_avg50_s')
-        if vol_avg50_s is not None and not pd.isna(vol_avg50_s) and vol_avg50_s > 0:
-            if vol_today < cfg.get('vol_multiplier', 1.5) * vol_avg50_s:
-                return False
+        if pd.isna(vol_today) or pd.isna(vol_avg50_s) or vol_avg50_s <= 0:
+            return False
+        if vol_today < cfg.get('vol_multiplier', 1.5) * vol_avg50_s:
+            return False
 
     # B2 FIX: use today's close vs yesterday's 52W high (spec: Close[T] > 52W_High[T-1])
     high52w_s = row.get('high52w_s')
@@ -594,9 +591,9 @@ def score_signal_v2(row: pd.Series, rec_label: str,
     ath_proximity = min((close_s / ath), 1.0) if ath > 0 else 0
     score_b = ath_proximity * 30
 
-    # Score C — volume ratio (capped at 20)
-    vol_avg = row.get('vol_avg20_s', 0) or 0
-    vol_s   = row.get('volume_s', 0) or 0
+    # Score C — volume ratio (capped at 20), use 50-day avg
+    vol_avg = row.get('vol_avg50_s', 0) or 0
+    vol_s   = row.get('volume', row.get('volume_s', 0)) or 0
     vol_ratio = (vol_s / vol_avg) if vol_avg > 0 else 0
     score_c = min(vol_ratio * 10, 20)
 
@@ -1014,13 +1011,13 @@ def print_diagnostic_report(indicators: dict[str, pd.DataFrame],
             continue
         row = ind.iloc[-1]
         s = row
-        required_s = ('sma50_s', 'sma150_s', 'ema220_s', 'low52w_s', 'vol_avg20_s')
+        required_s = ('sma50', 'sma150', 'ema220', 'low52w', 'close', 'vol_avg50_s')
         if any(pd.isna(s.get(c)) for c in required_s):
             continue
-        f1 = s['sma150_s'] > s['ema220_s']
-        f2 = f1 and s['close_s'] > s['sma50_s']
-        f3 = f2 and s['sma50_s'] > s['sma150_s']
-        f4 = f3 and s['close_s'] >= cfg['min_price_vs_low'] * s['low52w_s']
+        f1 = s['sma150'] > s['ema220']
+        f2 = f1 and s['close'] > s['sma50']
+        f3 = f2 and s['sma50'] > s['sma150']
+        f4 = f3 and s['close'] >= cfg['min_price_vs_low'] * s['low52w']
         f5 = f4 and bool(s.get('had_ema_dip_s', False))
         chop  = s.get('choppiness_s')
         f6_ok = chop is None or pd.isna(chop) or chop <= cfg['choppiness_threshold']

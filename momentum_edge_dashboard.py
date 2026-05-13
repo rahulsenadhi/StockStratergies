@@ -46,7 +46,8 @@ VOL_THRESH       = 1.5
 VOL_LOOKBACK     = 50    # VOLUME_LOOKBACK_DAYS
 VOL_MULTIPLIER   = 1.5   # VOLUME_MULTIPLIER — used with 50-day avg
 NEAR_BK_PCT      = 0.03
-MIN_BARS         = 300
+MIN_BARS         = 252    # spec: 252 trading days minimum
+MIN_CLOSE_PRICE  = 50.0   # spec: configurable — skip penny stocks below ₹50
 MIN_AVG_VOL      = 100_000   # match backtest: skip stocks with avg daily vol < 100K
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -525,23 +526,31 @@ def compute_signals(filters_active: dict, min_score: int,
     ohlcv     = load_universe_data()
     benchmark = load_benchmark_data()
 
-    funnel = {'total': 0, 'sufficient_data': 0, 'regime': 0,
+    funnel = {'total': 0, 'sufficient_data': 0,
               'f1': 0, 'f2': 0, 'f3': 0, 'f4': 0, 'f5': 0, 'f6': 0,
-              'sequential': 0, 'vol_bk': 0, 'final': 0}
+              'vol_bk': 0, 'final': 0}
     funnel['total'] = len(ohlcv)
 
+    # Regime: 3-condition gate matching backtest build_regime_series()
     is_bull_today = True
-    if benchmark is not None:
-        ema = benchmark.ewm(span=EMA220_P, adjust=False).mean()
-        if len(benchmark) > 0:
-            is_bull_today = bool(benchmark.iloc[-1] > ema.iloc[-1])
+    if benchmark is not None and len(benchmark) >= 200:
+        _sma50  = benchmark.rolling(50).mean()
+        _sma200 = benchmark.rolling(200).mean()
+        _high52 = benchmark.rolling(252).max()
+        _b = benchmark.iloc[-1]
+        is_bull_today = bool(
+            _b > _sma200.iloc[-1]
+            and _sma50.iloc[-1] > _sma200.iloc[-1]
+            and _b >= 0.90 * _high52.iloc[-1]
+        )
 
     rows = []
 
     for ticker, df in ohlcv.items():
         if len(df) < MIN_BARS:
             continue
-        # Bug 4 fix: match backtest's min_avg_volume filter (skip illiquid stocks)
+        if df['Close'].iloc[-1] < MIN_CLOSE_PRICE:
+            continue
         if df['Volume'].iloc[-30:].mean() < MIN_AVG_VOL:
             continue
         funnel['sufficient_data'] += 1
@@ -578,39 +587,43 @@ def compute_signals(filters_active: dict, min_score: int,
         def _s(series):
             return series.iloc[-2] if len(series) >= 2 else np.nan
 
-        close_s  = _s(close);  ema220_s = _s(ema220)
-        sma50_s  = _s(sma50);  sma150_s = _s(sma150)
-        low52_s  = _s(low52);  vol20_s  = _s(vol20);  vol50_s = _s(vol50)
-        vol_s    = _s(volume); had_dip_s = bool(_s(had_dip))
-        ath_prev = _s(ath);    high52_s = _s(high52)
-        mom_s    = _s(mom_6m)
+        # T-1 scalars (only close_s needed for breakout first-cross; F5 window ends T-1)
+        close_s   = _s(close)
+        vol20_s   = _s(vol20);   vol50_s  = _s(vol50)
+        had_dip_s = bool(_s(had_dip))
+        ath_prev  = _s(ath);     high52_s = _s(high52)
+        mom_s     = _s(mom_6m)
         res_today = float(resistance.iloc[-1]) if not pd.isna(resistance.iloc[-1]) else np.nan
 
-        if any(pd.isna(v) for v in [close_s, ema220_s, sma50_s, sma150_s, low52_s]):
-            continue
-
+        # Day-T scalars (F1–F4 use current bar per spec)
         close_now  = float(close.iloc[-1])
         ema220_now = float(ema220.iloc[-1])
+        sma50_now  = float(sma50.iloc[-1])
+        sma150_now = float(sma150.iloc[-1])
+        low52_now  = float(low52.iloc[-1])
         vol_today  = float(volume.iloc[-1])
 
-        # ── Filters ────────────────────────────────────────────────────────────
+        if any(pd.isna(v) for v in [close_now, ema220_now, sma50_now, sma150_now, low52_now]):
+            continue
+
+        # ── Filters (F1–F4 on day T per spec; F5 window T-1→T-89 per spec) ───────
         if filters_active.get('f1', True):
-            if not (sma150_s > ema220_s):
+            if not (sma150_now > ema220_now):
                 continue
         funnel['f1'] += 1
 
         if filters_active.get('f2', True):
-            if not (close_s > sma50_s):
+            if not (close_now > sma50_now):
                 continue
         funnel['f2'] += 1
 
         if filters_active.get('f3', True):
-            if not (sma50_s > sma150_s):
+            if not (sma50_now > sma150_now):
                 continue
         funnel['f3'] += 1
 
         if filters_active.get('f4', True):
-            if pd.isna(low52_s) or not (close_s >= MIN_PRICE_VS_LOW * low52_s):
+            if not (close_now >= MIN_PRICE_VS_LOW * low52_now):
                 continue
         funnel['f4'] += 1
 
@@ -625,55 +638,14 @@ def compute_signals(filters_active: dict, min_score: int,
                 continue
         funnel['f6'] += 1
 
-        # ── Sequential signal validation ───────────────────────────────────────
-        c = close.values
-        e = ema220.values
-        n = len(c)
-        seq_valid = False
-        rec_label, rec_days = 'No Reclaim', -1
-
-        dip_end = -1
-        for j in range(n - 2, -1, -1):
-            if c[j] < e[j]:
-                dip_end = j
-                break
-        if dip_end != -1:
-            dip_start = dip_end
-            for j in range(dip_end - 1, -1, -1):
-                if c[j] < e[j]:
-                    dip_start = j
-                else:
-                    break
-            pre_dip = c[:dip_start]
-            if len(pre_dip) >= 5:
-                pre_ath = pre_dip.max()
-                if pre_ath > 0 and pre_dip[-1] >= pre_ath * 0.90:
-                    dip_low_idx = dip_start + int(np.argmin(c[dip_start: dip_end + 1]))
-                    for j in range(dip_low_idx + 1, n):
-                        if c[j] >= e[j]:
-                            rd = j - dip_low_idx
-                            if rd <= 90:
-                                rec_days = rd
-                                rec_label = 'Fast' if rd <= 30 else ('Normal' if rd <= 60 else 'Slow')
-                                # Bug 2 fix: match backtest prefer_fast_recovery=True (skip Slow >60d)
-                                if rec_label != 'Slow':
-                                    seq_valid = True
-                            break
-
-        if not seq_valid:
-            continue
-        funnel['sequential'] += 1
+        rec_label, rec_days = 'N/A', -1
 
         # ── Volume + breakout ─────────────────────────────────────────────────
         vol_ok = True
         if filters_active.get('vol', True):
-            # 20-day check (existing)
-            if vol20_s <= 0 or pd.isna(vol_today):
+            if pd.isna(vol50_s) or vol50_s <= 0 or pd.isna(vol_today):
                 vol_ok = False
             else:
-                vol_ok = vol_today >= VOL_THRESH * vol20_s
-            # Additional 50-day check: vol_today >= VOLUME_MULTIPLIER × avg_vol_50
-            if vol_ok and not pd.isna(vol50_s) and vol50_s > 0:
                 vol_ok = vol_today >= VOL_MULTIPLIER * vol50_s
 
         # ── Breakout / near-breakout classification ───────────────────────────
@@ -697,7 +669,7 @@ def compute_signals(filters_active: dict, min_score: int,
             not is_breakout
             and not pd.isna(res_today)
             and 0 < dist_to_res <= 0.02            # within 2% below resistance
-            and dist_from_220 <= 0.15              # not overextended above EMA220
+            and vol_ok                             # spec 7.1: F1-F7 all true incl vol
             and cycle_state != 'POST_BREAKOUT'     # state machine: breakout already fired this cycle
         )
 
@@ -727,13 +699,10 @@ def compute_signals(filters_active: dict, min_score: int,
         else:
             action = 'FORMING'
 
-        # B11/B12 FIX: consistent use of today's values in score
-        vol_ratio = (float(vol_today) / float(vol20_s)) if vol20_s > 0 else 0
+        vol_ratio = (float(vol_today) / float(vol50_s)) if (not pd.isna(vol50_s) and vol50_s > 0) else 0
         ath_prox  = min((float(close_now) / float(bk_ref)), 1.0) if (bk_ref and bk_ref > 0) else 0
-        rec_pts   = {'Fast': 10, 'Normal': 5, 'Slow': 2}.get(rec_label, 2)
         mom_pct   = float(mom_s) if not pd.isna(mom_s) else 0
-        score_raw = ath_prox * 30 + min(vol_ratio * 10, 20) + rec_pts
-        score = round(score_raw + min(mom_pct * 100, 20), 1)
+        score = round(ath_prox * 30 + min(vol_ratio * 10, 20) + min(mom_pct * 100, 20), 1)
 
         dist_ath  = ((close_now / float(bk_ref)) - 1) * 100 if bk_ref and bk_ref > 0 else 0
         stop_loss = close_now * 0.85
@@ -783,9 +752,9 @@ def compute_signals(filters_active: dict, min_score: int,
 
 def _chart_funnel(funnel: dict, is_bull: bool) -> go.Figure:
     labels = ['Universe', 'Has Data', 'F1 Trend', 'F2 Price', 'F3 MA Align',
-              'F4 vs Low', 'F5 Dip', 'F6 Clean', 'Sequential', 'Vol+Breakout']
+              'F4 vs Low', 'F5 Dip', 'F6 Clean', 'Vol+Breakout']
     keys   = ['total', 'sufficient_data', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6',
-              'sequential', 'vol_bk']
+              'vol_bk']
     values = [funnel.get(k, 0) for k in keys]
     colors = ['#3a4060'] * len(values)
     colors[-1] = '#00c853' if is_bull else '#ff3d3d'
@@ -1437,21 +1406,22 @@ def _bt_run_single(ticker: str, df: pd.DataFrame,
             s_v    = arr_v[prev]
             s_dip  = arr_dip[prev]
 
-            if any(np.isnan(x) for x in [s_e, s_s50, s_s150, s_h52, s_l52, s_v20]):
+            if any(np.isnan(x) for x in [s_e, s_s50, s_s150, s_h52, s_l52, s_v50]):
                 i += 1
                 continue
 
-            f1     = s_s150 > s_e
-            f2     = s_c > s_s50
-            f3     = s_s50 > s_s150
-            f4     = s_c >= MIN_PRICE_VS_LOW * s_l52
-            f5     = s_dip >= 0.5
-            bk        = (s_c > s_h52) and (s_c > s_e)
-            vol_ok_20 = (s_v20 <= 0) or (s_v >= VOL_THRESH * s_v20)
-            vol_ok_50 = np.isnan(s_v50) or s_v50 <= 0 or (s_v >= VOL_MULTIPLIER * s_v50)
-            vol_ok    = vol_ok_20 and vol_ok_50
+            f1  = s_s150 > s_e
+            f2  = s_c > s_s50
+            f3  = s_s50 > s_s150
+            f4  = s_c >= MIN_PRICE_VS_LOW * s_l52
+            f5  = s_dip >= 0.5
+            # F6: choppiness check on prev bar's trailing window
+            chop_prev = _compute_choppiness(df.iloc[:prev + 1])
+            f6  = (chop_prev is None) or (chop_prev < CHOP_THRESH)
+            bk     = (s_c > s_h52) and (s_c > s_e)
+            vol_ok = (not np.isnan(s_v50)) and s_v50 > 0 and (s_v >= VOL_MULTIPLIER * s_v50)
 
-            if f1 and f2 and f3 and f4 and f5 and bk and vol_ok:
+            if f1 and f2 and f3 and f4 and f5 and f6 and bk and vol_ok:
                 en_px = arr_o[i]
                 if np.isnan(en_px) or en_px <= 0:
                     i += 1
@@ -2045,9 +2015,9 @@ def main():
             </div>""", unsafe_allow_html=True)
         with c3:
             st.markdown(f"""<div class="me-card">
-              <div class="label">Valid Sequential Signal</div>
-              <div class="value" style="color:#F5B731;">{funnel['sequential']:,}</div>
-              <div class="sub">dip → recovery → breakout confirmed</div>
+              <div class="label">Pass Vol + Breakout</div>
+              <div class="value" style="color:#F5B731;">{funnel['vol_bk']:,}</div>
+              <div class="sub">volume surge on breakout day</div>
               <div class="me-card-accent" style="background:#F5B731;"></div>
             </div>""", unsafe_allow_html=True)
         with c4:
@@ -2074,7 +2044,7 @@ def main():
               <b>52W High (₹)</b> = yesterday's 52-week high — the price level the stock is trying to break above.
               <b>Dist 52W%</b> = how far today's close is from the 52-week high (+0.5% = just above, −2% = still below).
               <b>Entry Type</b> = ATH means today's close broke an all-time high; 52W High means it only broke the 1-year high.
-              <b>Vol Ratio</b> = today's volume ÷ 20-day average (2.0× means 2× normal buying pressure).
+              <b>Vol Ratio</b> = today's volume ÷ 50-day average (2.0× means 2× normal buying pressure).
               Green rows = Breakout Today · Yellow = Near Breakout · Blue = Forming/Watch.
               <b>Click any row</b> to open the price chart and all 6 filter conditions.
             </div>
@@ -2127,7 +2097,6 @@ def main():
                 ('F4 vs Low',     funnel['f4']),
                 ('F5 Dip',        funnel['f5']),
                 ('F6 Clean',      funnel['f6']),
-                ('Sequential',    funnel['sequential']),
                 ('Vol+Breakout',  funnel['vol_bk']),
             ]
             for label, count in funnel_labels:
@@ -2163,9 +2132,7 @@ def main():
 
 **F6 — Chart is clean** (Choppiness < 61.8): The stock is trending, not just moving sideways randomly.
 
-**Sequential check**: The stock must have gone near its high → dipped → recovered → now breaking out. All four steps in order.
-
-**Volume confirmation** (1.5× average): Today's trading volume must be at least 1.5× the 20-day average, confirming real buying interest.
+**Volume confirmation** (1.5× 50-day average): Today's trading volume must be at least 1.5× the 50-day average, confirming real buying interest on the breakout day.
                 """)
 
         # ════════════════════════════════════════════════════════════════════════
