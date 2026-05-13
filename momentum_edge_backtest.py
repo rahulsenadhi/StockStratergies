@@ -8,8 +8,11 @@ Run order:
   Step 3:        python momentum_edge_backtest.py
 """
 
+import hashlib
+import os
 import sys
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -23,6 +26,19 @@ import pandas as pd
 warnings.filterwarnings('ignore')
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
+
+CACHE_DIR = Path('data/indicator_cache')
+_WORKERS   = min(32, (os.cpu_count() or 4) * 2)
+
+def _cfg_hash(cfg: dict) -> str:
+    keys = [
+        'sma50_period', 'sma150_period', 'ema220_period',
+        'high52w_period', 'low52w_period', 'vol_avg_period',
+        'vol_lookback_days', 'ema_dip_lookback', 'choppiness_period',
+        'momentum_period', 'min_bars', 'min_close_price', 'min_avg_volume',
+    ]
+    blob = '|'.join(f'{k}={cfg.get(k)}' for k in keys)
+    return hashlib.md5(blob.encode()).hexdigest()[:12]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  CONFIG
@@ -125,10 +141,25 @@ def _load_csv(path: Path) -> pd.DataFrame | None:
         return None
 
 
-def load_ohlcv(cfg: dict) -> dict[str, pd.DataFrame]:
+def _load_one_csv(args: tuple) -> tuple[str | None, pd.DataFrame | None, float]:
+    csv_file, min_bars, skip_stems, symbol_whitelist = args
+    stem = csv_file.stem
+    if stem in skip_stems:
+        return None, None, 0.0
+    if symbol_whitelist is not None and stem not in symbol_whitelist:
+        return None, None, 0.0
+    mtime = csv_file.stat().st_mtime
+    df = _load_csv(csv_file)
+    if df is not None and len(df) >= min_bars:
+        return stem, df, mtime
+    return None, None, 0.0
+
+
+def load_ohlcv(cfg: dict) -> tuple[dict[str, pd.DataFrame], dict[str, float]]:
     """
-    Load all stock OHLCV CSVs based on BACKTEST_UNIVERSE config.
-    'FULL_NSE_BSE' → ./data/*.csv (from nse_bse_downloader.py)
+    Load all stock OHLCV CSVs in parallel.
+    Returns (ohlcv_dict, mtime_dict).
+    'FULL_NSE_BSE' → ./data/nse_bse/*.csv
     'NIFTY500'     → momentum_edge_data/*.csv (legacy)
     """
     universe = cfg.get('backtest_universe', 'NIFTY500')
@@ -144,7 +175,6 @@ def load_ohlcv(cfg: dict) -> dict[str, pd.DataFrame]:
             f"Run: python {'nse_bse_downloader.py' if universe == 'FULL_NSE_BSE' else 'momentum_edge_downloader.py'}"
         )
 
-    # Determine which symbols to load
     symbol_whitelist = None
     universe_file = Path(cfg.get('universe_file', ''))
     if universe == 'FULL_NSE_BSE' and universe_file.exists():
@@ -155,29 +185,26 @@ def load_ohlcv(cfg: dict) -> dict[str, pd.DataFrame]:
         except Exception:
             pass
 
-    # Skip benchmark / summary files
     skip_stems = {'^NSEI', 'NIFTYBEES.NS', 'me_summary', 'download_status'}
+    csv_files  = sorted(folder.glob('*.csv'))
+    total      = len(csv_files)
 
-    ohlcv = {}
-    csv_files = sorted(folder.glob('*.csv'))
-    total = len(csv_files)
+    args_list = [(f, cfg['min_bars'], skip_stems, symbol_whitelist) for f in csv_files]
+    ohlcv: dict[str, pd.DataFrame] = {}
+    mtimes: dict[str, float]       = {}
     loaded = 0
 
-    for csv_file in csv_files:
-        stem = csv_file.stem
-        if stem in skip_stems:
-            continue
-        if symbol_whitelist is not None and stem not in symbol_whitelist:
-            continue
-        df = _load_csv(csv_file)
-        if df is not None and len(df) >= cfg['min_bars']:
-            ohlcv[stem] = df
-            loaded += 1
-        if loaded % 500 == 0 and loaded > 0:
-            print(f'  Loaded {loaded}/{total} symbols…', end='\r', flush=True)
+    with ThreadPoolExecutor(max_workers=_WORKERS) as pool:
+        for stem, df, mtime in pool.map(_load_one_csv, args_list):
+            if stem is not None:
+                ohlcv[stem]  = df
+                mtimes[stem] = mtime
+                loaded += 1
+                if loaded % 500 == 0:
+                    print(f'  Loaded {loaded}/{total} symbols…', end='\r', flush=True)
 
     print(f'  Loaded {loaded} symbols from {folder}/' + ' ' * 20)
-    return ohlcv
+    return ohlcv, mtimes
 
 
 def load_benchmark(cfg: dict) -> pd.Series | None:
@@ -1062,6 +1089,74 @@ def print_diagnostic_report(indicators: dict[str, pd.DataFrame],
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  PARALLEL + CACHED INDICATOR COMPUTATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _compute_one_cached(args: tuple) -> tuple[str, object]:
+    ticker, df, cfg, cache_file, csv_mtime = args
+    if cache_file is not None and cache_file.exists():
+        if cache_file.stat().st_mtime >= csv_mtime:
+            try:
+                return ticker, pd.read_parquet(cache_file)
+            except Exception:
+                pass
+    ind = compute_indicators(df, cfg)
+    if ind is not None and cache_file is not None:
+        try:
+            ind.to_parquet(cache_file)
+        except Exception:
+            pass
+    return ticker, ind
+
+
+def load_indicators_parallel(
+    ohlcv: dict[str, pd.DataFrame],
+    mtimes: dict[str, float],
+    cfg: dict,
+) -> dict[str, pd.DataFrame]:
+    """Compute indicators in parallel; cache each ticker as parquet."""
+    h = _cfg_hash(cfg)
+    cache_dir: Path | None = None
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        sentinel = CACHE_DIR / '.cfg_hash'
+        if sentinel.exists() and sentinel.read_text().strip() != h:
+            # CFG changed — wipe stale cache
+            for f in CACHE_DIR.glob('*.parquet'):
+                f.unlink(missing_ok=True)
+        sentinel.write_text(h)
+        cache_dir = CACHE_DIR
+    except Exception:
+        pass  # cache unavailable — compute fresh every time
+
+    args_list = [
+        (
+            ticker, df, cfg,
+            (cache_dir / f'{ticker}.parquet') if cache_dir else None,
+            mtimes.get(ticker, 0.0),
+        )
+        for ticker, df in ohlcv.items()
+    ]
+
+    indicators: dict[str, pd.DataFrame] = {}
+    skipped = 0
+    done    = 0
+
+    with ThreadPoolExecutor(max_workers=_WORKERS) as pool:
+        for ticker, ind in pool.map(_compute_one_cached, args_list):
+            done += 1
+            if ind is not None:
+                indicators[ticker] = ind
+            else:
+                skipped += 1
+            if done % 500 == 0:
+                print(f'  Processed {done}/{len(ohlcv)}…', end='\r', flush=True)
+
+    print(f'  Computed: {len(indicators)} stocks  |  Skipped (insufficient data): {skipped}')
+    return indicators
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1081,7 +1176,7 @@ def main():
 
     # ── Load data ──────────────────────────────────────────────────────────────
     print('\n[1/5] Loading OHLCV data…')
-    ohlcv = load_ohlcv(CFG)
+    ohlcv, mtimes = load_ohlcv(CFG)
     if not ohlcv:
         print('ERROR: No data loaded. Run nse_bse_downloader.py first.')
         return
@@ -1103,20 +1198,9 @@ def main():
         if not is_bull:
             print('  ⚠️ BEAR MARKET REGIME — No new signals will be generated')
 
-    # ── Compute indicators ─────────────────────────────────────────────────────
+    # ── Compute indicators (parallel + parquet cache) ─────────────────────────
     print(f'\n[3/5] Computing indicators for {len(ohlcv)} stocks…')
-    indicators  = {}
-    skipped_min = 0
-    for t_idx, (ticker, df) in enumerate(ohlcv.items()):
-        ind = compute_indicators(df, CFG)
-        if ind is None:
-            skipped_min += 1
-        else:
-            indicators[ticker] = ind
-        if (t_idx + 1) % 500 == 0:
-            print(f'  Processed {t_idx+1}/{len(ohlcv)}…', end='\r', flush=True)
-
-    print(f'  Computed: {len(indicators)} stocks  |  Skipped (insufficient data): {skipped_min}')
+    indicators = load_indicators_parallel(ohlcv, mtimes, CFG)
 
     # ── Diagnostic report ──────────────────────────────────────────────────────
     print_diagnostic_report(indicators, regime_series, CFG)

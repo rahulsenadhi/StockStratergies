@@ -49,6 +49,7 @@ NEAR_BK_PCT      = 0.03
 MIN_BARS         = 252    # spec: 252 trading days minimum
 MIN_CLOSE_PRICE  = 50.0   # spec: configurable — skip penny stocks below ₹50
 MIN_AVG_VOL      = 100_000   # match backtest: skip stocks with avg daily vol < 100K
+RECENT_DAYS      = 7     # scan back this many trading days for recent breakouts
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  PAGE CONFIG + CSS
@@ -522,7 +523,7 @@ def _compute_cycle_state(close_arr: np.ndarray,
 
 @st.cache_data(ttl=300, show_spinner=False)
 def compute_signals(filters_active: dict, min_score: int,
-                    exchange_filter: str) -> tuple[pd.DataFrame, dict, bool]:
+                    exchange_filter: str) -> tuple[pd.DataFrame, pd.DataFrame, dict, bool, object]:
     ohlcv     = load_universe_data()
     benchmark = load_benchmark_data()
 
@@ -544,7 +545,8 @@ def compute_signals(filters_active: dict, min_score: int,
             and _b >= 0.90 * _high52.iloc[-1]
         )
 
-    rows = []
+    rows        = []
+    recent_rows = []
 
     for ticker, df in ohlcv.items():
         if len(df) < MIN_BARS:
@@ -605,6 +607,52 @@ def compute_signals(filters_active: dict, min_score: int,
 
         if any(pd.isna(v) for v in [close_now, ema220_now, sma50_now, sma150_now, low52_now]):
             continue
+
+        # ── Recent breakout scan (POST_BREAKOUT stocks only) ──────────────────
+        if cycle_state == 'POST_BREAKOUT':
+            close_arr = close.values.astype(float)
+            res_arr   = resistance.values.astype(float)
+            n_arr     = len(close_arr)
+            for k in range(1, min(RECENT_DAYS + 4, n_arr - 1)):
+                idx      = n_arr - 1 - k
+                idx_prev = idx - 1
+                if idx_prev < 0:
+                    break
+                r  = res_arr[idx]
+                c  = close_arr[idx]
+                cp = close_arr[idx_prev]
+                if np.isnan(r) or np.isnan(c) or np.isnan(cp):
+                    continue
+                if c > r and cp <= r:
+                    if k <= RECENT_DAYS and close_now > ema220_now and close_now > c * 0.92:
+                        vol50_s_r = _s(vol50)
+                        vol_r = (float(vol_today) / float(vol50_s_r)) if (not pd.isna(vol50_s_r) and vol50_s_r > 0) else 0
+                        mom_s_r = _s(mom_6m)
+                        ext_pct = (close_now / c - 1) * 100
+                        recent_rows.append({
+                            'Ticker':        ticker,
+                            'Exchange':      exch,
+                            'Signal':        'Recent Breakout',
+                            'Action':        'REVIEW',
+                            'Score':         0.0,
+                            'Days Ago':      k,
+                            'Entry Type':    'ATH' if (not pd.isna(ath_prev) and c > float(ath_prev)) else '52W High',
+                            'Recovery':      'N/A',
+                            'Rec Days':      -1,
+                            'Chart Qual':    'N/A',
+                            'Choppiness':    None,
+                            'Close (₹)':     round(close_now, 2),
+                            '52W High (₹)':  round(float(res_arr[n_arr - 1]), 2) if not np.isnan(res_arr[n_arr - 1]) else None,
+                            'Dist 52W%':     round(ext_pct, 1),
+                            'Bk Price (₹)':  round(float(c), 2),
+                            '% Extended':    round(ext_pct, 1),
+                            '220 EMA (₹)':   round(ema220_now, 2),
+                            'Vol Ratio':     round(vol_r, 2),
+                            'Stop Loss (₹)': round(close_now * 0.85, 2),
+                            'Mom 6M%':       round(float(mom_s_r) * 100 if not pd.isna(mom_s_r) else 0, 1),
+                        })
+                    break
+            continue  # never show POST_BREAKOUT in main screener
 
         # ── Filters (F1–F4 on day T per spec; F5 window T-1→T-89 per spec) ───────
         if filters_active.get('f1', True):
@@ -685,11 +733,6 @@ def compute_signals(filters_active: dict, min_score: int,
         else:
             signal = 'Watchlist'
 
-        # State machine gate: POST_BREAKOUT stocks completed their 1-2-3 cycle already.
-        # Exclude from screener until a new flush resets the cycle.
-        if cycle_state == 'POST_BREAKOUT':
-            continue
-
         if filters_active.get('regime', True) and not is_bull_today:
             action = 'BEAR MARKET'
         elif signal == 'Breakout Today':
@@ -721,10 +764,13 @@ def compute_signals(filters_active: dict, min_score: int,
             'Close (₹)':    round(close_now, 2),
             '52W High (₹)': round(float(bk_ref), 2) if bk_ref else None,
             'Dist 52W%':    round(dist_ath, 1),
+            'Bk Price (₹)': None,
+            '% Extended':   None,
             '220 EMA (₹)':  round(ema220_now, 2),
             'Vol Ratio':    round(vol_ratio, 2),
             'Stop Loss (₹)':round(stop_loss, 2),
             'Mom 6M%':      round(mom_pct * 100, 1),
+            'Days Ago':     0,
         })
 
     df_out = pd.DataFrame(rows)
@@ -736,6 +782,10 @@ def compute_signals(filters_active: dict, min_score: int,
         df_out = df_out[df_out['Score'] >= min_score]
         funnel['final'] = len(df_out)
 
+    df_recent = pd.DataFrame(recent_rows)
+    if not df_recent.empty:
+        df_recent = df_recent.sort_values('Days Ago')
+
     # Find the latest date across all loaded CSVs so we can warn if data is stale
     latest_date = None
     for df_d in ohlcv.values():
@@ -743,7 +793,7 @@ def compute_signals(filters_active: dict, min_score: int,
         if latest_date is None or d > latest_date:
             latest_date = d
 
-    return df_out, funnel, is_bull_today, latest_date
+    return df_out, df_recent, funnel, is_bull_today, latest_date
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1939,7 +1989,7 @@ def main():
 
         # ── Load data ──────────────────────────────────────────────────────────
         with st.spinner('Computing signals across universe…'):
-            sigs, funnel, is_bull, latest_date = compute_signals(
+            sigs, recent_sigs, funnel, is_bull, latest_date = compute_signals(
                 filters_active={k: controls[k] for k in ('regime','f1','f2','f3','f4','f5','f6','vol')},
                 min_score=controls['min_score'],
                 exchange_filter=controls['exchange'],
@@ -2050,8 +2100,10 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
-            tab_all, tab_buy, tab_watch, tab_forming = st.tabs(
-                ['All Signals', '🟢 Buy Now', '🟡 Watch', '🔵 Forming']
+            n_recent = len(recent_sigs) if not recent_sigs.empty else 0
+            tab_all, tab_buy, tab_watch, tab_forming, tab_recent = st.tabs(
+                ['All Signals', '🟢 Buy Now', '🟡 Watch', '🔵 Forming',
+                 f'🔄 Recent 7d ({n_recent})']
             )
 
             def _handle_tab(df_tab: pd.DataFrame, key: str) -> None:
@@ -2079,6 +2131,28 @@ def main():
                     sigs[sigs['Signal'].isin(['Watch Zone', 'Watchlist'])] if not sigs.empty else sigs,
                     'tbl_forming',
                 )
+
+            with tab_recent:
+                st.markdown("""
+                <div class="explain-box">
+                  <b>Recent Breakouts (last 7 trading days)</b> — These stocks had their first-close above
+                  52-week resistance within the past week. They may still be buyable if the price hasn't
+                  extended too far. Check <b>% Extended</b> (how much above breakout price today's close is)
+                  and <b>Bk Price (₹)</b> (the actual breakout bar close). Still above EMA220 = trend intact.
+                  Stop loss is 15% below current close.
+                </div>""", unsafe_allow_html=True)
+                if recent_sigs.empty:
+                    st.markdown('<div style="color:#5a6480;padding:16px;">No recent breakouts found in the last 7 trading days.</div>',
+                                unsafe_allow_html=True)
+                else:
+                    display_cols = ['Ticker', 'Exchange', 'Days Ago', 'Close (₹)', 'Bk Price (₹)',
+                                    '% Extended', '220 EMA (₹)', 'Vol Ratio', 'Stop Loss (₹)', 'Mom 6M%']
+                    show_cols = [c for c in display_cols if c in recent_sigs.columns]
+                    st.dataframe(
+                        recent_sigs[show_cols].reset_index(drop=True),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
 
         with col_side:
             st.markdown('<div class="sec-hdr">Filter Funnel</div>', unsafe_allow_html=True)
