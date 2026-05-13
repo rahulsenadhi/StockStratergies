@@ -41,7 +41,7 @@ BATCH_SLEEP      = 2.0          # seconds between batch calls
 SYMBOL_SLEEP     = 0.5          # seconds between individual retry downloads
 BENCHMARK_SYM    = '^NSEI'
 
-NSE_URL = 'https://archives.nseindia.com/content/equities/EQUITY_L.csv'
+NSE_URL = 'https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv'
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PHASE 1 — SYMBOL UNIVERSE

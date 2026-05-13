@@ -43,10 +43,18 @@ CFG = {
     'max_positions':        10,         # hold at most 10 stocks simultaneously
 
     # ── Market regime filter ──────────────────────────────────────────────────
-    'use_regime_filter':    True,       # block new entries when Nifty < EMA220
-    'benchmark_ticker':     '^NSEI',    # Nifty 50 index for regime check
-    'benchmark_file_full':  './data/nse_bse/^NSEI.csv',
-    'benchmark_file_legacy':'./data/^NSEI.csv',        # fallback: Monthly Rotation benchmark
+    'use_regime_filter':          True,        # block new entries in bear market
+    'benchmark_ticker':           '^NSEI',     # Nifty 50 index
+    'benchmark_file_full':        './data/nse_bse/^NSEI.csv',
+    'benchmark_file_legacy':      './data/^NSEI.csv',
+    # Three-condition regime gate (all must be TRUE for market_on):
+    #   C1: NIFTY_close > NIFTY_SMA_200
+    #   C2: NIFTY_SMA_50 > NIFTY_SMA_200
+    #   C3: NIFTY_close >= (1 - regime_max_dd_from_high) × NIFTY_52W_high
+    'regime_sma_fast':            50,          # NIFTY_SMA_50
+    'regime_sma_slow':            200,         # NIFTY_SMA_200
+    'regime_52w_period':          252,         # REGIME_LOOKBACK_52W
+    'regime_max_dd_from_high':    0.10,        # REGIME_MAX_DRAWDOWN_FROM_HIGH
 
     # ── Indicator periods ─────────────────────────────────────────────────────
     'sma50_period':        50,
@@ -64,6 +72,8 @@ CFG = {
     'min_price_vs_low':    1.25,        # close >= 1.25 × 52-week low
     'vol_filter':          True,
     'vol_threshold':       1.5,         # breakout volume > 1.5× 20-day avg
+    'vol_lookback_days':   50,          # VOLUME_LOOKBACK_DAYS (50-day avg for additional check)
+    'vol_multiplier':      1.5,         # VOLUME_MULTIPLIER (used with 50-day avg)
 
     # ── Recovery filter ───────────────────────────────────────────────────────
     'prefer_fast_recovery':True,        # skip Slow (>60d) recovery setups
@@ -194,15 +204,25 @@ def load_benchmark(cfg: dict) -> pd.Series | None:
 
 def build_regime_series(benchmark: pd.Series | None, cfg: dict) -> pd.Series | None:
     """
-    Returns a boolean Series indexed by date.
-    True  = BULL (Nifty50 Close > EMA220) → allow new entries
-    False = BEAR  → block new entries
+    Returns a boolean Series (market_on) indexed by date.
+    True  = BULL → allow new entries
+    False = BEAR → block new entries (existing positions still managed)
+
+    market_on = True only when ALL three conditions hold on day T:
+      C1: NIFTY_close_T  > NIFTY_SMA_200_T
+      C2: NIFTY_SMA_50_T > NIFTY_SMA_200_T
+      C3: NIFTY_close_T  >= (1 - regime_max_dd_from_high) × NIFTY_52W_high_T
     """
     if benchmark is None or not cfg.get('use_regime_filter', True):
         return None
-    ema = benchmark.ewm(span=cfg['ema220_period'], adjust=False).mean()
-    bull = benchmark > ema
-    return bull
+    sma_fast = benchmark.rolling(cfg['regime_sma_fast']).mean()
+    sma_slow = benchmark.rolling(cfg['regime_sma_slow']).mean()
+    high_52w = benchmark.rolling(cfg['regime_52w_period']).max()
+    floor    = (1 - cfg['regime_max_dd_from_high']) * high_52w
+    c1 = benchmark > sma_slow
+    c2 = sma_fast  > sma_slow
+    c3 = benchmark >= floor
+    return (c1 & c2 & c3)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -320,13 +340,16 @@ def compute_indicators(df: pd.DataFrame, cfg: dict) -> pd.DataFrame | None:
 
     # All-time high — entry_type label only; breakout check uses high52w_s (see B2 fix)
     ath = close.expanding().max()
-    ind['ath']       = ath
-    ind['ath_prev']  = ath.shift(1)   # ATH through yesterday (used for entry_type label)
+    ind['ath']      = ath
+    ind['ath_prev'] = ath.shift(1)   # ATH through yesterday
+    # Bug 5 fix: ATH = today's close exceeds yesterday's all-time high (true new ATH breakout)
+    # 52W_HIGH_FALLBACK = only broke the 52-week high, ATH is higher
     ind['entry_type'] = np.where(
-        ind['ath_prev'] > ind['high52w'].shift(1), 'ATH', '52W_HIGH_FALLBACK'
+        close > ind['ath_prev'], 'ATH', '52W_HIGH_FALLBACK'
     )
 
     ind['vol_avg20'] = volume.rolling(cfg['vol_avg_period']).mean()
+    ind['vol_avg50'] = volume.rolling(cfg['vol_lookback_days']).mean()
 
     # 90-day EMA dip flag
     dip_flag           = (close < ind['ema220']).astype(int)
@@ -347,6 +370,7 @@ def compute_indicators(df: pd.DataFrame, cfg: dict) -> pd.DataFrame | None:
     ind['high52w_s']      = ind['high52w'].shift(1)
     ind['low52w_s']       = ind['low52w'].shift(1)
     ind['vol_avg20_s']    = ind['vol_avg20'].shift(1)
+    ind['vol_avg50_s']    = ind['vol_avg50'].shift(1)
     ind['had_ema_dip_s']  = ind['had_ema_dip'].shift(1)
     ind['choppiness_s']   = ind['choppiness'].shift(1)
     ind['momentum_6m_s']  = ind['momentum_6m'].shift(1)
@@ -417,14 +441,20 @@ def check_volume_and_breakout(row: pd.Series, cfg: dict) -> bool:
 
     B10 FIX: Strict > comparison (spec says Close > 52W_High.shift(1), not >=).
     """
-    # Volume confirmation — use today's volume vs yesterday's 20-day avg
+    # Volume confirmation — today's volume vs shifted averages
     if cfg.get('vol_filter', True):
         vol_avg_s = row.get('vol_avg20_s', 0)
         vol_today = row.get('volume', row.get('volume_s'))   # prefer today's volume
         if vol_avg_s <= 0 or pd.isna(vol_today):
             return False
+        # Existing 20-day check (unchanged)
         if vol_today < cfg['vol_threshold'] * vol_avg_s:
             return False
+        # Additional 50-day check (vol_today >= VOLUME_MULTIPLIER × avg_vol_50)
+        vol_avg50_s = row.get('vol_avg50_s')
+        if vol_avg50_s is not None and not pd.isna(vol_avg50_s) and vol_avg50_s > 0:
+            if vol_today < cfg.get('vol_multiplier', 1.5) * vol_avg50_s:
+                return False
 
     # B2 FIX: use today's close vs yesterday's 52W high (spec: Close[T] > 52W_High[T-1])
     high52w_s = row.get('high52w_s')
@@ -1013,7 +1043,7 @@ def print_diagnostic_report(indicators: dict[str, pd.DataFrame],
     print('╠' + border + '╣')
     print(f'║  Universe: {universe_mode:<{W-12}}║')
     print(f'║  Total symbols loaded        : {total_syms:<{W-34}}║')
-    print(f'║  Market Regime (Nifty 50)    : {regime:<{W-34}}║')
+    print(f'║  Market Regime (SMA50/200)   : {regime:<{W-34}}║')
     print('╠' + border + '╣')
     print(f'║{"  FILTER FUNNEL:":^{W}}║')
     labels = [
@@ -1072,7 +1102,7 @@ def main():
     if regime_series is not None and len(regime_series) > 0:
         is_bull = bool(regime_series.iloc[-1])
         regime_str = '🟢 BULL' if is_bull else '🔴 BEAR'
-        print(f'  Current regime: {regime_str} (Nifty 50 vs 220 EMA)')
+        print(f'  Current regime: {regime_str} (SMA50 > SMA200, close > SMA200, < 10% off 52W high)')
         if not is_bull:
             print('  ⚠️ BEAR MARKET REGIME — No new signals will be generated')
 

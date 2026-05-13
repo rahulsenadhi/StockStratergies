@@ -18,7 +18,7 @@ from tqdm import tqdm
 # ─────────────────────────────────────────────
 # CONFIG
 # ─────────────────────────────────────────────
-NSE_URL = "https://archives.nseindia.com/content/equities/EQUITY_L.csv"
+NSE_URL = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
 BSE_API_URL = "https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w"
 MIN_DAILY_VALUE_CR = 1
 BATCH_SIZE = 50
@@ -120,8 +120,8 @@ def download_bse_symbols() -> pd.DataFrame:
             df = df[df['GROUP'].isin({'A', 'B', 'T'})].copy()
 
         # Map columns — handle alternate naming
-        code_col = next((c for c in df.columns if 'SECURITY_CODE' in c or 'ScripCode' in c or 'scripcode' in c.lower()), None)
-        name_col = next((c for c in df.columns if 'SECURITY_NAME' in c or 'ScripName' in c or 'scripname' in c.lower()), None)
+        code_col = next((c for c in df.columns if any(k in c.upper() for k in ('SECURITY_CODE','SCRIPCODE','SCRIP_CD'))), None)
+        name_col = next((c for c in df.columns if any(k in c.upper() for k in ('SECURITY_NAME','SCRIPNAME','SCRIP_NAME'))), None)
         isin_col = next((c for c in df.columns if 'ISIN' in c.upper()), None)
 
         if code_col is None or name_col is None:

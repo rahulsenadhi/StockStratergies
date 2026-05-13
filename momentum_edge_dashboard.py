@@ -43,8 +43,11 @@ CHOP_THRESH      = 61.8
 MOM_P            = 126
 MIN_PRICE_VS_LOW = 1.25
 VOL_THRESH       = 1.5
+VOL_LOOKBACK     = 50    # VOLUME_LOOKBACK_DAYS
+VOL_MULTIPLIER   = 1.5   # VOLUME_MULTIPLIER — used with 50-day avg
 NEAR_BK_PCT      = 0.03
-MIN_BARS         = 260
+MIN_BARS         = 300
+MIN_AVG_VOL      = 100_000   # match backtest: skip stocks with avg daily vol < 100K
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  PAGE CONFIG + CSS
@@ -59,114 +62,270 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ── Base ───────────────────────────────────────────────────────────────── */
 html, body, [data-testid="stApp"] {
-    background-color: #0e1117 !important;
-    color: #e0e0e0 !important;
+    background-color: #060B14 !important;
+    color: #D4DBE8 !important;
     font-family: 'Inter', 'Segoe UI', sans-serif;
+    font-size: 14px;
 }
-[data-testid="stSidebar"] { background-color: #11162a !important; }
-[data-testid="stSidebar"] * { color: #c0c8d8 !important; }
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #080E1C 0%, #060B14 100%) !important;
+    border-right: 1px solid rgba(255,255,255,0.06) !important;
+}
+[data-testid="stSidebar"] * { color: #8A9DC0 !important; }
+[data-testid="stSidebar"] .stCheckbox label { color: #A0B0CC !important; font-size: 12px !important; }
+[data-testid="stSidebar"] .stSlider label, [data-testid="stSidebar"] .stSelectbox label {
+    color: #7C90B0 !important; font-size: 11px !important;
+}
 
-/* Regime banner */
+/* ── Regime banners ─────────────────────────────────────────────────────── */
 .regime-bull {
-    background: linear-gradient(90deg, rgba(0,200,83,0.15), rgba(0,200,83,0.05));
-    border: 1px solid rgba(0,200,83,0.4);
-    border-left: 5px solid #00c853;
-    border-radius: 10px;
-    padding: 14px 20px;
+    background: linear-gradient(135deg, rgba(0,212,128,0.12) 0%, rgba(0,212,128,0.04) 100%);
+    border: 1px solid rgba(0,212,128,0.35);
+    border-left: 4px solid #00D480;
+    border-radius: 12px;
+    padding: 16px 20px;
     margin-bottom: 20px;
-    font-size: 16px; font-weight: 700; color: #00c853;
+    position: relative;
+    overflow: hidden;
 }
+.regime-bull::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, #00D480, transparent);
+}
+.regime-bull-title { font-size: 15px; font-weight: 700; color: #00D480; letter-spacing: -0.01em; }
 .regime-bear {
-    background: linear-gradient(90deg, rgba(255,61,61,0.15), rgba(255,61,61,0.05));
-    border: 1px solid rgba(255,61,61,0.4);
-    border-left: 5px solid #ff3d3d;
-    border-radius: 10px;
-    padding: 14px 20px;
+    background: linear-gradient(135deg, rgba(255,61,90,0.12) 0%, rgba(255,61,90,0.04) 100%);
+    border: 1px solid rgba(255,61,90,0.35);
+    border-left: 4px solid #FF3D5A;
+    border-radius: 12px;
+    padding: 16px 20px;
     margin-bottom: 20px;
-    font-size: 16px; font-weight: 700; color: #ff3d3d;
+    position: relative;
+    overflow: hidden;
 }
-.regime-sub { font-size: 12px; font-weight: 400; color: #8892a4; margin-top: 4px; }
+.regime-bear::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, #FF3D5A, transparent);
+}
+.regime-bear-title { font-size: 15px; font-weight: 700; color: #FF3D5A; letter-spacing: -0.01em; }
+.regime-sub {
+    font-size: 12px; font-weight: 400; color: #64748B;
+    margin-top: 5px; line-height: 1.5;
+}
+.regime-pills { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.regime-pill {
+    font-size: 10px; font-weight: 600; padding: 3px 10px;
+    border-radius: 999px; letter-spacing: 0.03em;
+}
+.pill-ok   { background: rgba(0,212,128,0.15); color: #00D480; border: 1px solid rgba(0,212,128,0.3); }
+.pill-fail { background: rgba(255,61,90,0.15);  color: #FF3D5A; border: 1px solid rgba(255,61,90,0.3); }
 
-/* Metric cards */
+/* ── Metric / stat cards ────────────────────────────────────────────────── */
 .me-card {
-    background: #161b27;
-    border: 1px solid #2a2f45;
-    border-radius: 10px;
-    padding: 14px 16px;
+    background: linear-gradient(145deg, #0D1626 0%, #0A1220 100%);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 18px 16px 14px 16px;
     text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
 }
-.me-card .label { font-size: 11px; color: #6e7891; margin-bottom: 4px; }
-.me-card .value { font-size: 26px; font-weight: 800; line-height: 1.1; }
-.me-card .sub   { font-size: 11px; color: #5a6480; margin-top: 4px; }
+.me-card::before {
+    content: '';
+    position: absolute; top: 0; left: 20%; right: 20%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+}
+.me-card .label {
+    font-size: 10px; font-weight: 600; color: #4A5A7A;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    margin-bottom: 8px;
+}
+.me-card .value {
+    font-size: 28px; font-weight: 800; line-height: 1.0;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: -0.02em;
+}
+.me-card .sub { font-size: 11px; color: #3A4A66; margin-top: 6px; line-height: 1.4; }
+.me-card-accent {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
+    border-radius: 0 0 14px 14px;
+}
 
-/* Section header */
+/* ── Section header ─────────────────────────────────────────────────────── */
 .sec-hdr {
-    font-size: 13px; font-weight: 700; color: #7c9cff;
-    text-transform: uppercase; letter-spacing: .06em;
-    border-bottom: 1px solid #1e2235;
-    padding-bottom: 6px; margin: 20px 0 10px 0;
+    font-size: 11px; font-weight: 700; color: #4F7BFF;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    display: flex; align-items: center; gap: 8px;
+    padding-bottom: 8px; margin: 22px 0 12px 0;
+    border-bottom: 1px solid rgba(79,123,255,0.15);
+}
+.sec-hdr::before {
+    content: '';
+    display: inline-block; width: 3px; height: 14px;
+    background: #4F7BFF; border-radius: 2px; flex-shrink: 0;
 }
 
-/* Funnel bars */
+/* ── Funnel bars ─────────────────────────────────────────────────────────── */
 .funnel-bar {
-    background: #12172a;
-    border: 1px solid #1e2235;
+    background: rgba(13,22,38,0.8);
+    border: 1px solid rgba(255,255,255,0.05);
     border-radius: 8px;
-    padding: 10px 14px;
-    margin-bottom: 6px;
+    padding: 8px 12px;
+    margin-bottom: 5px;
+    position: relative;
+    overflow: hidden;
+}
+.funnel-fill {
+    position: absolute; top: 0; left: 0; bottom: 0;
+    border-radius: 8px;
+    opacity: 0.12;
+}
+.funnel-label { font-size: 11px; color: #7A8BA8; position: relative; }
+.funnel-count { font-size: 12px; font-weight: 700; color: #C8D4E8; font-family: 'JetBrains Mono', monospace; position: relative; }
+.funnel-pct   { font-size: 10px; color: #3A4A66; font-family: 'JetBrains Mono', monospace; position: relative; }
+
+/* ── Signal badges ─────────────────────────────────────────────────────── */
+.badge-buy {
+    background: rgba(0,212,128,0.12); color: #00D480;
+    border: 1px solid rgba(0,212,128,0.3);
+    border-radius: 999px; padding: 2px 10px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+.badge-watch {
+    background: rgba(245,183,49,0.12); color: #F5B731;
+    border: 1px solid rgba(245,183,49,0.3);
+    border-radius: 999px; padding: 2px 10px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+.badge-forming {
+    background: rgba(79,123,255,0.12); color: #7C9CFF;
+    border: 1px solid rgba(79,123,255,0.25);
+    border-radius: 999px; padding: 2px 10px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+.badge-bear {
+    background: rgba(255,61,90,0.12); color: #FF5C7A;
+    border: 1px solid rgba(255,61,90,0.25);
+    border-radius: 999px; padding: 2px 10px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+    white-space: nowrap;
 }
 
-/* Signal action badge */
-.badge-buy     { background:#00c85322;color:#00c853;border:1px solid #00c85366;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700; }
-.badge-watch   { background:#f9c20022;color:#f9c200;border:1px solid #f9c20066;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700; }
-.badge-forming { background:#7c9cff22;color:#7c9cff;border:1px solid #7c9cff66;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700; }
-.badge-bear    { background:#ff3d3d22;color:#ff3d3d;border:1px solid #ff3d3d66;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700; }
-
-/* Explain box */
+/* ── Explain / info box ─────────────────────────────────────────────────── */
 .explain-box {
-    border-left: 3px solid #7c9cff;
-    background: rgba(124,156,255,0.06);
-    border-radius: 0 8px 8px 0;
-    padding: 10px 14px;
-    font-size: 12px;
-    color: #8892a4;
-    line-height: 1.7;
-    margin-bottom: 14px;
-}
-
-/* Detail panel */
-.detail-header {
-    background: linear-gradient(90deg, rgba(124,156,255,0.1), rgba(124,156,255,0.03));
-    border: 1px solid rgba(124,156,255,0.25);
-    border-left: 5px solid #7c9cff;
+    background: rgba(79,123,255,0.05);
+    border: 1px solid rgba(79,123,255,0.15);
     border-radius: 10px;
-    padding: 14px 20px;
+    padding: 12px 16px;
+    font-size: 12px; color: #6A7A9A; line-height: 1.8;
     margin-bottom: 16px;
 }
+.explain-box b { color: #9AB0D0; font-weight: 600; }
 
-/* Criteria card */
+/* ── Detail panel header ────────────────────────────────────────────────── */
+.detail-header {
+    background: linear-gradient(135deg, rgba(79,123,255,0.1) 0%, rgba(79,123,255,0.03) 100%);
+    border: 1px solid rgba(79,123,255,0.25);
+    border-left: 4px solid #4F7BFF;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 18px;
+    position: relative;
+    overflow: hidden;
+}
+.detail-header::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, rgba(79,123,255,0.6), transparent);
+}
+
+/* ── Criteria cards ─────────────────────────────────────────────────────── */
 .crit-ok {
-    background: rgba(0,200,83,0.07);
-    border: 1px solid rgba(0,200,83,0.2);
-    border-left: 3px solid #00c853;
-    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(0,212,128,0.07) 0%, rgba(0,212,128,0.02) 100%);
+    border: 1px solid rgba(0,212,128,0.2);
+    border-left: 3px solid #00D480;
+    border-radius: 10px;
     padding: 12px 14px;
     margin-bottom: 8px;
-    min-height: 78px;
+    min-height: 76px;
 }
 .crit-fail {
-    background: rgba(255,61,61,0.07);
-    border: 1px solid rgba(255,61,61,0.2);
-    border-left: 3px solid #ff3d3d;
-    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(255,61,90,0.07) 0%, rgba(255,61,90,0.02) 100%);
+    border: 1px solid rgba(255,61,90,0.18);
+    border-left: 3px solid #FF3D5A;
+    border-radius: 10px;
     padding: 12px 14px;
     margin-bottom: 8px;
-    min-height: 78px;
+    min-height: 76px;
 }
-.crit-icon  { font-size: 16px; margin-bottom: 4px; }
-.crit-label { font-size: 11px; font-weight: 700; color: #e0e0e0; line-height: 1.4; }
-.crit-detail{ font-size: 10px; color: #5a6480; margin-top: 5px; font-family: monospace; }
+.crit-icon  { font-size: 14px; margin-bottom: 4px; }
+.crit-label { font-size: 11px; font-weight: 600; color: #C8D4E8; line-height: 1.4; }
+.crit-detail {
+    font-size: 10px; color: #4A5A7A; margin-top: 5px;
+    font-family: 'JetBrains Mono', monospace; line-height: 1.6;
+}
+
+/* ── Page header ────────────────────────────────────────────────────────── */
+.page-title {
+    font-size: 26px; font-weight: 800; color: #E8EDF5;
+    letter-spacing: -0.03em; line-height: 1.1;
+}
+.page-sub {
+    font-size: 13px; color: #3A4A6A; margin-top: 4px; line-height: 1.5;
+}
+.page-sub b { color: #4F7BFF; font-weight: 600; }
+
+/* ── Streamlit native element tweaks ────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+    background: rgba(13,22,38,0.6) !important;
+    border-radius: 10px !important;
+    padding: 4px !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    gap: 2px !important;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 7px !important;
+    font-size: 12px !important; font-weight: 600 !important;
+    color: #4A5A7A !important; padding: 6px 14px !important;
+    transition: all 0.15s !important;
+}
+.stTabs [aria-selected="true"] {
+    background: rgba(79,123,255,0.2) !important;
+    color: #7C9CFF !important;
+}
+.stDataFrame { border-radius: 10px !important; overflow: hidden !important; }
+.stButton > button {
+    background: linear-gradient(135deg, #1A2A4A, #0F1E38) !important;
+    border: 1px solid rgba(79,123,255,0.3) !important;
+    color: #7C9CFF !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important; font-size: 13px !important;
+    transition: all 0.15s !important;
+}
+.stButton > button:hover {
+    background: linear-gradient(135deg, #1E3260, #152A50) !important;
+    border-color: rgba(79,123,255,0.6) !important;
+}
+[data-testid="stButton"] [kind="primary"] > button {
+    background: linear-gradient(135deg, #2A4AFF, #1A35CC) !important;
+    border-color: transparent !important;
+    color: #fff !important;
+}
+hr { border-color: rgba(255,255,255,0.06) !important; }
+.stWarning  { background: rgba(245,183,49,0.08)  !important; border: 1px solid rgba(245,183,49,0.25)  !important; border-radius: 10px !important; }
+.stInfo     { background: rgba(79,123,255,0.08)  !important; border: 1px solid rgba(79,123,255,0.25)  !important; border-radius: 10px !important; }
+.stSuccess  { background: rgba(0,212,128,0.08)   !important; border: 1px solid rgba(0,212,128,0.25)   !important; border-radius: 10px !important; }
+.stError    { background: rgba(255,61,90,0.08)   !important; border: 1px solid rgba(255,61,90,0.25)   !important; border-radius: 10px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -324,6 +483,42 @@ def _compute_recovery(close_s: pd.Series, ema220_s: pd.Series) -> tuple[str, int
     return 'No Reclaim', -1
 
 
+def _compute_cycle_state(close_arr: np.ndarray,
+                         ema220_arr: np.ndarray,
+                         resistance_arr: np.ndarray) -> str:
+    """
+    Walk-forward 1-2-3 state machine for a single symbol.
+
+    States
+    ------
+    NORMAL       : no flush has occurred yet
+    FLUSHED      : close dropped below EMA220 (point 2 — shakeout in progress)
+    POST_BREAKOUT: first close > resistance_prev after the flush (point 3 done)
+
+    Transitions
+    -----------
+    any state  → FLUSHED       : close_T < EMA220_T
+    FLUSHED    → POST_BREAKOUT : close_T > resistance_prev_T
+                                 AND prev_close <= resistance_prev_T
+    POST_BREAKOUT → FLUSHED    : close_T < EMA220_T  (new cycle starts)
+    """
+    n     = len(close_arr)
+    state = 'NORMAL'
+    for i in range(1, n):
+        ci      = close_arr[i]
+        ei      = ema220_arr[i]
+        ri      = resistance_arr[i]
+        ci_prev = close_arr[i - 1]
+        if np.isnan(ci) or np.isnan(ei):
+            continue
+        if ci < ei:
+            state = 'FLUSHED'
+        elif state == 'FLUSHED' and not np.isnan(ri) and ci > ri and ci_prev <= ri:
+            state = 'POST_BREAKOUT'
+        # POST_BREAKOUT stays until close drops below EMA220 again (first branch above)
+    return state
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def compute_signals(filters_active: dict, min_score: int,
                     exchange_filter: str) -> tuple[pd.DataFrame, dict, bool]:
@@ -346,6 +541,9 @@ def compute_signals(filters_active: dict, min_score: int,
     for ticker, df in ohlcv.items():
         if len(df) < MIN_BARS:
             continue
+        # Bug 4 fix: match backtest's min_avg_volume filter (skip illiquid stocks)
+        if df['Volume'].iloc[-30:].mean() < MIN_AVG_VOL:
+            continue
         funnel['sufficient_data'] += 1
 
         exch = 'NSE' if ticker.endswith('.NS') else 'BSE'
@@ -362,8 +560,17 @@ def compute_signals(filters_active: dict, min_score: int,
         ema220 = close.ewm(span=EMA220_P, adjust=False).mean()
         high52 = close.rolling(HIGH52_P).max()
         low52  = close.rolling(LOW52_P).min()
-        vol20  = volume.rolling(VOLAVG_P).mean()
-        ath    = close.expanding().max()
+        vol20      = volume.rolling(VOLAVG_P).mean()
+        vol50      = volume.rolling(VOL_LOOKBACK).mean()
+        resistance = close.shift(1).rolling(HIGH52_P).max()   # yesterday's 252-day max
+        ath        = close.expanding().max()
+
+        # 1-2-3 state machine: determines whether this cycle's breakout already fired
+        cycle_state = _compute_cycle_state(
+            close.values.astype(float),
+            ema220.values.astype(float),
+            resistance.values.astype(float),
+        )
         dip_flag   = (close < ema220).astype(int)
         had_dip    = dip_flag.rolling(DIP_LB).max().astype(bool)
         mom_6m     = close.pct_change(MOM_P)
@@ -373,10 +580,11 @@ def compute_signals(filters_active: dict, min_score: int,
 
         close_s  = _s(close);  ema220_s = _s(ema220)
         sma50_s  = _s(sma50);  sma150_s = _s(sma150)
-        low52_s  = _s(low52);  vol20_s  = _s(vol20)
+        low52_s  = _s(low52);  vol20_s  = _s(vol20);  vol50_s = _s(vol50)
         vol_s    = _s(volume); had_dip_s = bool(_s(had_dip))
         ath_prev = _s(ath);    high52_s = _s(high52)
         mom_s    = _s(mom_6m)
+        res_today = float(resistance.iloc[-1]) if not pd.isna(resistance.iloc[-1]) else np.nan
 
         if any(pd.isna(v) for v in [close_s, ema220_s, sma50_s, sma150_s, low52_s]):
             continue
@@ -445,9 +653,11 @@ def compute_signals(filters_active: dict, min_score: int,
                         if c[j] >= e[j]:
                             rd = j - dip_low_idx
                             if rd <= 90:
-                                seq_valid = True
                                 rec_days = rd
                                 rec_label = 'Fast' if rd <= 30 else ('Normal' if rd <= 60 else 'Slow')
+                                # Bug 2 fix: match backtest prefer_fast_recovery=True (skip Slow >60d)
+                                if rec_label != 'Slow':
+                                    seq_valid = True
                             break
 
         if not seq_valid:
@@ -457,17 +667,39 @@ def compute_signals(filters_active: dict, min_score: int,
         # ── Volume + breakout ─────────────────────────────────────────────────
         vol_ok = True
         if filters_active.get('vol', True):
-            # B12 FIX: today's actual volume vs yesterday's 20-day avg
+            # 20-day check (existing)
             if vol20_s <= 0 or pd.isna(vol_today):
                 vol_ok = False
             else:
                 vol_ok = vol_today >= VOL_THRESH * vol20_s
+            # Additional 50-day check: vol_today >= VOLUME_MULTIPLIER × avg_vol_50
+            if vol_ok and not pd.isna(vol50_s) and vol50_s > 0:
+                vol_ok = vol_today >= VOL_MULTIPLIER * vol50_s
 
-        bk_ref = ath_prev if (not pd.isna(ath_prev) and ath_prev > high52_s) else high52_s
-        # B11 FIX: today's close vs yesterday's reference
-        is_breakout = (not pd.isna(bk_ref)) and close_now > bk_ref and close_now > ema220_now
-        is_near_bk  = (not is_breakout) and (not pd.isna(bk_ref)) and close_now >= bk_ref * (1 - NEAR_BK_PCT)
-        entry_type  = 'ATH' if (not pd.isna(ath_prev) and ath_prev > high52_s) else '52W High'
+        # ── Breakout / near-breakout classification ───────────────────────────
+        # resistance_today = yesterday's 252-day rolling max  (the level to beat)
+        bk_ref = res_today if not pd.isna(res_today) else high52_s
+        entry_type = 'ATH' if (not pd.isna(ath_prev) and close_now > float(ath_prev)) else '52W High'
+
+        # BREAKOUT: today's close first-crosses above resistance
+        is_breakout = (
+            not pd.isna(res_today)
+            and close_now > res_today              # above resistance today
+            and close_s <= res_today               # was at-or-below yesterday
+            and close_now > ema220_now             # still above long-term trend
+        )
+
+        # Distance gates for near-breakout
+        dist_to_res = (res_today - close_now) / res_today if (not pd.isna(res_today) and res_today > 0) else 1.0
+        dist_from_220 = (close_now / ema220_now - 1) if ema220_now > 0 else 0.0
+
+        is_near_bk = (
+            not is_breakout
+            and not pd.isna(res_today)
+            and 0 < dist_to_res <= 0.02            # within 2% below resistance
+            and dist_from_220 <= 0.15              # not overextended above EMA220
+            and cycle_state != 'POST_BREAKOUT'     # state machine: breakout already fired this cycle
+        )
 
         if is_breakout and vol_ok:
             funnel['vol_bk'] += 1
@@ -480,6 +712,11 @@ def compute_signals(filters_active: dict, min_score: int,
             signal = 'Watch Zone'
         else:
             signal = 'Watchlist'
+
+        # State machine gate: POST_BREAKOUT stocks completed their 1-2-3 cycle already.
+        # Exclude from screener until a new flush resets the cycle.
+        if cycle_state == 'POST_BREAKOUT':
+            continue
 
         if filters_active.get('regime', True) and not is_bull_today:
             action = 'BEAR MARKET'
@@ -513,8 +750,8 @@ def compute_signals(filters_active: dict, min_score: int,
             'Chart Qual':   'Clean ✅' if (chop is not None and chop < CHOP_THRESH) else 'Choppy ⚠️',
             'Choppiness':   round(chop, 1) if chop is not None else None,
             'Close (₹)':    round(close_now, 2),
-            'ATH (₹)':      round(float(bk_ref), 2) if bk_ref else None,
-            'Dist ATH%':    round(dist_ath, 1),
+            '52W High (₹)': round(float(bk_ref), 2) if bk_ref else None,
+            'Dist 52W%':    round(dist_ath, 1),
             '220 EMA (₹)':  round(ema220_now, 2),
             'Vol Ratio':    round(vol_ratio, 2),
             'Stop Loss (₹)':round(stop_loss, 2),
@@ -624,16 +861,16 @@ def _format_signals_for_display(signals: pd.DataFrame) -> pd.DataFrame:
     """Return a display-formatted copy of signals for st.dataframe."""
     display_cols = [
         'Ticker', 'Exchange', 'Signal', 'Action', 'Score',
-        'Close (₹)', 'ATH (₹)', 'Dist ATH%', '220 EMA (₹)',
+        'Close (₹)', '52W High (₹)', 'Dist 52W%', '220 EMA (₹)',
         'Vol Ratio', 'Mom 6M%', 'Recovery', 'Stop Loss (₹)', 'Entry Type', 'Chart Qual',
     ]
     disp = signals[[c for c in display_cols if c in signals.columns]].copy().reset_index(drop=True)
 
-    for c in ('Close (₹)', 'ATH (₹)', '220 EMA (₹)', 'Stop Loss (₹)'):
+    for c in ('Close (₹)', '52W High (₹)', '220 EMA (₹)', 'Stop Loss (₹)'):
         if c in disp.columns:
             disp[c] = disp[c].apply(lambda x: f'₹{x:,.2f}' if pd.notna(x) else '—')
-    if 'Dist ATH%' in disp.columns:
-        disp['Dist ATH%'] = disp['Dist ATH%'].apply(lambda x: f'{x:+.1f}%')
+    if 'Dist 52W%' in disp.columns:
+        disp['Dist 52W%'] = disp['Dist 52W%'].apply(lambda x: f'{x:+.1f}%')
     if 'Vol Ratio' in disp.columns:
         disp['Vol Ratio'] = disp['Vol Ratio'].apply(lambda x: f'{x:.2f}×')
     if 'Mom 6M%' in disp.columns:
@@ -880,8 +1117,9 @@ def _build_detail_chart(ticker: str, df: pd.DataFrame,
 
 def _render_criteria_panel(df: pd.DataFrame) -> None:
     """
-    Render 6 strategy conditions as a 2×3 grid of ✅/❌ cards.
-    Uses yesterday's values (no look-ahead) for F1–F5; today's close for F6.
+    Render 6 strategy filter conditions (F1–F6) as a 2×3 grid of ✅/❌ cards,
+    then the Breakout Trigger as a separate full-width row.
+    All filter values use yesterday's close (no look-ahead), matching the backtest.
     """
     close  = df['Close']
     volume = df['Volume']
@@ -891,6 +1129,8 @@ def _render_criteria_panel(df: pd.DataFrame) -> None:
     ema220 = close.ewm(span=EMA220_P, adjust=False).mean()
     high52 = close.rolling(HIGH52_P).max()
     low52  = close.rolling(LOW52_P).min()
+    vol20  = volume.rolling(VOLAVG_P).mean()
+    vol50  = volume.rolling(VOL_LOOKBACK).mean()
 
     def _sv(series) -> float:
         return float(series.iloc[-2]) if len(series) >= 2 else np.nan
@@ -901,11 +1141,15 @@ def _render_criteria_panel(df: pd.DataFrame) -> None:
     ema220_s = _sv(ema220)
     low52_s  = _sv(low52)
     high52_s = _sv(high52)
-    close_now = float(close.iloc[-1])
+    vol20_s  = _sv(vol20)
+    vol50_s  = _sv(vol50)
+    close_now  = float(close.iloc[-1])
+    ema220_now = float(ema220.iloc[-1])
+    vol_today  = float(volume.iloc[-1])
 
-    # F5: find last dip date within lookback window
+    # F5: find last dip date within lookback window (using shifted window = yesterday's data)
     dip_mask   = close < ema220
-    dip_recent = dip_mask.iloc[-DIP_LB:]
+    dip_recent = dip_mask.iloc[-DIP_LB-1:-1]   # yesterday's lookback window
     had_dip    = bool(dip_recent.any())
     last_dip_str = '—'
     if had_dip:
@@ -913,7 +1157,31 @@ def _render_criteria_panel(df: pd.DataFrame) -> None:
         if len(dip_dates) > 0:
             last_dip_str = pd.Timestamp(dip_dates[-1]).strftime('%d %b %Y')
 
+    # F6: Choppiness Index (actual backtest F6 — not the breakout!)
+    chop_val  = _compute_choppiness(df)
+    chop_ok   = chop_val is not None and chop_val < CHOP_THRESH
+    chop_str  = f'{chop_val:.1f}' if chop_val is not None else '—'
+
     threshold_4 = MIN_PRICE_VS_LOW * low52_s if not pd.isna(low52_s) else np.nan
+
+    # Breakout trigger (separate from F1–F6 filters)
+    # resistance = yesterday's 252-day rolling max (same definition as compute_signals)
+    resistance_p  = close.shift(1).rolling(HIGH52_P).max()
+    res_today_cp  = float(resistance_p.iloc[-1]) if not pd.isna(resistance_p.iloc[-1]) else float('nan')
+    close_prev_cp = float(close.iloc[-2]) if len(close) >= 2 else float('nan')
+
+    vol_ratio      = (vol_today / vol20_s) if vol20_s > 0 and not pd.isna(vol20_s) else 0
+    vol_ratio50    = (vol_today / vol50_s) if (not pd.isna(vol50_s) and vol50_s > 0) else None
+    vol_ok_20      = vol_ratio >= VOL_THRESH
+    vol_ok_50      = (vol_ratio50 is None) or (vol_ratio50 >= VOL_MULTIPLIER)
+    vol_ok_now     = vol_ok_20 and vol_ok_50
+    is_bk_today    = (
+        not np.isnan(res_today_cp)
+        and close_now > res_today_cp
+        and close_prev_cp <= res_today_cp
+        and close_now > ema220_now
+        and vol_ok_now
+    )
 
     conditions = [
         (
@@ -936,25 +1204,25 @@ def _render_criteria_panel(df: pd.DataFrame) -> None:
         ),
         (
             (not pd.isna(threshold_4)) and close_s >= threshold_4,
-            f'F4 — Close ≥ 1.25 × 52W Low',
+            'F4 — Close ≥ 1.25 × 52W Low',
             'Stock well above its yearly low',
             f'Close = ₹{close_s:,.2f}   Min = ₹{threshold_4:,.2f}   52W Low = ₹{low52_s:,.2f}',
         ),
         (
             had_dip,
             f'F5 — Dipped below EMA 220 (last {DIP_LB}d)',
-            'The "shakeout" dip occurred',
+            'The shakeout dip occurred — confirms the setup',
             f'Last dip date: {last_dip_str}',
         ),
         (
-            close_now > high52_s,
-            'F6 — Breaking 52-Week High',
-            'New breakout on today\'s close',
-            f'Close = ₹{close_now:,.2f}   Prev 52W High = ₹{high52_s:,.2f}',
+            chop_ok,
+            'F6 — Choppiness < 61.8',
+            'Clean trending chart, not sideways noise',
+            f'Choppiness Index = {chop_str}   (threshold = {CHOP_THRESH})',
         ),
     ]
 
-    # Render as 2 rows × 3 columns
+    # Render F1–F6 as 2 rows × 3 columns
     for row_start in (0, 3):
         cols = st.columns(3)
         for i, col in enumerate(cols):
@@ -974,6 +1242,30 @@ def _render_criteria_panel(df: pd.DataFrame) -> None:
                     f'</div>',
                     unsafe_allow_html=True,
                 )
+
+    # Breakout Trigger — separate row, checked on today's close (this fires the buy signal)
+    st.markdown('<div style="margin-top:10px;"></div>', unsafe_allow_html=True)
+    bk_css  = 'crit-ok' if is_bk_today else 'crit-fail'
+    bk_icon = '✅' if is_bk_today else '❌'
+    vol50_str  = f'{vol_ratio50:.2f}×' if vol_ratio50 is not None else 'N/A'
+    res_str    = f'₹{res_today_cp:,.2f}' if not np.isnan(res_today_cp) else '—'
+    bk_detail  = (
+        f'Close = ₹{close_now:,.2f}   Resistance (prev 52W max) = {res_str}   '
+        f'Prev close = ₹{close_prev_cp:,.2f}   EMA220 = ₹{ema220_now:,.2f}   '
+        f'Vol/20d = {vol_ratio:.2f}× (need ≥{VOL_THRESH}×)   '
+        f'Vol/50d = {vol50_str} (need ≥{VOL_MULTIPLIER}×)'
+    )
+    st.markdown(
+        f'<div class="{bk_css}" style="border-left-color:#f9c200;border-color:rgba(249,194,0,0.3);background:rgba(249,194,0,0.05);">'
+        f'  <div class="crit-icon">{bk_icon}</div>'
+        f'  <div class="crit-label">🚀 Breakout Trigger — Close > 52W High + Volume confirmed</div>'
+        f'  <div style="font-size:10px;color:#6e7891;margin-top:2px;">'
+        f'    This is what actually triggers the BUY signal. All 6 filters above must also pass.'
+        f'  </div>'
+        f'  <div class="crit-detail">{bk_detail}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1033,8 +1325,8 @@ def _render_stock_detail(ticker: str, signals_df: pd.DataFrame,
     st.markdown('<div class="sec-hdr">Strategy Conditions</div>', unsafe_allow_html=True)
     st.markdown(
         '<div style="font-size:11px;color:#5a6480;margin-bottom:10px;">'
-        'Evaluated on yesterday\'s close (no look-ahead). '
-        'F6 uses today\'s close to capture live breakout.'
+        'F1–F6 filters evaluated on yesterday\'s close (no look-ahead bias). '
+        'The Breakout Trigger at the bottom uses today\'s live close.'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -1067,7 +1359,8 @@ def _bt_run_single(ticker: str, df: pd.DataFrame,
     ema220  = close.ewm(span=EMA220_P, adjust=False).mean()
     high52  = close.rolling(HIGH52_P, min_periods=HIGH52_P).max()
     low52   = close.rolling(LOW52_P,  min_periods=LOW52_P ).min()
-    vol20   = volume.rolling(VOLAVG_P, min_periods=VOLAVG_P).mean()
+    vol20   = volume.rolling(VOLAVG_P,  min_periods=VOLAVG_P ).mean()
+    vol50   = volume.rolling(VOL_LOOKBACK, min_periods=VOL_LOOKBACK).mean()
     had_dip = (close < ema220).rolling(DIP_LB, min_periods=1).max()
 
     arr_c   = close.values.astype(float)
@@ -1079,6 +1372,7 @@ def _bt_run_single(ticker: str, df: pd.DataFrame,
     arr_h52 = high52.values.astype(float)
     arr_l52 = low52.values.astype(float)
     arr_v20 = vol20.values.astype(float)
+    arr_v50 = vol50.values.astype(float)
     arr_dip = had_dip.values.astype(float)
     dates   = df.index
     n       = len(dates)
@@ -1139,6 +1433,7 @@ def _bt_run_single(ticker: str, df: pd.DataFrame,
             s_h52  = arr_h52[prev - 1] if prev >= 1 else arr_h52[prev]
             s_l52  = arr_l52[prev]
             s_v20  = arr_v20[prev]
+            s_v50  = arr_v50[prev]
             s_v    = arr_v[prev]
             s_dip  = arr_dip[prev]
 
@@ -1151,8 +1446,10 @@ def _bt_run_single(ticker: str, df: pd.DataFrame,
             f3     = s_s50 > s_s150
             f4     = s_c >= MIN_PRICE_VS_LOW * s_l52
             f5     = s_dip >= 0.5
-            bk     = (s_c > s_h52) and (s_c > s_e)
-            vol_ok = (s_v20 <= 0) or (s_v >= VOL_THRESH * s_v20)
+            bk        = (s_c > s_h52) and (s_c > s_e)
+            vol_ok_20 = (s_v20 <= 0) or (s_v >= VOL_THRESH * s_v20)
+            vol_ok_50 = np.isnan(s_v50) or s_v50 <= 0 or (s_v >= VOL_MULTIPLIER * s_v50)
+            vol_ok    = vol_ok_20 and vol_ok_50
 
             if f1 and f2 and f3 and f4 and f5 and bk and vol_ok:
                 en_px = arr_o[i]
@@ -1520,10 +1817,10 @@ def _render_backtest_report() -> None:
     """
     st.markdown("""
     <div style="padding:4px 0 12px 0;">
-      <div style="font-size:22px;font-weight:900;color:#e4e8f0;">📋 Backtest Report</div>
-      <div style="font-size:12px;color:#5a6480;margin-top:4px;">
+      <div class="page-title">📋 Backtest Report</div>
+      <div class="page-sub">
         Walk-forward backtest of Momentum Edge signals on loaded NSE/BSE stocks.
-        Entry at next-bar open · Exit at next-bar open after exit condition fires on prior close.
+        Entry at next-bar open &nbsp;·&nbsp; Exit at next-bar open after exit condition fires on prior close.
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1598,8 +1895,9 @@ def render_sidebar() -> dict:
     with st.sidebar:
         st.markdown("""
         <div style="padding:8px 0 20px 0;">
-          <div style="font-size:20px;font-weight:900;color:#e4e8f0;">📈 Momentum Edge</div>
-          <div style="font-size:11px;color:#3d4a60;margin-top:2px;">NSE + BSE Universe Scanner</div>
+          <div style="font-size:18px;font-weight:800;color:#E8EDF5;letter-spacing:-0.02em;">📈 Momentum Edge</div>
+          <div style="font-size:10px;color:#2A3A58;margin-top:3px;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;">NSE + BSE Universe Scanner</div>
+          <div style="height:1px;background:linear-gradient(90deg,rgba(79,123,255,0.4),transparent);margin-top:10px;"></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1660,13 +1958,11 @@ def main():
 
     with tab_scr:
         st.markdown("""
-        <div style="padding:4px 0 8px 0;">
-          <div style="font-size:28px;font-weight:900;color:#e4e8f0;letter-spacing:-.02em;">
-            📈 Momentum Edge Screener
-          </div>
-          <div style="font-size:13px;color:#5a6480;margin-top:2px;">
-            NSE + BSE universe · 220-EMA shakeout-recovery ATH breakout strategy
-            · <b style="color:#7c9cff;">Click any row</b> for a full price chart and criteria breakdown
+        <div style="padding:4px 0 12px 0;">
+          <div class="page-title">📈 Momentum Edge Screener</div>
+          <div class="page-sub">
+            NSE + BSE universe &nbsp;·&nbsp; 220-EMA shakeout-recovery ATH breakout strategy
+            &nbsp;·&nbsp; <b>Click any row</b> for a full price chart and criteria breakdown
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -1705,16 +2001,25 @@ def main():
         if is_bull:
             st.markdown(
                 '<div class="regime-bull">'
-                '🟢 BULL MARKET — Strategy Active | Nifty 50 is above its 220-day average'
-                '<div class="regime-sub">New buy signals are active. Follow breakout setups with proper position sizing.</div>'
+                '<div class="regime-bull-title">🟢 BULL MARKET — Strategy Active</div>'
+                '<div class="regime-sub">Nifty 50 passes all 3 regime conditions. New buy signals are active. Follow breakout setups with proper position sizing.</div>'
+                '<div class="regime-pills">'
+                '<span class="regime-pill pill-ok">Close &gt; SMA 200</span>'
+                '<span class="regime-pill pill-ok">SMA 50 &gt; SMA 200</span>'
+                '<span class="regime-pill pill-ok">Within 10% of 52W High</span>'
+                '</div>'
                 '</div>',
                 unsafe_allow_html=True,
             )
         else:
             st.markdown(
                 '<div class="regime-bear">'
-                '🔴 BEAR MARKET — No New Entries | Nifty 50 has fallen below its 220-day average'
-                '<div class="regime-sub">All new entries are paused. Existing positions follow their own exit rules.</div>'
+                '<div class="regime-bear-title">🔴 BEAR MARKET — No New Entries</div>'
+                '<div class="regime-sub">Nifty 50 failed one or more regime conditions. All new entries are paused. Existing positions follow their own exit rules.</div>'
+                '<div class="regime-pills">'
+                '<span class="regime-pill pill-fail">Regime Filter Active</span>'
+                '<span class="regime-pill pill-fail">No new signals</span>'
+                '</div>'
                 '</div>',
                 unsafe_allow_html=True,
             )
@@ -1727,26 +2032,30 @@ def main():
         with c1:
             st.markdown(f"""<div class="me-card">
               <div class="label">Total Universe</div>
-              <div class="value" style="color:#7c9cff;">{funnel['total']:,}</div>
+              <div class="value" style="color:#7C9CFF;">{funnel['total']:,}</div>
               <div class="sub">NSE + BSE stocks loaded</div>
+              <div class="me-card-accent" style="background:#4F7BFF;"></div>
             </div>""", unsafe_allow_html=True)
         with c2:
             st.markdown(f"""<div class="me-card">
               <div class="label">Pass All 6 Filters</div>
-              <div class="value" style="color:#00bfa5;">{funnel['f6']:,}</div>
+              <div class="value" style="color:#00D480;">{funnel['f6']:,}</div>
               <div class="sub">of {funnel['sufficient_data']:,} with sufficient data</div>
+              <div class="me-card-accent" style="background:#00D480;"></div>
             </div>""", unsafe_allow_html=True)
         with c3:
             st.markdown(f"""<div class="me-card">
               <div class="label">Valid Sequential Signal</div>
-              <div class="value" style="color:#f9c200;">{funnel['sequential']:,}</div>
+              <div class="value" style="color:#F5B731;">{funnel['sequential']:,}</div>
               <div class="sub">dip → recovery → breakout confirmed</div>
+              <div class="me-card-accent" style="background:#F5B731;"></div>
             </div>""", unsafe_allow_html=True)
         with c4:
             st.markdown(f"""<div class="me-card">
               <div class="label">Breakout Today 🔥</div>
-              <div class="value" style="color:#00c853;">{n_bk}</div>
-              <div class="sub">Near: {n_near} · All signals: {len(sigs)}</div>
+              <div class="value" style="color:#00D480;">{n_bk}</div>
+              <div class="sub">Near: {n_near} &nbsp;·&nbsp; All signals: {len(sigs)}</div>
+              <div class="me-card-accent" style="background:linear-gradient(90deg,#00D480,#4F7BFF);"></div>
             </div>""", unsafe_allow_html=True)
 
         st.markdown('<br>', unsafe_allow_html=True)
@@ -1761,11 +2070,13 @@ def main():
             st.markdown("""
             <div class="explain-box">
               <b>How to read this table:</b>
-              <b>Score /100</b> = overall setup quality (6M momentum + ATH proximity + volume + recovery speed).
-              <b>Dist ATH%</b> = how close today's price is to the all-time high (0% = AT the ATH).
-              <b>Vol Ratio</b> = today's volume ÷ 20-day average (2.0× means 2× normal buying).
-              Green rows = Breakout Today · Yellow = Near Breakout · Blue = Watch Zone.
-              <b>Click any row</b> to open the price chart and criteria panel.
+              <b>Score /100</b> = overall setup quality (6M momentum rank + breakout proximity + volume surge + recovery speed).
+              <b>52W High (₹)</b> = yesterday's 52-week high — the price level the stock is trying to break above.
+              <b>Dist 52W%</b> = how far today's close is from the 52-week high (+0.5% = just above, −2% = still below).
+              <b>Entry Type</b> = ATH means today's close broke an all-time high; 52W High means it only broke the 1-year high.
+              <b>Vol Ratio</b> = today's volume ÷ 20-day average (2.0× means 2× normal buying pressure).
+              Green rows = Breakout Today · Yellow = Near Breakout · Blue = Forming/Watch.
+              <b>Click any row</b> to open the price chart and all 6 filter conditions.
             </div>
             """, unsafe_allow_html=True)
 
@@ -1819,18 +2130,23 @@ def main():
                 ('Sequential',    funnel['sequential']),
                 ('Vol+Breakout',  funnel['vol_bk']),
             ]
-            st.markdown('<div style="font-size:11px;">', unsafe_allow_html=True)
             for label, count in funnel_labels:
-                pct = f"{count / max(funnel['total'], 1) * 100:.0f}%" if funnel['total'] > 0 else '—'
+                pct_val = count / max(funnel['total'], 1) * 100 if funnel['total'] > 0 else 0
+                pct_str = f'{pct_val:.0f}%'
+                fill_color = '#4F7BFF' if label not in ('Vol+Breakout',) else '#00D480'
                 st.markdown(
-                    f'<div class="funnel-bar" style="display:flex;justify-content:space-between;">'
-                    f'<span style="color:#8892a4;">{label}</span>'
-                    f'<span style="color:#e0e0e0;font-weight:700;">{count:,}'
-                    f' <span style="color:#3a4060;font-size:10px;">({pct})</span></span>'
+                    f'<div class="funnel-bar">'
+                    f'  <div class="funnel-fill" style="width:{pct_val:.1f}%;background:{fill_color};"></div>'
+                    f'  <div style="display:flex;justify-content:space-between;align-items:center;">'
+                    f'    <span class="funnel-label">{label}</span>'
+                    f'    <span>'
+                    f'      <span class="funnel-count">{count:,}</span>'
+                    f'      &nbsp;<span class="funnel-pct">({pct_str})</span>'
+                    f'    </span>'
+                    f'  </div>'
                     f'</div>',
                     unsafe_allow_html=True,
                 )
-            st.markdown('</div>', unsafe_allow_html=True)
 
             st.markdown("<div style='margin-top:10px'></div>", unsafe_allow_html=True)
             with st.expander("🔍 What does each filter check?"):
