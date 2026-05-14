@@ -7,7 +7,9 @@ Run: streamlit run momentum_edge_dashboard.py --server.port 8503
 """
 
 import calendar
+import os
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -356,9 +358,9 @@ def _load_csv(path: Path) -> pd.DataFrame | None:
         return None
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_universe_data() -> dict[str, pd.DataFrame]:
-    """Load all stock CSVs from both data folders. Legacy folder (full OHLCV) takes priority."""
+    """Load all stock CSVs in parallel. Legacy folder takes priority."""
     symbol_whitelist = None
     ufile = Path(UNIVERSE_FILE)
     if ufile.exists():
@@ -370,31 +372,39 @@ def load_universe_data() -> dict[str, pd.DataFrame]:
             pass
 
     skip_stems = {'^NSEI', 'NIFTYBEES.NS', 'me_summary', 'download_status', 'failed_symbols'}
-    ohlcv = {}
 
-    def _scan_folder(folder: Path) -> None:
+    def _try_load(csv_file: Path) -> tuple[str, object]:
+        stem = csv_file.stem
+        if stem in skip_stems:
+            return stem, None
+        if symbol_whitelist and stem not in symbol_whitelist:
+            return stem, None
+        df = _load_csv(csv_file)
+        if df is not None and len(df) >= MIN_BARS:
+            return stem, df
+        return stem, None
+
+    # Collect all candidate files (legacy priority)
+    seen: set[str] = set()
+    file_pairs: list[tuple[Path, int]] = []   # (path, priority)  0=legacy, 1=full
+    for folder, pri in [(Path(DATA_FOLDER_LEGACY), 0), (Path(DATA_FOLDER_FULL), 1)]:
         if not folder.exists():
-            return
-        for csv_file in sorted(folder.glob('*.csv')):
-            stem = csv_file.stem
-            if stem in skip_stems:
-                continue
-            if symbol_whitelist and stem not in symbol_whitelist:
-                continue
-            if stem in ohlcv:          # already loaded from a higher-priority folder
-                continue
-            df = _load_csv(csv_file)
-            if df is not None and len(df) >= MIN_BARS:
-                ohlcv[stem] = df
+            continue
+        for f in sorted(folder.glob('*.csv')):
+            if f.stem not in seen:
+                file_pairs.append((f, pri))
+                seen.add(f.stem)
 
-    # Legacy folder first — it has proper OHLCV data
-    _scan_folder(Path(DATA_FOLDER_LEGACY))
-    # Full folder second — picks up any newer stocks not in legacy
-    _scan_folder(Path(DATA_FOLDER_FULL))
+    ohlcv: dict[str, pd.DataFrame] = {}
+    workers = min(32, (os.cpu_count() or 4) * 2)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for stem, df in pool.map(lambda p: _try_load(p[0]), file_pairs):
+            if df is not None:
+                ohlcv[stem] = df
     return ohlcv
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_benchmark_data() -> pd.Series | None:
     candidates = [
         BENCHMARK_FILE,
@@ -488,40 +498,32 @@ def _compute_recovery(close_s: pd.Series, ema220_s: pd.Series) -> tuple[str, int
 def _compute_cycle_state(close_arr: np.ndarray,
                          ema220_arr: np.ndarray,
                          resistance_arr: np.ndarray) -> str:
-    """
-    Walk-forward 1-2-3 state machine for a single symbol.
-
-    States
-    ------
-    NORMAL       : no flush has occurred yet
-    FLUSHED      : close dropped below EMA220 (point 2 — shakeout in progress)
-    POST_BREAKOUT: first close > resistance_prev after the flush (point 3 done)
-
-    Transitions
-    -----------
-    any state  → FLUSHED       : close_T < EMA220_T
-    FLUSHED    → POST_BREAKOUT : close_T > resistance_prev_T
-                                 AND prev_close <= resistance_prev_T
-    POST_BREAKOUT → FLUSHED    : close_T < EMA220_T  (new cycle starts)
-    """
-    n     = len(close_arr)
+    n = len(close_arr)
+    if n < 2:
+        return 'NORMAL'
+    # Pre-compute event arrays (vectorized, no Python loop overhead)
+    valid      = ~(np.isnan(close_arr) | np.isnan(ema220_arr))
+    below_ema  = valid & (close_arr < ema220_arr)
+    # First-cross: today > resistance AND yesterday <= resistance
+    above_res  = np.zeros(n, dtype=bool)
+    with np.errstate(invalid='ignore'):
+        above_res[1:] = (
+            ~np.isnan(resistance_arr[1:]) &
+            (close_arr[1:] > resistance_arr[1:]) &
+            (close_arr[:-1] <= resistance_arr[1:])
+        )
     state = 'NORMAL'
     for i in range(1, n):
-        ci      = close_arr[i]
-        ei      = ema220_arr[i]
-        ri      = resistance_arr[i]
-        ci_prev = close_arr[i - 1]
-        if np.isnan(ci) or np.isnan(ei):
+        if not valid[i]:
             continue
-        if ci < ei:
+        if below_ema[i]:
             state = 'FLUSHED'
-        elif state == 'FLUSHED' and not np.isnan(ri) and ci > ri and ci_prev <= ri:
+        elif state == 'FLUSHED' and above_res[i]:
             state = 'POST_BREAKOUT'
-        # POST_BREAKOUT stays until close drops below EMA220 again (first branch above)
     return state
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def compute_signals(filters_active: dict, min_score: int,
                     exchange_filter: str) -> tuple[pd.DataFrame, pd.DataFrame, dict, bool, object]:
     ohlcv     = load_universe_data()
