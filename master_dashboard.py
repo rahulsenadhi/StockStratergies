@@ -19,6 +19,8 @@ import streamlit as st
 
 from core import analytics as core_analytics
 from core import data_io as core_data_io
+from core import glossary as core_glossary
+from core import regime as core_regime
 from core import rotation_trades as core_rotation_trades
 
 warnings.filterwarnings('ignore')
@@ -729,7 +731,7 @@ def _compute_momentum_signals() -> pd.DataFrame:
             pass
 
     # ── Regime gate (3-condition on Nifty) ─────────────────────────────────
-    bench = _load_benchmark_cached('data/nse_bse') or _load_benchmark_cached('data')
+    bench = _benchmark_first('data/nse_bse', 'data')
     is_bull_today = True
     if bench is not None and len(bench) >= 200:
         _sma50  = bench.rolling(50).mean()
@@ -2808,6 +2810,15 @@ def _load_benchmark_cached(folder: str) -> pd.Series | None:
     return core_data_io.load_benchmark(folder, ['^NSEI', 'NIFTYBEES.NS'])
 
 
+def _benchmark_first(*folders: str) -> pd.Series | None:
+    """Return first non-empty benchmark from the given folders. Series-safe (no `or`)."""
+    for f in folders:
+        s = _load_benchmark_cached(f)
+        if s is not None and not s.empty:
+            return s
+    return None
+
+
 @st.cache_data(ttl=3600)
 def _build_report(strategy: str) -> dict:
     """Build analytics.full_report for a given strategy. Cached 1h."""
@@ -2815,16 +2826,16 @@ def _build_report(strategy: str) -> dict:
         ohlcv = _load_ohlcv_cached('data/nse_bse', 10, ('^NSEI', 'NIFTYBEES.NS'))
         if not ohlcv:
             ohlcv = _load_ohlcv_cached('data', 10, ('^NSEI', 'NIFTYBEES.NS'))
-        bench = _load_benchmark_cached('data/nse_bse') or _load_benchmark_cached('data')
+        bench = _benchmark_first('data/nse_bse', 'data')
         return core_analytics.full_report('momentum_edge_trades.csv', ohlcv, bench)
     if strategy == S_IPO:
         ohlcv = _load_ohlcv_cached('ipo_data', 5, ('NIFTYBEES.NS', 'ipo_summary'))
-        bench = _load_benchmark_cached('data/nse_bse') or _load_benchmark_cached('data')
+        bench = _benchmark_first('data/nse_bse', 'data')
         return core_analytics.full_report('ipo_edge_trades.csv', ohlcv, bench)
     if strategy == S_MONTHLY:
         trades = core_rotation_trades.build('rebalance_log.csv', 'data')
         ohlcv = core_rotation_trades.build_pseudo_ohlcv('data')
-        bench = _load_benchmark_cached('data') or _load_benchmark_cached('data/nse_bse')
+        bench = _benchmark_first('data', 'data/nse_bse')
         return core_analytics.full_report_from_df(trades, ohlcv, bench)
     return {}
 
@@ -2975,6 +2986,85 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
         )
 
 
+@st.cache_data(ttl=3600)
+def _regime_snapshot() -> dict:
+    """Compute Nifty regime state for top-of-page banner.
+
+    Returns dict with keys: status ('Bull'/'Bear'/'Unknown'), bars_since_flip,
+    close, sma50, sma200, high52, pct_from_high.
+    """
+    bench = _benchmark_first('data/nse_bse', 'data')
+    if bench is None or len(bench) < 200:
+        return {'status': 'Unknown', 'bars_since_flip': 0}
+
+    series = core_regime.build_series(bench, {'use_regime_filter': True})
+    if series is None or series.empty:
+        return {'status': 'Unknown', 'bars_since_flip': 0}
+
+    state_now = bool(series.dropna().iloc[-1])
+    return {
+        'status':          'Bull' if state_now else 'Bear',
+        'bars_since_flip': core_regime.bars_since_flip(series),
+        'close':           round(float(bench.iloc[-1]), 2),
+        'sma50':           round(float(bench.rolling(50).mean().iloc[-1]), 2),
+        'sma200':          round(float(bench.rolling(200).mean().iloc[-1]), 2),
+        'high52':          round(float(bench.rolling(252).max().iloc[-1]), 2),
+        'pct_from_high':   round((float(bench.iloc[-1]) / float(bench.rolling(252).max().iloc[-1]) - 1) * 100, 2),
+        'date':            str(bench.index[-1].date()),
+    }
+
+
+def _render_regime_banner() -> None:
+    """Persistent Nifty regime banner shown above every page."""
+    snap = _regime_snapshot()
+    status = snap.get('status', 'Unknown')
+
+    if status == 'Bull':
+        bg, border, accent, icon, msg = (
+            'rgba(0,200,83,0.10)', 'rgba(0,200,83,0.45)', '#00c853',
+            '🟢', 'BULL — all 3 regime conditions on. New entries allowed.',
+        )
+    elif status == 'Bear':
+        bg, border, accent, icon, msg = (
+            'rgba(232,90,140,0.10)', 'rgba(232,90,140,0.45)', '#e85a8c',
+            '🔴', 'BEAR / SIDEWAYS — at least one regime condition has failed.',
+        )
+    else:
+        bg, border, accent, icon, msg = (
+            'rgba(124,156,255,0.08)', 'rgba(124,156,255,0.35)', '#7c9cff',
+            '⚪', 'Regime unknown — benchmark data unavailable.',
+        )
+
+    bars = snap.get('bars_since_flip', 0)
+    extras = ''
+    if snap.get('close'):
+        extras = (
+            f'<span style="margin-left:18px;color:#6a748a;">'
+            f'Nifty <b style="color:#e4e8f0">{snap["close"]:,}</b> · '
+            f'SMA50 <b style="color:#e4e8f0">{snap["sma50"]:,}</b> · '
+            f'SMA200 <b style="color:#e4e8f0">{snap["sma200"]:,}</b> · '
+            f'{snap["pct_from_high"]:+.1f}% from 52W high · '
+            f'{snap["date"]}</span>'
+        )
+
+    st.markdown(
+        f"""
+        <div style="background:{bg};border:1px solid {border};
+                    border-left:4px solid {accent};border-radius:10px;
+                    padding:10px 16px;margin-bottom:18px;
+                    display:flex;align-items:center;font-size:13px;">
+          <span style="font-size:18px;margin-right:10px;">{icon}</span>
+          <b style="color:{accent};letter-spacing:.03em;">{msg}</b>
+          <span style="margin-left:14px;color:#6a748a;">
+            {bars} bars since last flip
+          </span>
+          {extras}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_insights(m: dict, i: dict, mo: dict) -> None:
     st.markdown(
         '<h1 style="margin:0 0 6px 0;font-size:30px;font-weight:900;letter-spacing:-.02em;">'
@@ -3014,11 +3104,14 @@ def render_insights(m: dict, i: dict, mo: dict) -> None:
 
 def main():
     page = render_sidebar()
+    core_glossary.render_sidebar(st)
 
     with st.spinner('Loading data…'):
         m  = load_monthly()
         i  = load_ipo()
         mo = load_momentum()
+
+    _render_regime_banner()
 
     page_clean = page.split('  ', 1)[-1] if '  ' in page else page.lstrip('🏠🔄🚀📈📊 ')
 
