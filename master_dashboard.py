@@ -22,6 +22,7 @@ from core import data_io as core_data_io
 from core import glossary as core_glossary
 from core import regime as core_regime
 from core import rotation_trades as core_rotation_trades
+from core import scorer as core_scorer
 
 warnings.filterwarnings('ignore')
 
@@ -2480,11 +2481,21 @@ def render_ipo(i: dict):
     if sigs.empty:
         st.info('No data in ipo_data/ — run **ipo_edge_downloader.py** first.')
     else:
+        # ── Enrich w/ historical analytics overlay ──────────────────────────
+        try:
+            ipo_report = _build_report(S_IPO)
+            sigs = core_scorer.enrich_signals(
+                sigs, ipo_report,
+                feature_map={},  # no per-row features → use overall + regime fallback
+            )
+        except Exception:
+            pass
+
         display_cols = [
             'Ticker', 'Company', 'Signal', 'Stage', 'Setup',
             'Close', 'Bk Level', 'vs Bk%', 'Vol Ratio',
             'IPO Day Val', 'Liquidity', 'Promoter', 'Listing PE',
-            'Age (d)', 'Score',
+            'Age (d)', 'Score', 'Hist Win%', 'Hist Avg%',
         ]
         disp = sigs[[c for c in display_cols if c in sigs.columns]].copy()
 
@@ -2509,11 +2520,19 @@ def render_ipo(i: dict):
         disp['vs Bk%']      = disp['vs Bk%'].apply(lambda x: f'{x:+.1f}%')
         disp['Vol Ratio']   = disp['Vol Ratio'].apply(lambda x: f'{x:.2f}×')
         disp['IPO Day Val'] = disp['IPO Day Val'].apply(lambda x: f'₹{x:.1f} Cr')
+        if 'Hist Win%' in disp.columns:
+            disp['Hist Win%'] = disp['Hist Win%'].apply(lambda x: f'{x:.0f}%')
+        if 'Hist Avg%' in disp.columns:
+            disp['Hist Avg%'] = disp['Hist Avg%'].apply(lambda x: f'{x:+.1f}%')
 
-        widths = [60, 130, 90, 80, 75, 60, 65, 55, 60, 80, 70, 75, 70, 50, 130]
+        n_cols = len(disp.columns)
+        widths = ([60, 130, 90, 80, 75, 60, 65, 55, 60, 80, 70, 75, 70, 50, 130, 60, 60])[:n_cols]
         st.plotly_chart(
             chart_plotly_table(disp, widths, row_colors, score_col='Score'),
             width='stretch',
+        )
+        st.caption(
+            '📊 *Hist Win%* / *Hist Avg%* — overall historical IPO Edge win rate from closed trades.'
         )
 
     # ── Trade history ──────────────────────────────────────────────────────────
@@ -2708,12 +2727,22 @@ def render_momentum(mo: dict):
             'Signals appear when a stock passes all 8 filters simultaneously — this is intentionally selective.'
         ), unsafe_allow_html=True)
     else:
+        # ── Enrich w/ historical analytics overlay ──────────────────────────
+        try:
+            me_report = _build_report(S_MOMENTUM)
+            sigs = core_scorer.enrich_signals(
+                sigs, me_report,
+                feature_map={'Entry Type': 'Entry_Type', 'Recovery': 'Recovery_Speed'},
+            )
+        except Exception:
+            pass
+
         display_cols = [
             'Ticker', 'Company', 'Signal',
             'Close', 'ATH (₹)', 'Dist ATH%',
             'Entry Type', 'Chart Qual', 'Choppiness',
             'Recovery', '220 EMA', '52W High', 'vs High%', 'Vol Ratio',
-            'Score',
+            'Score', 'Hist Win%', 'Hist Avg%',
         ]
         disp = sigs[[c for c in display_cols if c in sigs.columns]].copy()
 
@@ -2734,11 +2763,20 @@ def render_momentum(mo: dict):
             disp['vs High%']  = disp['vs High%'].apply(lambda x: f'{x:+.1f}%')
         if 'Vol Ratio' in disp.columns:
             disp['Vol Ratio'] = disp['Vol Ratio'].apply(lambda x: f'{x:.2f}×')
+        if 'Hist Win%' in disp.columns:
+            disp['Hist Win%'] = disp['Hist Win%'].apply(lambda x: f'{x:.0f}%')
+        if 'Hist Avg%' in disp.columns:
+            disp['Hist Avg%'] = disp['Hist Avg%'].apply(lambda x: f'{x:+.1f}%')
 
-        widths = [60, 130, 90, 65, 70, 65, 65, 65, 65, 75, 65, 65, 55, 55, 130]
+        n_cols = len(disp.columns)
+        widths = ([60, 130, 90, 65, 70, 65, 65, 65, 65, 75, 65, 65, 55, 55, 130, 60, 60])[:n_cols]
         st.plotly_chart(
             chart_plotly_table(disp, widths, row_colors, score_col='Score'),
             width='stretch',
+        )
+        st.caption(
+            '📊 *Hist Win%* / *Hist Avg%* — historical performance of past trades '
+            'with the same Entry Type + Recovery Speed combo. Based on closed backtest trades only.'
         )
 
     # ── How to read the screener ───────────────────────────────────────────────
