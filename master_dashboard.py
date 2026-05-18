@@ -17,6 +17,9 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from core import analytics as core_analytics
+from core import data_io as core_data_io
+
 warnings.filterwarnings('ignore')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1644,7 +1647,7 @@ def render_history(m: dict, i: dict, mo: dict):
         'Bars above orange = strategy beat Nifty. Bars below = Nifty won.'
         '</div>', unsafe_allow_html=True,
     )
-    st.plotly_chart(_chart_yearly_bars(ann_data, bench_ann), use_container_width=True)
+    st.plotly_chart(_chart_yearly_bars(ann_data, bench_ann), width='stretch')
 
     # ══════════════════════════════════════════════════════════════════════════
     #  SECTION 3 — GROWTH OF ₹1 LAKH CHART
@@ -1665,7 +1668,7 @@ def render_history(m: dict, i: dict, mo: dict):
              S_MOMENTUM: (mo_eq, 'Equity')},
             bench_src,
         ),
-        use_container_width=True,
+        width='stretch',
     )
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -1879,7 +1882,7 @@ def render_history(m: dict, i: dict, mo: dict):
         S_IPO:      (i_eq,  'Portfolio_Value'),
         S_MOMENTUM: (mo_eq, 'Equity'),
     }
-    st.plotly_chart(chart_drawdown_comparison(dd_map), use_container_width=True)
+    st.plotly_chart(chart_drawdown_comparison(dd_map), width='stretch')
 
     # ══════════════════════════════════════════════════════════════════════════
     #  SECTION 7 — FINAL VERDICT
@@ -1987,7 +1990,7 @@ def render_sidebar() -> str:
         page = st.radio(
             'Navigate',
             ['🏠  Home', '🔄  Monthly Rotation', '🚀  IPO Edge',
-             '📈  Momentum Edge', '📊  History & Proof'],
+             '📈  Momentum Edge', '🔬  Insights', '📊  History & Proof'],
             label_visibility='collapsed',
         )
 
@@ -1996,7 +1999,7 @@ def render_sidebar() -> str:
 
         col_a, col_b = st.columns(2)
         with col_a:
-            if st.button('🔄 Monthly', use_container_width=True):
+            if st.button('🔄 Monthly', width='stretch'):
                 with st.spinner('Updating…'):
                     ok = _run_strategy([
                         [sys.executable, 'step1_download_data.py'],
@@ -2009,7 +2012,7 @@ def render_sidebar() -> str:
                     st.rerun()
 
         with col_b:
-            if st.button('🚀 IPO', use_container_width=True):
+            if st.button('🚀 IPO', width='stretch'):
                 with st.spinner('Updating…'):
                     ok = _run_strategy([
                         [sys.executable, 'ipo_edge_downloader.py'],
@@ -2020,7 +2023,7 @@ def render_sidebar() -> str:
                     st.success('Done ✓')
                     st.rerun()
 
-        if st.button('📈 Momentum Edge', use_container_width=True):
+        if st.button('📈 Momentum Edge', width='stretch'):
             with st.spinner('Updating…'):
                 ok = _run_strategy([
                     [sys.executable, 'momentum_edge_downloader.py'],
@@ -2147,7 +2150,7 @@ def render_home(m: dict, i: dict, mo: dict):
     <div style="font-size:11px;color:#3d4a60;margin:-4px 0 10px 2px;">
       Each line shows how ₹5 lakh would have grown if invested at the start of that strategy's backtest.
     </div>""", unsafe_allow_html=True)
-    st.plotly_chart(chart_combined_equity(m, i, mo), use_container_width=True)
+    st.plotly_chart(chart_combined_equity(m, i, mo), width='stretch')
 
     st.markdown('<br>', unsafe_allow_html=True)
     st.markdown('<div class="sec-hdr">Today\'s Signals — What to Watch</div>', unsafe_allow_html=True)
@@ -2305,7 +2308,7 @@ def render_monthly(m: dict):
     st.markdown('<div style="font-size:11px;color:#3d4a60;margin:-4px 0 10px 2px;">Blue line = this strategy. Orange dotted = just buying Nifty index. Bigger gap above = more profit.</div>', unsafe_allow_html=True)
     st.plotly_chart(
         chart_equity(eq, 'Portfolio_Value', S_MONTHLY, color, 'Benchmark_Value'),
-        use_container_width=True,
+        width='stretch',
     )
 
     if not ranks.empty:
@@ -2324,7 +2327,7 @@ def render_monthly(m: dict):
         ]
         st.plotly_chart(chart_plotly_table(tbl, [30, 80, 170, 80, 70, 70, 80],
                                            row_colors, score_col=None),
-                        use_container_width=True)
+                        width='stretch')
 
     if reb is not None and not reb.empty:
         st.markdown(f'<div class="sec-hdr" style="color:{color}">Rebalance Log — What Changed Each Month</div>', unsafe_allow_html=True)
@@ -2332,7 +2335,7 @@ def render_monthly(m: dict):
         r = reb[['Date', 'Top5_Stocks', 'Stocks_Bought', 'Stocks_Sold', 'Portfolio_Value']].copy()
         r['Date']            = r['Date'].astype(str).str[:10]
         r['Portfolio_Value'] = r['Portfolio_Value'].apply(lambda x: f'₹{x:,.0f}')
-        st.plotly_chart(chart_plotly_table(r.tail(12), score_col=None), use_container_width=True)
+        st.plotly_chart(chart_plotly_table(r.tail(12), score_col=None), width='stretch')
 
     st.markdown('<br>', unsafe_allow_html=True)
     _glossary_expander()
@@ -2404,7 +2407,7 @@ def render_ipo(i: dict):
         st.markdown(f'<div class="sec-hdr" style="color:{color}">Backtest Equity Curve</div>', unsafe_allow_html=True)
         eq_col = 'Portfolio_Value' if 'Portfolio_Value' in eq.columns else 'Equity'
         bench  = 'Benchmark_Value' if 'Benchmark_Value' in eq.columns else None
-        st.plotly_chart(chart_equity(eq, eq_col, S_IPO, color, bench), use_container_width=True)
+        st.plotly_chart(chart_equity(eq, eq_col, S_IPO, color, bench), width='stretch')
 
     # ── Live signal table ──────────────────────────────────────────────────────
     st.markdown(f'<div class="sec-hdr" style="color:{color}">Live Screener — IPOs Listed in Last 12 Months</div>',
@@ -2456,7 +2459,7 @@ def render_ipo(i: dict):
         widths = [60, 130, 90, 80, 75, 60, 65, 55, 60, 80, 70, 75, 70, 50, 130]
         st.plotly_chart(
             chart_plotly_table(disp, widths, row_colors, score_col='Score'),
-            use_container_width=True,
+            width='stretch',
         )
 
     # ── Trade history ──────────────────────────────────────────────────────────
@@ -2486,7 +2489,7 @@ def render_ipo(i: dict):
             row_colors = ['rgba(0,200,83,0.08)' if p > 0 else 'rgba(255,61,61,0.06)'
                           for p in trades['PnL_Pct']]
         st.plotly_chart(chart_plotly_table(t, row_colors=row_colors, score_col=None),
-                        use_container_width=True)
+                        width='stretch')
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2611,7 +2614,7 @@ def render_momentum(mo: dict):
             'Dips = times the market corrected.'
             '</div>', unsafe_allow_html=True,
         )
-        st.plotly_chart(chart_equity(eq, 'Equity', S_MOMENTUM, color), use_container_width=True)
+        st.plotly_chart(chart_equity(eq, 'Equity', S_MOMENTUM, color), width='stretch')
 
     # ── Live signal table ──────────────────────────────────────────────────────
     st.markdown(
@@ -2681,7 +2684,7 @@ def render_momentum(mo: dict):
         widths = [60, 130, 90, 65, 70, 65, 65, 65, 65, 75, 65, 65, 55, 55, 130]
         st.plotly_chart(
             chart_plotly_table(disp, widths, row_colors, score_col='Score'),
-            use_container_width=True,
+            width='stretch',
         )
 
     # ── How to read the screener ───────────────────────────────────────────────
@@ -2730,11 +2733,197 @@ def render_momentum(mo: dict):
         row_colors = ['rgba(0,200,83,0.08)' if r == 'Win' else 'rgba(255,61,61,0.06)'
                       for r in trades['Result']]
         st.plotly_chart(chart_plotly_table(t, row_colors=row_colors, score_col=None),
-                        use_container_width=True)
+                        width='stretch')
 
     # ── Glossary ───────────────────────────────────────────────────────────────
     st.markdown('<br>', unsafe_allow_html=True)
     _glossary_expander()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  INSIGHTS PAGE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@st.cache_data(ttl=3600)
+def _load_ohlcv_cached(folder: str, min_bars: int, skip: tuple[str, ...]) -> dict:
+    """Thin Streamlit cache wrapper around core.data_io.load_ohlcv."""
+    ohlcv, _ = core_data_io.load_ohlcv(folder, min_bars=min_bars, skip=set(skip))
+    return ohlcv
+
+
+@st.cache_data(ttl=3600)
+def _build_report(strategy: str) -> dict:
+    """Build analytics.full_report for a given strategy. Cached 1h."""
+    if strategy == S_MOMENTUM:
+        ohlcv = _load_ohlcv_cached('data/nse_bse', 10, ('^NSEI', 'NIFTYBEES.NS'))
+        if not ohlcv:
+            ohlcv = _load_ohlcv_cached('data', 10, ('^NSEI', 'NIFTYBEES.NS'))
+        return core_analytics.full_report('momentum_edge_trades.csv', ohlcv)
+    if strategy == S_IPO:
+        ohlcv = _load_ohlcv_cached('ipo_data', 5, ('NIFTYBEES.NS', 'ipo_summary'))
+        return core_analytics.full_report('ipo_edge_trades.csv', ohlcv)
+    return {}
+
+
+def _kpi_card(label: str, value: str, sub: str = '', color: str = '#7c9cff') -> None:
+    st.markdown(
+        f"""
+        <div style="background:rgba(255,255,255,0.02);border:1px solid #1f2533;
+                    border-radius:10px;padding:14px 16px;">
+          <div style="font-size:10px;letter-spacing:.08em;color:#6a748a;
+                      text-transform:uppercase;">{label}</div>
+          <div style="font-size:24px;font-weight:800;color:{color};margin-top:4px;">{value}</div>
+          <div style="font-size:11px;color:#3d4a60;margin-top:2px;">{sub}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_strategy_insights(strategy: str, report: dict) -> None:
+    if not report or report.get('trades') is None or report['trades'].empty:
+        st.info(f'No trade data for {strategy} yet. Run the backtest first.')
+        return
+
+    color = THEME[strategy]['color']
+    trades_x = report['trades']
+    n = len(trades_x)
+
+    # ── Header KPIs ─────────────────────────────────────────────────────────
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        _kpi_card('Total Trades', f'{n}', 'closed positions', color)
+    with c2:
+        wr = report.get('overall_win_rate', 0)
+        _kpi_card('Win Rate', f'{wr}%', 'profitable trades', color)
+    with c3:
+        _kpi_card('Avg PnL', f'{report.get("overall_avg_pnl", 0):+.2f}%', 'per trade', color)
+    with c4:
+        _kpi_card('Median PnL', f'{report.get("overall_median", 0):+.2f}%', 'half above/below', color)
+
+    st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
+
+    # ── Optimal Entry — by entry features ──────────────────────────────────
+    st.markdown('### 🎯 Optimal Entry — what predicts winners?')
+    st.caption('Win rate and average PnL grouped by entry feature. Larger Count = more reliable signal.')
+
+    cols = st.columns(2)
+    with cols[0]:
+        df = report.get('by_entry_type', pd.DataFrame())
+        if not df.empty:
+            st.markdown('**By Entry Type**')
+            st.dataframe(df, hide_index=True, width='stretch')
+    with cols[1]:
+        df = report.get('by_recovery_speed', pd.DataFrame())
+        if not df.empty:
+            st.markdown('**By Recovery Speed**')
+            st.dataframe(df, hide_index=True, width='stretch')
+
+    df = report.get('by_score_bucket', pd.DataFrame())
+    if not df.empty:
+        st.markdown('**By Setup Score (quintiles)**')
+        st.caption('Higher buckets = stronger setups at entry. Look for a monotonic win-rate ladder.')
+        st.dataframe(df, hide_index=True, width='stretch')
+
+    st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
+
+    # ── Optimal Sell — partial booking sensitivity ─────────────────────────
+    st.markdown('### 💰 Optimal Sell — when to take profits?')
+    st.caption(
+        'For each candidate partial-booking level, how many trades touched it, '
+        'how many faded back below it, and what trades finally averaged.'
+    )
+    df = report.get('partial_levels', pd.DataFrame())
+    if not df.empty:
+        st.dataframe(df, hide_index=True, width='stretch')
+        best = df.loc[df['Fade_Rate'].idxmin()] if len(df) else None
+        if best is not None:
+            st.success(
+                f'📌 Lowest fade rate: **+{int(best["Level_Pct"])}%** level '
+                f'({best["Fade_Rate"]}% fade, avg final +{best["Avg_Final"]}%). '
+                'Compare against the strategy\'s current partial spec.'
+            )
+
+    st.markdown('**Hold-day Curve** — PnL by holding-period bucket')
+    df = report.get('hold_curve', pd.DataFrame())
+    if not df.empty:
+        st.dataframe(df, hide_index=True, width='stretch')
+
+    st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
+
+    # ── Loss Avoidance — stop loss recommendation ──────────────────────────
+    st.markdown('### 🛡️ Loss Avoidance — where to set the stop?')
+    rec = report.get('stop_recommendation', {})
+    if rec:
+        cc = st.columns(4)
+        with cc[0]:
+            _kpi_card('Winner MAE p95',
+                      f'{rec.get("winner_mae_p95", "—")}%',
+                      'most winners survive', '#00c853')
+        with cc[1]:
+            _kpi_card('Winner MAE mean',
+                      f'{rec.get("winner_mae_mean", "—")}%',
+                      'avg deepest dip', '#00c853')
+        with cc[2]:
+            _kpi_card('Loser MAE p95',
+                      f'{rec.get("loser_mae_p95", "—")}%',
+                      'typical loser depth', '#e85a8c')
+        with cc[3]:
+            _kpi_card('Loser MAE mean',
+                      f'{rec.get("loser_mae_mean", "—")}%',
+                      'avg loser depth', '#e85a8c')
+
+        st.caption(
+            'Read: set the stop *just above* the Winner MAE p95 line — '
+            'tight enough to cut losses, loose enough that most eventual '
+            'winners do not get stopped out on a normal pullback.'
+        )
+
+    cl = report.get('loss_clusters', {})
+    if cl:
+        cc = st.columns(3)
+        with cc[0]:
+            _kpi_card('Max Consecutive Losses', f'{cl.get("max_consecutive_losses", 0)}',
+                      'worst losing streak', '#e85a8c')
+        with cc[1]:
+            _kpi_card('Avg Streak Length', f'{cl.get("avg_consecutive_losses", 0)}',
+                      'typical losing run', '#6a748a')
+        with cc[2]:
+            _kpi_card('Total Losses', f'{cl.get("total_losses", 0)}',
+                      f'of {n} trades', '#6a748a')
+
+    # ── Trade-level MAE/MFE table (collapsed) ──────────────────────────────
+    with st.expander('🔍 Full trade table with MAE / MFE'):
+        show_cols = [c for c in [
+            'Ticker', 'Entry_Date', 'Exit_Date', 'PnL_Pct',
+            'MAE_Pct', 'MFE_Pct', 'Time_To_MAE', 'Time_To_MFE',
+            'Holding_Days', 'Exit_Reason', 'Result',
+        ] if c in trades_x.columns]
+        st.dataframe(
+            trades_x[show_cols].sort_values('Exit_Date', ascending=False),
+            hide_index=True, width='stretch',
+        )
+
+
+def render_insights(m: dict, i: dict, mo: dict) -> None:
+    st.markdown(
+        '<h1 style="margin:0 0 6px 0;font-size:30px;font-weight:900;letter-spacing:-.02em;">'
+        '🔬 Insights</h1>',
+        unsafe_allow_html=True,
+    )
+    st.caption('Post-hoc analytics on closed trades — entry quality, exit timing, stop placement.')
+
+    tab_me, tab_ipo = st.tabs(['📈 Momentum Edge', '🚀 IPO Edge'])
+
+    with tab_me:
+        with st.spinner('Building Momentum Edge report…'):
+            report = _build_report(S_MOMENTUM)
+        _render_strategy_insights(S_MOMENTUM, report)
+
+    with tab_ipo:
+        with st.spinner('Building IPO Edge report…'):
+            report = _build_report(S_IPO)
+        _render_strategy_insights(S_IPO, report)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2759,6 +2948,8 @@ def main():
         render_ipo(i)
     elif 'Momentum' in page:
         render_momentum(mo)
+    elif 'Insights' in page:
+        render_insights(m, i, mo)
     elif 'History' in page:
         render_history(m, i, mo)
 
