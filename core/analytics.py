@@ -20,6 +20,8 @@ strategies already write):
 import numpy as np
 import pandas as pd
 
+from core import regime as core_regime
+
 
 # ── Loaders ──────────────────────────────────────────────────────────────────
 
@@ -90,6 +92,44 @@ def compute_mae_mfe(
     out['MFE_Pct'] = mfe_pct
     out['Time_To_MAE'] = t_mae
     out['Time_To_MFE'] = t_mfe
+    return out
+
+
+# ── Regime tagging ───────────────────────────────────────────────────────────
+
+def tag_regime_at_entry(
+    trades: pd.DataFrame,
+    benchmark: pd.Series | None,
+    cfg: dict | None = None,
+) -> pd.DataFrame:
+    """Add Regime_At_Entry column ('Bull' / 'Bear' / 'Unknown').
+
+    Reads benchmark Close series and the 3-condition gate from core.regime.
+    Missing benchmark → all entries tagged 'Unknown'.
+    """
+    out = trades.copy()
+    if benchmark is None or benchmark.empty:
+        out['Regime_At_Entry'] = 'Unknown'
+        return out
+
+    series = core_regime.build_series(benchmark, cfg)
+    if series is None or series.empty:
+        out['Regime_At_Entry'] = 'Unknown'
+        return out
+
+    series = series.dropna()
+    labels = []
+    for entry_dt in out['Entry_Date']:
+        try:
+            # Use the regime value on the last bar at or before entry
+            sub = series.loc[:entry_dt]
+            if sub.empty:
+                labels.append('Unknown')
+            else:
+                labels.append('Bull' if bool(sub.iloc[-1]) else 'Bear')
+        except Exception:
+            labels.append('Unknown')
+    out['Regime_At_Entry'] = labels
     return out
 
 
@@ -232,16 +272,36 @@ def loss_clusters(trades: pd.DataFrame) -> dict:
 def full_report(
     trades_csv: str,
     ohlcv: dict[str, pd.DataFrame],
+    benchmark: pd.Series | None = None,
+    regime_cfg: dict | None = None,
+) -> dict:
+    """One-shot driver from a CSV path."""
+    trades = load_trades(trades_csv)
+    return full_report_from_df(trades, ohlcv, benchmark, regime_cfg)
+
+
+def full_report_from_df(
+    trades: pd.DataFrame,
+    ohlcv: dict[str, pd.DataFrame],
+    benchmark: pd.Series | None = None,
+    regime_cfg: dict | None = None,
 ) -> dict:
     """One-shot driver: returns every analytic bundle in a single dict.
 
+    Optional `benchmark` (Close series) enables regime-at-entry tagging.
     Dashboard "Insights" tab can render each key as a section.
     """
-    trades = load_trades(trades_csv)
-    if trades.empty:
+    if trades is None or trades.empty:
         return {'trades': pd.DataFrame(), 'error': 'No trades'}
 
+    # Coerce date columns if caller passed raw DataFrame
+    trades = trades.copy()
+    for col in ('Entry_Date', 'Exit_Date'):
+        if col in trades.columns:
+            trades[col] = pd.to_datetime(trades[col], errors='coerce')
+
     trades_x = compute_mae_mfe(trades, ohlcv)
+    trades_x = tag_regime_at_entry(trades_x, benchmark, regime_cfg)
 
     report = {
         'trades':            trades_x,
@@ -251,6 +311,7 @@ def full_report(
         'by_entry_type':     win_rate_by(trades_x, 'Entry_Type'),
         'by_recovery_speed': win_rate_by(trades_x, 'Recovery_Speed'),
         'by_exit_reason':    win_rate_by(trades_x, 'Exit_Reason'),
+        'by_regime':         win_rate_by(trades_x, 'Regime_At_Entry'),
         'by_score_bucket':   win_rate_by_score_bucket(trades_x),
         'hold_curve':        hold_day_curve(trades_x),
         'partial_levels':    optimal_partial_levels(trades_x),

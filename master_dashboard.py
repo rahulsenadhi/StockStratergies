@@ -19,6 +19,7 @@ import streamlit as st
 
 from core import analytics as core_analytics
 from core import data_io as core_data_io
+from core import rotation_trades as core_rotation_trades
 
 warnings.filterwarnings('ignore')
 
@@ -705,8 +706,13 @@ def _compute_ipo_signals() -> pd.DataFrame:
 
 
 def _compute_momentum_signals() -> pd.DataFrame:
-    """Detect Momentum Edge live signals with ATH, choppiness, recovery, and scoring."""
-    # Prefer the full universe folder; fall back to legacy 158-stock folder
+    """Detect Momentum Edge live signals — SPEC-ALIGNED with momentum_edge_dashboard.py.
+
+    F1-F4 use day-T values (per spec); F5/F6 use T-1; breakout-ref uses T-1 (resistance =
+    yesterday's 252-day rolling max). Volume check uses 50-day average per spec.
+    State machine excludes stocks whose current breakout already fired (POST_BREAKOUT).
+    Regime gate (3-condition) is applied — entries in Bear regime get BEAR MARKET action.
+    """
     full_folder   = Path(BASE_DIR) / 'data' / 'nse_bse'
     legacy_folder = Path(BASE_DIR) / 'momentum_edge_data'
     folder = full_folder if full_folder.exists() and any(full_folder.glob('*.csv')) else legacy_folder
@@ -716,11 +722,40 @@ def _compute_momentum_signals() -> pd.DataFrame:
 
     universe: dict[str, str] = {}
     if sym_file.exists():
-        s = pd.read_csv(sym_file)
-        universe = dict(zip(s['Ticker'].str.strip(), s['Company'].str.strip()))
+        try:
+            s = pd.read_csv(sym_file)
+            universe = dict(zip(s['Ticker'].str.strip(), s['Company'].str.strip()))
+        except Exception:
+            pass
 
-    rows      = []
-    skip_stems = {'NIFTYBEES.NS', 'me_summary'}
+    # ── Regime gate (3-condition on Nifty) ─────────────────────────────────
+    bench = _load_benchmark_cached('data/nse_bse') or _load_benchmark_cached('data')
+    is_bull_today = True
+    if bench is not None and len(bench) >= 200:
+        _sma50  = bench.rolling(50).mean()
+        _sma200 = bench.rolling(200).mean()
+        _high52 = bench.rolling(252).max()
+        _b = bench.iloc[-1]
+        is_bull_today = bool(
+            _b > _sma200.iloc[-1]
+            and _sma50.iloc[-1] > _sma200.iloc[-1]
+            and _b >= 0.90 * _high52.iloc[-1]
+        )
+
+    # Match standalone constants
+    SMA50_P, SMA150_P, EMA220_P = 50, 150, 220
+    HIGH52_P, LOW52_P           = 252, 252
+    VOL_LOOKBACK                = 50
+    VOL_MULTIPLIER              = 1.5
+    DIP_LB                      = 90
+    MOM_P                       = 126
+    MIN_PRICE_VS_LOW            = 1.25
+    MIN_BARS, MIN_CLOSE_PRICE   = 252, 50.0
+    MIN_AVG_VOL                 = 100_000
+    NEAR_BK_PCT                 = 0.02
+
+    rows       = []
+    skip_stems = {'NIFTYBEES.NS', 'me_summary', '^NSEI'}
 
     for csv_path in sorted(folder.glob('*.csv')):
         if csv_path.stem in skip_stems:
@@ -728,141 +763,158 @@ def _compute_momentum_signals() -> pd.DataFrame:
         ticker  = csv_path.stem
         company = universe.get(ticker, ticker.replace('.NS', ''))
         df      = _load_ohlcv_csv(csv_path)
-        if df is None or len(df) < 260:
+        if df is None or len(df) < MIN_BARS:
+            continue
+        if df['Close'].iloc[-1] < MIN_CLOSE_PRICE:
+            continue
+        if df['Volume'].iloc[-30:].mean() < MIN_AVG_VOL:
             continue
 
         close  = df['Close']
         volume = df['Volume']
-        sma50  = close.rolling(50).mean()
-        sma150 = close.rolling(150).mean()
-        ema220 = close.ewm(span=220, adjust=False).mean()
-        high52 = close.rolling(252).max()
-        low52  = close.rolling(252).min()
-        vol20  = volume.rolling(20).mean()
-        dip    = (close < ema220).astype(int).rolling(90).max().astype(bool)
 
-        # ATH (all-time high using full history)
-        ath_series  = close.expanding().max()
-        ath_current = float(ath_series.iloc[-1])
-        ath_prev    = float(ath_series.shift(1).iloc[-1])
-        h52p        = float(high52.shift(1).iloc[-1])
+        sma50      = close.rolling(SMA50_P).mean()
+        sma150     = close.rolling(SMA150_P).mean()
+        ema220     = close.ewm(span=EMA220_P, adjust=False).mean()
+        high52     = close.rolling(HIGH52_P).max()
+        low52      = close.rolling(LOW52_P).min()
+        vol50      = volume.rolling(VOL_LOOKBACK).mean()
+        resistance = close.shift(1).rolling(HIGH52_P).max()   # yesterday's 252-day max
+        ath        = close.expanding().max()
+        dip_flag   = (close < ema220).astype(int)
+        had_dip    = dip_flag.rolling(DIP_LB).max().astype(bool)
+        mom_6m     = close.pct_change(MOM_P)
 
-        # FIX 1 — LOOK-AHEAD BIAS: use yesterday's values (_s) for all conditions
-        sma50_s  = sma50.iloc[-2]  if len(sma50)  >= 2 else float('nan')
-        sma150_s = sma150.iloc[-2] if len(sma150) >= 2 else float('nan')
-        ema220_s = ema220.iloc[-2] if len(ema220) >= 2 else float('nan')
-        low52_s  = low52.iloc[-2]  if len(low52)  >= 2 else float('nan')
-        vol20_s  = vol20.iloc[-2]  if len(vol20)  >= 2 else float('nan')
-        close_s  = close.iloc[-2]  if len(close)  >= 2 else float('nan')
-        vol_s    = volume.iloc[-2] if len(volume) >= 2 else float('nan')
-        dip_s    = bool(dip.iloc[-2]) if len(dip) >= 2 else False
-        bk_ref_s = float(ath_series.shift(1).iloc[-2]) if len(ath_series) >= 2 else float('nan')
+        # 1-2-3 state machine (vectorized, mirrors standalone _compute_cycle_state)
+        c_arr = close.values.astype(float)
+        e_arr = ema220.values.astype(float)
+        r_arr = resistance.values.astype(float)
+        n_arr = len(c_arr)
+        cycle_state = 'NORMAL'
+        if n_arr >= 2:
+            valid = ~(np.isnan(c_arr) | np.isnan(e_arr))
+            below_ema = valid & (c_arr < e_arr)
+            above_res = np.zeros(n_arr, dtype=bool)
+            above_res[1:] = (
+                ~np.isnan(r_arr[1:])
+                & (c_arr[1:] > r_arr[1:])
+                & (c_arr[:-1] <= r_arr[1:])
+            )
+            for i in range(1, n_arr):
+                if not valid[i]:
+                    continue
+                if below_ema[i]:
+                    cycle_state = 'FLUSHED'
+                elif cycle_state == 'FLUSHED' and above_res[i]:
+                    cycle_state = 'POST_BREAKOUT'
 
-        r = pd.Series({
-            'close':  close.iloc[-1],
-            'sma50':  sma50.iloc[-1],
-            'sma150': sma150.iloc[-1],
-            'ema220': ema220.iloc[-1],
-            'high52': high52.iloc[-1],
-            'low52':  low52.iloc[-1],
-            'volume': volume.iloc[-1],
-            'vol20':  vol20.iloc[-1],
-            'dip':    dip.iloc[-1],
-        })
-        if any(pd.isna(x) for x in (sma50_s, sma150_s, ema220_s, low52_s)):
-            continue
-        if pd.isna(h52p) or pd.isna(bk_ref_s):
-            continue
-
-        # All conditions use shifted (yesterday's) values — FIX 1
-        c1  = sma150_s > ema220_s
-        c2  = close_s  > sma50_s
-        c3  = sma50_s  > sma150_s
-        c4  = close_s  >= 1.25 * low52_s
-        c5  = dip_s
-        c6  = close_s  >= bk_ref_s
-        vol_ok = (not pd.isna(vol20_s) and vol20_s > 0) and (not pd.isna(vol_s)) and (vol_s >= 1.5 * vol20_s)
-        dist   = (bk_ref_s - close_s) / bk_ref_s * 100 if bk_ref_s > 0 else 99
-        vol_r  = float(vol_s / vol20_s) if (not pd.isna(vol20_s) and vol20_s > 0 and not pd.isna(vol_s)) else 0
-
-        if c1 and c2 and c3 and c4 and c5 and c6 and vol_ok:
-            signal = 'Breakout Today'
-        elif c1 and c2 and c3 and c4 and c5 and dist <= 3:
-            signal = 'Near Breakout'
-        elif c1 and c2 and c3 and c4 and c5:
-            signal = 'Watch Zone'
-        elif c1 and c2 and c3 and c4:
-            signal = 'Watchlist'
-        else:
+        # Skip stocks where this cycle's breakout already fired
+        if cycle_state == 'POST_BREAKOUT':
             continue
 
-        # ── ATH metrics ─────────────────────────────────────────────────────
-        dist_from_ath = round((float(r.close) / ath_current - 1) * 100, 2)
-        # Entry type: ATH if close is at an all-time high, else 52W fallback
-        entry_type = 'ATH' if (c6 and bk_ref_s > h52p) else '52W High'
+        def _s(series):
+            return series.iloc[-2] if len(series) >= 2 else np.nan
 
-        # ── Choppiness ──────────────────────────────────────────────────────
+        close_s    = _s(close)
+        vol50_s    = _s(vol50)
+        had_dip_s  = bool(_s(had_dip))
+        ath_prev   = _s(ath)
+        high52_s   = _s(high52)
+        mom_s      = _s(mom_6m)
+        res_today  = float(resistance.iloc[-1]) if not pd.isna(resistance.iloc[-1]) else np.nan
+
+        close_now  = float(close.iloc[-1])
+        ema220_now = float(ema220.iloc[-1])
+        sma50_now  = float(sma50.iloc[-1])
+        sma150_now = float(sma150.iloc[-1])
+        low52_now  = float(low52.iloc[-1])
+        vol_today  = float(volume.iloc[-1])
+
+        if any(pd.isna(v) for v in (close_now, ema220_now, sma50_now, sma150_now, low52_now)):
+            continue
+
+        # ── F1-F4 on day T, F5 / F6 on T-1 ────────────────────────────────
+        if not (sma150_now > ema220_now): continue
+        if not (close_now  > sma50_now):  continue
+        if not (sma50_now  > sma150_now): continue
+        if not (close_now  >= MIN_PRICE_VS_LOW * low52_now): continue
+        if not had_dip_s: continue
+
         chop_series = _compute_choppiness(df, CHOPPINESS_P)
-        # Use shifted choppiness (yesterday's value) — FIX 1
         chop_val    = float(chop_series.iloc[-2]) if len(chop_series) >= 2 and not pd.isna(chop_series.iloc[-2]) else float('nan')
-        chart_qual  = 'Clean ✅' if (not pd.isna(chop_val) and chop_val < CHOPPINESS_THRESH) \
-                      else 'Choppy ❌'
+        if not pd.isna(chop_val) and chop_val > CHOPPINESS_THRESH:
+            continue
 
-        # ── Recovery speed ──────────────────────────────────────────────────
-        rec_label, rec_days = _compute_recovery_speed(close, ema220, lookback=90)
-        if rec_label == 'Fast':
-            rec_str = 'Fast 🟢'
-        elif rec_label == 'Normal':
-            rec_str = 'Normal 🟡'
-        elif rec_label == 'Slow':
-            rec_str = 'Slow 🟠'
+        # ── Volume + breakout (vol50 per spec) ────────────────────────────
+        vol_ok = (
+            not pd.isna(vol50_s) and vol50_s > 0
+            and not pd.isna(vol_today)
+            and vol_today >= VOL_MULTIPLIER * vol50_s
+        )
+
+        bk_ref = res_today if not pd.isna(res_today) else high52_s
+        is_breakout = (
+            not pd.isna(res_today)
+            and close_now > res_today
+            and close_s <= res_today
+            and close_now > ema220_now
+        )
+        dist_to_res = (res_today - close_now) / res_today if (not pd.isna(res_today) and res_today > 0) else 1.0
+        is_near_bk = (
+            (not is_breakout)
+            and (not pd.isna(res_today))
+            and 0 < dist_to_res <= NEAR_BK_PCT
+            and vol_ok
+        )
+
+        if is_breakout and vol_ok:
+            signal = 'Breakout Today'
+        elif is_near_bk:
+            signal = 'Near Breakout'
         else:
-            rec_str = '— ⚪'
+            signal = 'Watch Zone'
 
-        # ── Signal Quality Score (max 10) ───────────────────────────────────
-        score = 0.0
-        # ATH entry (max 2)
-        if entry_type == 'ATH':
-            score += 2
-        # Clean chart (max 2)
-        if not pd.isna(chop_val) and chop_val < CHOPPINESS_THRESH:
-            score += 2
-        # Recovery speed (max 2)
-        if rec_label == 'Fast':
-            score += 2
-        elif rec_label == 'Normal':
-            score += 1
-        # Trend filters: c1 + c2 + c3 + c4 each contribute 0.5 (max 2)
-        score += sum([c1, c2, c3, c4]) * 0.5
-        # Volume (max 2)
-        if vol_ok:
-            score += 2
+        # ── Entry type, recovery, score ───────────────────────────────────
+        entry_type = 'ATH' if (not pd.isna(ath_prev) and close_now > float(ath_prev)) else '52W High'
+
+        rec_label, rec_days = _compute_recovery_speed(close, ema220, lookback=90)
+        rec_str = {'Fast': 'Fast 🟢', 'Normal': 'Normal 🟡', 'Slow': 'Slow 🟠'}.get(rec_label, '— ⚪')
+
+        vol_ratio = (vol_today / vol50_s) if (not pd.isna(vol50_s) and vol50_s > 0) else 0
+        ath_prox  = min((close_now / bk_ref), 1.0) if (bk_ref and bk_ref > 0) else 0
+        mom_pct   = float(mom_s) if not pd.isna(mom_s) else 0
+        score = round(ath_prox * 30 + min(vol_ratio * 10, 20) + min(mom_pct * 100, 20), 1)
+
+        dist_ath = ((close_now / float(bk_ref)) - 1) * 100 if bk_ref and bk_ref > 0 else 0
 
         rows.append({
-            'Ticker':      ticker.replace('.NS', ''),
-            'Company':     company,
-            'Signal':      signal,
-            'Close':       round(float(r.close), 2),
-            'ATH (₹)':    round(ath_current, 2),
-            'Dist ATH%':  dist_from_ath,
-            'Entry Type':  entry_type,
-            'Chart Qual':  chart_qual,
-            'Choppiness': round(chop_val, 1) if not pd.isna(chop_val) else '—',
-            'Recovery':    rec_str,
-            '220 EMA':    round(float(r.ema220), 2),
-            '52W High':   round(float(r.high52), 2),
-            'vs High%':   round(-dist, 2),
-            'Vol Ratio':  round(vol_r, 2),
-            'Score':      round(score, 1),
-            '_score':     score,
+            'Ticker':       ticker.replace('.NS', ''),
+            'Company':      company,
+            'Signal':       signal,
+            'Close':        round(close_now, 2),
+            'ATH (₹)':      round(float(ath.iloc[-1]), 2),
+            'Dist ATH%':    round((close_now / float(ath.iloc[-1]) - 1) * 100, 2),
+            'Entry Type':   entry_type,
+            'Chart Qual':   'Clean ✅' if (not pd.isna(chop_val) and chop_val < CHOPPINESS_THRESH) else 'Choppy ❌',
+            'Choppiness':   round(chop_val, 1) if not pd.isna(chop_val) else '—',
+            'Recovery':     rec_str,
+            '220 EMA':      round(ema220_now, 2),
+            '52W High':     round(float(bk_ref), 2) if bk_ref else None,
+            'vs High%':     round(dist_ath, 2),
+            'Vol Ratio':    round(vol_ratio, 2),
+            'Score':        score,
+            '_score':       score,
+            '_is_bull':     is_bull_today,
         })
 
     if not rows:
         return pd.DataFrame()
 
     df_out = pd.DataFrame(rows)
-    df_out.sort_values('_score', ascending=False, inplace=True)
-    return df_out.drop(columns=['_score']).reset_index(drop=True)
+    sig_rank = {'Breakout Today': 0, 'Near Breakout': 1, 'Watch Zone': 2}
+    df_out['_rank'] = df_out['Signal'].map(sig_rank).fillna(3)
+    df_out = df_out.sort_values(['_rank', '_score'], ascending=[True, False])
+    return df_out.drop(columns=['_rank', '_score', '_is_bull']).reset_index(drop=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2752,16 +2804,28 @@ def _load_ohlcv_cached(folder: str, min_bars: int, skip: tuple[str, ...]) -> dic
 
 
 @st.cache_data(ttl=3600)
+def _load_benchmark_cached(folder: str) -> pd.Series | None:
+    return core_data_io.load_benchmark(folder, ['^NSEI', 'NIFTYBEES.NS'])
+
+
+@st.cache_data(ttl=3600)
 def _build_report(strategy: str) -> dict:
     """Build analytics.full_report for a given strategy. Cached 1h."""
     if strategy == S_MOMENTUM:
         ohlcv = _load_ohlcv_cached('data/nse_bse', 10, ('^NSEI', 'NIFTYBEES.NS'))
         if not ohlcv:
             ohlcv = _load_ohlcv_cached('data', 10, ('^NSEI', 'NIFTYBEES.NS'))
-        return core_analytics.full_report('momentum_edge_trades.csv', ohlcv)
+        bench = _load_benchmark_cached('data/nse_bse') or _load_benchmark_cached('data')
+        return core_analytics.full_report('momentum_edge_trades.csv', ohlcv, bench)
     if strategy == S_IPO:
         ohlcv = _load_ohlcv_cached('ipo_data', 5, ('NIFTYBEES.NS', 'ipo_summary'))
-        return core_analytics.full_report('ipo_edge_trades.csv', ohlcv)
+        bench = _load_benchmark_cached('data/nse_bse') or _load_benchmark_cached('data')
+        return core_analytics.full_report('ipo_edge_trades.csv', ohlcv, bench)
+    if strategy == S_MONTHLY:
+        trades = core_rotation_trades.build('rebalance_log.csv', 'data')
+        ohlcv = core_rotation_trades.build_pseudo_ohlcv('data')
+        bench = _load_benchmark_cached('data') or _load_benchmark_cached('data/nse_bse')
+        return core_analytics.full_report_from_df(trades, ohlcv, bench)
     return {}
 
 
@@ -2818,6 +2882,12 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
         if not df.empty:
             st.markdown('**By Recovery Speed**')
             st.dataframe(df, hide_index=True, width='stretch')
+
+    df = report.get('by_regime', pd.DataFrame())
+    if not df.empty and (df['Regime_At_Entry'] != 'Unknown').any():
+        st.markdown('**By Market Regime at Entry**')
+        st.caption('Bull = all 3 Nifty regime conditions on. Bear = at least one off.')
+        st.dataframe(df, hide_index=True, width='stretch')
 
     df = report.get('by_score_bucket', pd.DataFrame())
     if not df.empty:
@@ -2913,7 +2983,9 @@ def render_insights(m: dict, i: dict, mo: dict) -> None:
     )
     st.caption('Post-hoc analytics on closed trades — entry quality, exit timing, stop placement.')
 
-    tab_me, tab_ipo = st.tabs(['📈 Momentum Edge', '🚀 IPO Edge'])
+    tab_me, tab_ipo, tab_rot = st.tabs(
+        ['📈 Momentum Edge', '🚀 IPO Edge', '🔄 Monthly Rotation']
+    )
 
     with tab_me:
         with st.spinner('Building Momentum Edge report…'):
@@ -2924,6 +2996,16 @@ def render_insights(m: dict, i: dict, mo: dict) -> None:
         with st.spinner('Building IPO Edge report…'):
             report = _build_report(S_IPO)
         _render_strategy_insights(S_IPO, report)
+
+    with tab_rot:
+        st.caption(
+            'Rotation has no native per-trade log — trades are synthesized by '
+            'walking the monthly rebalance log. Each Stocks_Bought entry is paired '
+            'with its next Stocks_Sold appearance to form a round-trip.'
+        )
+        with st.spinner('Building Rotation report…'):
+            report = _build_report(S_MONTHLY)
+        _render_strategy_insights(S_MONTHLY, report)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
