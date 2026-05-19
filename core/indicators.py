@@ -89,6 +89,66 @@ def dip_flag(close: pd.Series, ema_line: pd.Series, lookback: int) -> pd.Series:
     return below.rolling(lookback).max().astype(bool)
 
 
+def rsi(close: pd.Series, period: int = 14) -> pd.Series:
+    """Wilder RSI. Returns 0-100. Overbought >70, oversold <30."""
+    delta = close.diff()
+    gain = delta.clip(lower=0)
+    loss = (-delta).clip(lower=0)
+    avg_gain = gain.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+    avg_loss = loss.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    return 100 - (100 / (1 + rs))
+
+
+def macd(close: pd.Series, fast: int = 12, slow: int = 26,
+         signal: int = 9) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """Returns (macd_line, signal_line, histogram). Histogram = macd - signal."""
+    ema_fast = close.ewm(span=fast, adjust=False).mean()
+    ema_slow = close.ewm(span=slow, adjust=False).mean()
+    macd_line = ema_fast - ema_slow
+    sig_line  = macd_line.ewm(span=signal, adjust=False).mean()
+    hist      = macd_line - sig_line
+    return macd_line, sig_line, hist
+
+
+def bollinger(close: pd.Series, period: int = 20,
+              num_std: float = 2.0) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """Returns (middle_band, upper_band, lower_band). Middle = SMA, bands = ±k·σ."""
+    mid = close.rolling(period).mean()
+    std = close.rolling(period).std()
+    upper = mid + num_std * std
+    lower = mid - num_std * std
+    return mid, upper, lower
+
+
+def adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    """Wilder ADX. <20 = weak trend, 20-25 = developing, >25 = strong, >40 = very strong."""
+    high, low, close = df['High'], df['Low'], df['Close']
+    up_move   = high.diff()
+    down_move = -low.diff()
+    plus_dm   = pd.Series(
+        np.where((up_move > down_move) & (up_move > 0), up_move, 0.0),
+        index=df.index,
+    )
+    minus_dm  = pd.Series(
+        np.where((down_move > up_move) & (down_move > 0), down_move, 0.0),
+        index=df.index,
+    )
+    tr = true_range(df)
+    # Wilder smoothing via EMA with alpha=1/period
+    atr_w  = tr.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+    plus_di  = 100 * plus_dm.ewm(alpha=1 / period, adjust=False, min_periods=period).mean() / atr_w.replace(0, np.nan)
+    minus_di = 100 * minus_dm.ewm(alpha=1 / period, adjust=False, min_periods=period).mean() / atr_w.replace(0, np.nan)
+    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
+    return dx.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+
+
+def obv(close: pd.Series, volume: pd.Series) -> pd.Series:
+    """On-Balance Volume. Cumulative volume signed by close direction."""
+    direction = np.sign(close.diff()).fillna(0)
+    return (direction * volume).cumsum()
+
+
 def all_indicators(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """Compute the common indicator bundle. Returns a new DataFrame indexed like df.
 

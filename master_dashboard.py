@@ -15,11 +15,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
 from core import analytics as core_analytics
 from core import data_io as core_data_io
 from core import glossary as core_glossary
+from core import indicators as core_indicators
 from core import regime as core_regime
 from core import rotation_trades as core_rotation_trades
 from core import scorer as core_scorer
@@ -813,64 +815,271 @@ def _compute_ipo_signals() -> pd.DataFrame:
     return df_out.drop(columns=['_stage_rank', '_score']).reset_index(drop=True)
 
 
-def _render_me_detail(ticker: str, trades: pd.DataFrame | None) -> None:
-    """Candlestick + SMA50/EMA220 + 52W lines + trade markers for one ticker.
+_PERIOD_BARS = {'1M': 21, '3M': 63, '6M': 126, '1Y': 252, '3Y': 756, 'All': None}
 
-    Looks up OHLCV from data/nse_bse/<ticker>.csv first, falls back to
-    momentum_edge_data/. Renders 252-bar window inline.
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _loss_free_holding(trades: pd.DataFrame) -> pd.DataFrame:
+    """For each past trade, count consecutive days from Entry_Date where Close
+    stayed at-or-above Entry_Price before first close below.
+
+    Returns DataFrame columns: Ticker, Entry_Date, Entry_Price, Loss_Free_Days,
+    First_Loss_Date, Holding_Days, PnL_Pct, Result, Never_Dipped (bool).
+    Trade with no detectable down-close inside Holding_Days window → Never_Dipped=True,
+    Loss_Free_Days = Holding_Days.
     """
+    if trades is None or trades.empty:
+        return pd.DataFrame()
+
+    rows = []
+    folders = [
+        Path(BASE_DIR) / 'data' / 'nse_bse',
+        Path(BASE_DIR) / 'data',
+        Path(BASE_DIR) / 'momentum_edge_data',
+    ]
+
+    for _, tr in trades.iterrows():
+        ticker = str(tr['Ticker'])
+        stem   = ticker if ticker.endswith('.NS') else f'{ticker}.NS'
+        # Find OHLCV file
+        path = None
+        for folder in folders:
+            for candidate in (folder / f'{stem}.csv', folder / f'{ticker}.csv'):
+                if candidate.exists():
+                    path = candidate
+                    break
+            if path is not None:
+                break
+        if path is None:
+            continue
+
+        try:
+            ohlcv = pd.read_csv(path, index_col=0, parse_dates=True)
+        except Exception:
+            continue
+        if 'Close' not in ohlcv.columns or ohlcv.empty:
+            continue
+
+        try:
+            entry_dt = pd.to_datetime(tr['Entry_Date'])
+            entry_px = float(tr['Entry_Price'])
+            exit_dt  = pd.to_datetime(tr.get('Exit_Date'), errors='coerce')
+        except Exception:
+            continue
+        if pd.isna(entry_dt) or pd.isna(entry_px):
+            continue
+
+        # Walk forward from day AFTER entry to exit (or end of data)
+        after = ohlcv.loc[ohlcv.index > entry_dt]
+        if pd.notna(exit_dt):
+            after = after.loc[after.index <= exit_dt]
+        if after.empty:
+            continue
+
+        below_mask = after['Close'] < entry_px
+        if below_mask.any():
+            first_loss_idx = below_mask.idxmax()
+            loss_free = int((after.index < first_loss_idx).sum())
+            first_loss_date = first_loss_idx.strftime('%Y-%m-%d')
+            never = False
+        else:
+            loss_free = int(len(after))
+            first_loss_date = '—'
+            never = True
+
+        rows.append({
+            'Ticker':          ticker.replace('.NS', ''),
+            'Entry_Date':      entry_dt.strftime('%Y-%m-%d'),
+            'Entry_Price':     entry_px,
+            'Loss_Free_Days':  loss_free,
+            'First_Loss_Date': first_loss_date,
+            'Holding_Days':    int(tr.get('Holding_Days', 0)) if pd.notna(tr.get('Holding_Days')) else len(after),
+            'PnL_Pct':         float(tr.get('PnL_Pct', 0.0)) if pd.notna(tr.get('PnL_Pct')) else 0.0,
+            'Result':          str(tr.get('Result', '')),
+            'Never_Dipped':    never,
+        })
+
+    return pd.DataFrame(rows)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _compute_full_indicators(path_str: str) -> pd.DataFrame | None:
+    """Read OHLCV CSV + compute RSI/MACD/ADX/Bollinger/ATR/OBV bundle. Cached 1h."""
+    df = _load_ohlcv_csv(Path(path_str))
+    if df is None or len(df) < 60:
+        return None
+    close, volume = df['Close'], df['Volume']
+    out = df.copy()
+    out['sma50']  = close.rolling(50).mean()
+    out['sma150'] = close.rolling(150).mean()
+    out['ema220'] = close.ewm(span=220, adjust=False).mean()
+    out['rsi14']  = core_indicators.rsi(close, 14)
+    macd_l, macd_s, macd_h = core_indicators.macd(close, 12, 26, 9)
+    out['macd'], out['macd_sig'], out['macd_hist'] = macd_l, macd_s, macd_h
+    bb_m, bb_u, bb_l = core_indicators.bollinger(close, 20, 2.0)
+    out['bb_mid'], out['bb_up'], out['bb_lo'] = bb_m, bb_u, bb_l
+    out['atr14']  = core_indicators.atr(df, 14)
+    out['adx14']  = core_indicators.adx(df, 14)
+    out['obv']    = core_indicators.obv(close, volume)
+    return out
+
+
+def _interp_rsi(v: float) -> tuple[str, str]:
+    if v >= 70: return ('Overbought', '#EF4444')
+    if v >= 55: return ('Bullish', '#22C55E')
+    if v >= 45: return ('Neutral',  '#94A3B8')
+    if v >= 30: return ('Bearish',  '#F59E0B')
+    return ('Oversold', '#22C55E')
+
+
+def _interp_adx(v: float) -> tuple[str, str]:
+    if v >= 40: return ('Very strong trend', '#22C55E')
+    if v >= 25: return ('Strong trend',     '#22C55E')
+    if v >= 20: return ('Developing',       '#F59E0B')
+    return ('Weak / range', '#94A3B8')
+
+
+def _interp_macd(line: float, sig: float, hist: float) -> tuple[str, str]:
+    if hist > 0 and line > sig: return ('Bullish crossover', '#22C55E')
+    if hist < 0 and line < sig: return ('Bearish crossover', '#EF4444')
+    return ('Neutral', '#94A3B8')
+
+
+def _indicator_badge(label: str, value: str, sub: str, color: str = '#94A3B8') -> str:
+    return (
+        f'<div style="background:var(--bg-surface);border:1px solid var(--border-soft);'
+        f'border-radius:10px;padding:12px 14px;height:100%;">'
+        f'<div style="font-size:10px;letter-spacing:.10em;color:var(--fg-muted);'
+        f'text-transform:uppercase;font-weight:500;">{label}</div>'
+        f'<div style="font-size:20px;font-weight:600;color:{color};margin-top:4px;'
+        f'letter-spacing:-.02em;font-variant-numeric:tabular-nums;">{value}</div>'
+        f'<div style="font-size:11px;color:var(--fg-muted);margin-top:2px;">{sub}</div>'
+        f'</div>'
+    )
+
+
+def _render_me_detail(ticker: str, trades: pd.DataFrame | None) -> None:
+    """Multi-panel interactive chart: candles + Bollinger + RSI + MACD + Volume/OBV.
+
+    Toggles for each panel, period selector (1M…All), synced crosshair, and
+    KPI badges showing current RSI/MACD/ADX/ATR/Bollinger-width/OBV-trend.
+    """
+    # ── Locate OHLCV file ───────────────────────────────────────────────────
     full = Path(BASE_DIR) / 'data' / 'nse_bse' / f'{ticker}.NS.csv'
     legacy = Path(BASE_DIR) / 'momentum_edge_data' / f'{ticker}.NS.csv'
-    raw = Path(BASE_DIR) / 'data' / 'nse_bse' / f'{ticker}.csv'  # may already include .NS suffix
+    raw = Path(BASE_DIR) / 'data' / 'nse_bse' / f'{ticker}.csv'
     path = next((p for p in (full, legacy, raw) if p.exists()), None)
     if path is None:
         st.info(f'No OHLCV file found for {ticker}.')
         return
 
-    df = _load_ohlcv_csv(path)
-    if df is None or len(df) < 60:
+    df = _compute_full_indicators(str(path))
+    if df is None:
         st.info('Not enough bars to chart this ticker.')
         return
 
-    close = df['Close']
-    sma50  = close.rolling(50).mean()
-    sma150 = close.rolling(150).mean()
-    ema220 = close.ewm(span=220, adjust=False).mean()
-    high52 = float(close.rolling(252).max().iloc[-1])
-    low52  = float(close.rolling(252).min().iloc[-1])
+    # ── Controls row: period selector + indicator toggles ──────────────────
+    key = f'me_detail_{ticker}'
+    ctrl1, ctrl2 = st.columns([1, 2])
+    with ctrl1:
+        period = st.radio(
+            'Period', list(_PERIOD_BARS.keys()), index=3, horizontal=True,
+            key=f'{key}_period', label_visibility='collapsed',
+        )
+    with ctrl2:
+        t1, t2, t3, t4 = st.columns(4)
+        with t1: show_bb   = st.checkbox('Bollinger',   value=True, key=f'{key}_bb')
+        with t2: show_rsi  = st.checkbox('RSI(14)',     value=True, key=f'{key}_rsi')
+        with t3: show_macd = st.checkbox('MACD',        value=True, key=f'{key}_macd')
+        with t4: show_vol  = st.checkbox('Volume + OBV', value=True, key=f'{key}_vol')
 
-    df_w = df.tail(252).copy()
+    # ── Window slice ────────────────────────────────────────────────────────
+    nbars = _PERIOD_BARS[period]
+    df_w = df.tail(nbars).copy() if nbars else df.copy()
+    if df_w.empty:
+        st.info('No data in selected window.')
+        return
     idx = df_w.index
+    close = df_w['Close']
+    high52 = float(df['Close'].rolling(252).max().iloc[-1])
+    low52  = float(df['Close'].rolling(252).min().iloc[-1])
 
-    fig = go.Figure()
+    # ── KPI badge row: current readings ─────────────────────────────────────
+    rsi_now = float(df['rsi14'].iloc[-1]) if not df['rsi14'].dropna().empty else float('nan')
+    macd_l  = float(df['macd'].iloc[-1])
+    macd_s  = float(df['macd_sig'].iloc[-1])
+    macd_h  = float(df['macd_hist'].iloc[-1])
+    adx_now = float(df['adx14'].iloc[-1]) if not df['adx14'].dropna().empty else float('nan')
+    atr_now = float(df['atr14'].iloc[-1])
+    bb_width = float(
+        ((df['bb_up'].iloc[-1] - df['bb_lo'].iloc[-1]) / df['bb_mid'].iloc[-1]) * 100
+    ) if pd.notna(df['bb_mid'].iloc[-1]) and df['bb_mid'].iloc[-1] != 0 else float('nan')
+    obv_slope = float(df['obv'].iloc[-1] - df['obv'].iloc[-20]) if len(df) >= 20 else 0.0
+
+    rsi_lbl,  rsi_c  = _interp_rsi(rsi_now)  if pd.notna(rsi_now)  else ('—', '#94A3B8')
+    adx_lbl,  adx_c  = _interp_adx(adx_now)  if pd.notna(adx_now)  else ('—', '#94A3B8')
+    macd_lbl, macd_c = _interp_macd(macd_l, macd_s, macd_h)
+    obv_lbl  = 'Rising ↑' if obv_slope > 0 else 'Falling ↓' if obv_slope < 0 else 'Flat'
+    obv_c    = '#22C55E'  if obv_slope > 0 else '#EF4444'   if obv_slope < 0 else '#94A3B8'
+    bb_lbl   = 'Tight' if bb_width < 5 else 'Wide' if bb_width > 12 else 'Normal'
+
+    b1, b2, b3, b4, b5 = st.columns(5)
+    with b1: st.markdown(_indicator_badge('RSI(14)',    f'{rsi_now:.1f}'    if pd.notna(rsi_now) else '—',  rsi_lbl,  rsi_c),  unsafe_allow_html=True)
+    with b2: st.markdown(_indicator_badge('MACD Hist',  f'{macd_h:+.2f}',                                   macd_lbl, macd_c), unsafe_allow_html=True)
+    with b3: st.markdown(_indicator_badge('ADX(14)',    f'{adx_now:.1f}'    if pd.notna(adx_now) else '—',  adx_lbl,  adx_c),  unsafe_allow_html=True)
+    with b4: st.markdown(_indicator_badge('ATR(14)',    f'₹{atr_now:.2f}',                                  f'Avg daily range', '#60A5FA'), unsafe_allow_html=True)
+    with b5: st.markdown(_indicator_badge('OBV 20d',    obv_lbl,                                            f'BB width {bb_width:.1f}% · {bb_lbl}', obv_c), unsafe_allow_html=True)
+    st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
+
+    # ── Build subplots ──────────────────────────────────────────────────────
+    rows_cfg = [('price', 0.60)]
+    if show_rsi:  rows_cfg.append(('rsi',  0.13))
+    if show_macd: rows_cfg.append(('macd', 0.13))
+    if show_vol:  rows_cfg.append(('vol',  0.14))
+    # Normalize heights so they sum to 1
+    total = sum(h for _, h in rows_cfg)
+    heights = [h / total for _, h in rows_cfg]
+    row_idx = {name: i + 1 for i, (name, _) in enumerate(rows_cfg)}
+
+    fig = make_subplots(
+        rows=len(rows_cfg), cols=1, shared_xaxes=True,
+        vertical_spacing=0.02, row_heights=heights,
+    )
+
+    # Row 1: Candles + MAs + Bollinger + 52W lines
     fig.add_trace(go.Candlestick(
-        x=idx,
-        open=df_w['Open'], high=df_w['High'],
-        low=df_w['Low'],   close=df_w['Close'],
-        name='Price',
-        increasing_line_color='#00c853',
-        increasing_fillcolor='rgba(0,200,83,0.35)',
-        decreasing_line_color='#ff3d3d',
-        decreasing_fillcolor='rgba(255,61,61,0.35)',
-    ))
-    fig.add_trace(go.Scatter(x=idx, y=sma50.loc[idx], name='SMA 50',
-                             line=dict(color='#4c9fff', width=1.5)))
-    fig.add_trace(go.Scatter(x=idx, y=sma150.loc[idx], name='SMA 150',
-                             line=dict(color='#ff9800', width=1.5)))
-    fig.add_trace(go.Scatter(x=idx, y=ema220.loc[idx], name='EMA 220',
-                             line=dict(color='#ff5252', width=2, dash='dot')))
-    fig.add_hline(y=high52, line_color='rgba(0,200,83,0.6)', line_dash='dash',
-                  annotation_text=f'52W High ₹{high52:,.0f}',
-                  annotation_position='bottom right',
-                  annotation_font=dict(color='#00c853', size=10))
-    fig.add_hline(y=low52, line_color='rgba(255,61,61,0.6)', line_dash='dash',
-                  annotation_text=f'52W Low ₹{low52:,.0f}',
-                  annotation_position='top right',
-                  annotation_font=dict(color='#ff5252', size=10))
+        x=idx, open=df_w['Open'], high=df_w['High'],
+        low=df_w['Low'], close=df_w['Close'], name='Price',
+        increasing_line_color='#22C55E', increasing_fillcolor='rgba(34,197,94,0.35)',
+        decreasing_line_color='#EF4444', decreasing_fillcolor='rgba(239,68,68,0.35)',
+        showlegend=False,
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(x=idx, y=df_w['sma50'],  name='SMA 50',
+                             line=dict(color='#60A5FA', width=1.4)), row=1, col=1)
+    fig.add_trace(go.Scatter(x=idx, y=df_w['sma150'], name='SMA 150',
+                             line=dict(color='#F59E0B', width=1.4)), row=1, col=1)
+    fig.add_trace(go.Scatter(x=idx, y=df_w['ema220'], name='EMA 220',
+                             line=dict(color='#A78BFA', width=1.6, dash='dot')), row=1, col=1)
+    if show_bb:
+        fig.add_trace(go.Scatter(x=idx, y=df_w['bb_up'], name='BB Upper',
+                                 line=dict(color='rgba(148,163,184,0.5)', width=1)),
+                      row=1, col=1)
+        fig.add_trace(go.Scatter(x=idx, y=df_w['bb_lo'], name='BB Lower',
+                                 line=dict(color='rgba(148,163,184,0.5)', width=1),
+                                 fill='tonexty', fillcolor='rgba(148,163,184,0.06)'),
+                      row=1, col=1)
+        fig.add_trace(go.Scatter(x=idx, y=df_w['bb_mid'], name='BB Mid',
+                                 line=dict(color='rgba(148,163,184,0.6)', width=1, dash='dot')),
+                      row=1, col=1)
+    fig.add_hline(y=high52, line_color='rgba(34,197,94,0.5)', line_dash='dash',
+                  annotation_text=f'52W High ₹{high52:,.0f}', annotation_position='bottom right',
+                  annotation_font=dict(color='#22C55E', size=10), row=1, col=1)
+    fig.add_hline(y=low52, line_color='rgba(239,68,68,0.5)', line_dash='dash',
+                  annotation_text=f'52W Low ₹{low52:,.0f}', annotation_position='top right',
+                  annotation_font=dict(color='#EF4444', size=10), row=1, col=1)
 
-    # Past trade markers
+    # Trade markers
     if trades is not None and not trades.empty and 'Ticker' in trades.columns:
-        ticker_full = ticker if ticker.endswith('.NS') else f'{ticker}.NS'
         t = trades[trades['Ticker'].astype(str).str.replace('.NS', '', regex=False) == ticker].copy()
         if not t.empty:
             ed = pd.to_datetime(t.get('Entry_Date'), errors='coerce')
@@ -883,37 +1092,107 @@ def _render_me_detail(ticker: str, trades: pd.DataFrame | None) -> None:
             if em.any():
                 fig.add_trace(go.Scatter(
                     x=ed[em], y=ep[em], mode='markers', name='BUY',
-                    marker=dict(symbol='triangle-up', size=14, color='#00e676',
+                    marker=dict(symbol='triangle-up', size=14, color='#22C55E',
                                 line=dict(color='#fff', width=1)),
-                    hovertemplate='BUY  ₹%{y:,.2f}<br>%{x}<extra></extra>',
-                ))
+                    hovertemplate='BUY ₹%{y:,.2f}<br>%{x}<extra></extra>',
+                ), row=1, col=1)
             if xm.any():
                 fig.add_trace(go.Scatter(
                     x=xd[xm], y=xp[xm], mode='markers', name='EXIT',
-                    marker=dict(symbol='triangle-down', size=14, color='#ff1744',
+                    marker=dict(symbol='triangle-down', size=14, color='#EF4444',
                                 line=dict(color='#fff', width=1)),
-                    hovertemplate='EXIT  ₹%{y:,.2f}<br>%{x}<extra></extra>',
-                ))
+                    hovertemplate='EXIT ₹%{y:,.2f}<br>%{x}<extra></extra>',
+                ), row=1, col=1)
+
+    # Row: RSI
+    if show_rsi:
+        r = row_idx['rsi']
+        fig.add_trace(go.Scatter(x=idx, y=df_w['rsi14'], name='RSI(14)',
+                                 line=dict(color='#F8FAFC', width=1.4)), row=r, col=1)
+        fig.add_hline(y=70, line_color='rgba(239,68,68,0.4)', line_dash='dot', row=r, col=1)
+        fig.add_hline(y=30, line_color='rgba(34,197,94,0.4)', line_dash='dot', row=r, col=1)
+        fig.add_hline(y=50, line_color='rgba(148,163,184,0.25)', line_dash='dot', row=r, col=1)
+        fig.update_yaxes(range=[0, 100], tickvals=[20, 50, 80], row=r, col=1)
+
+    # Row: MACD
+    if show_macd:
+        r = row_idx['macd']
+        hist_color = ['#22C55E' if v >= 0 else '#EF4444' for v in df_w['macd_hist'].fillna(0)]
+        fig.add_trace(go.Bar(x=idx, y=df_w['macd_hist'], name='MACD Hist',
+                             marker_color=hist_color, opacity=0.55,
+                             showlegend=False), row=r, col=1)
+        fig.add_trace(go.Scatter(x=idx, y=df_w['macd'],     name='MACD',
+                                 line=dict(color='#60A5FA', width=1.5)), row=r, col=1)
+        fig.add_trace(go.Scatter(x=idx, y=df_w['macd_sig'], name='Signal',
+                                 line=dict(color='#F59E0B', width=1.2)), row=r, col=1)
+        fig.add_hline(y=0, line_color='rgba(148,163,184,0.3)', line_dash='dot', row=r, col=1)
+
+    # Row: Volume + OBV
+    if show_vol:
+        r = row_idx['vol']
+        vol_color = ['#22C55E' if c >= o else '#EF4444' for c, o in zip(df_w['Close'], df_w['Open'])]
+        fig.add_trace(go.Bar(x=idx, y=df_w['Volume'], name='Volume',
+                             marker_color=vol_color, opacity=0.45,
+                             showlegend=False, yaxis=f'y{r}'), row=r, col=1)
+        # OBV on secondary axis — simulate via normalizing into volume range
+        obv_w = df_w['obv']
+        if not obv_w.empty:
+            v_max = float(df_w['Volume'].max() or 1)
+            o_min, o_max = float(obv_w.min()), float(obv_w.max())
+            rng = (o_max - o_min) or 1.0
+            obv_norm = (obv_w - o_min) / rng * v_max
+            fig.add_trace(go.Scatter(x=idx, y=obv_norm, name='OBV (scaled)',
+                                     line=dict(color='#A78BFA', width=1.4)), row=r, col=1)
+
+    # ── Layout: synced crosshair + corporate dark theme ─────────────────────
+    yaxis_titles = {1: '₹ Price'}
+    if show_rsi:  yaxis_titles[row_idx['rsi']]  = 'RSI'
+    if show_macd: yaxis_titles[row_idx['macd']] = 'MACD'
+    if show_vol:  yaxis_titles[row_idx['vol']]  = 'Volume'
+
+    for r in range(1, len(rows_cfg) + 1):
+        fig.update_xaxes(
+            showspikes=True, spikemode='across+toaxis', spikethickness=1,
+            spikedash='dot', spikecolor='rgba(148,163,184,0.55)',
+            showline=True, linecolor='#1E293B', gridcolor='#1E293B',
+            row=r, col=1,
+        )
+        fig.update_yaxes(
+            title=dict(text=yaxis_titles.get(r, ''), font=dict(size=10, color='#64748B')),
+            showspikes=True, spikemode='across', spikethickness=1,
+            spikedash='dot', spikecolor='rgba(148,163,184,0.55)',
+            showline=True, linecolor='#1E293B', gridcolor='#1E293B',
+            tickfont=dict(size=10),
+            row=r, col=1,
+        )
+    # Price axis: ₹ prefix
+    fig.update_yaxes(tickprefix='₹', tickformat=',.0f', row=1, col=1)
+    # Last row gets x-tick labels
+    fig.update_xaxes(tickformat='%d %b %y', tickfont=dict(size=10),
+                     row=len(rows_cfg), col=1)
+    # Hide rangeslider on candlestick
+    fig.update_layout(xaxis_rangeslider_visible=False)
 
     fig.update_layout(
-        height=480,
-        paper_bgcolor='#0e1117', plot_bgcolor='#12172a',
-        xaxis=dict(gridcolor='#1e2235', rangeslider=dict(visible=False),
-                   tickformat='%d %b %y', tickfont=dict(size=10)),
-        yaxis=dict(gridcolor='#1e2235', tickprefix='₹', tickformat=',.0f',
-                   tickfont=dict(size=10)),
-        legend=dict(orientation='h', y=1.02, x=0,
-                    font=dict(size=11, color='#8892a4'),
+        height=180 + 380 * heights[0] + sum(180 * h for h in heights[1:]),
+        paper_bgcolor='#020617', plot_bgcolor='#020617',
+        font=dict(color='#F1F5F9', family='IBM Plex Sans'),
+        legend=dict(orientation='h', y=1.04, x=0,
+                    font=dict(size=11, color='#94A3B8'),
                     bgcolor='rgba(0,0,0,0)'),
-        font=dict(color='#e0e0e0', family='IBM Plex Sans'),
-        margin=dict(l=70, r=30, t=50, b=30),
+        margin=dict(l=70, r=30, t=60, b=40),
         hovermode='x unified',
+        hoverlabel=dict(bgcolor='#0F172A', bordercolor='#334155',
+                        font=dict(family='IBM Plex Mono', size=11, color='#F1F5F9')),
+        spikedistance=-1,
+        dragmode='zoom',
+        barmode='overlay',
     )
     st.plotly_chart(fig, width='stretch')
 
-    # Mini stats bar
-    close_now  = float(close.iloc[-1])
-    close_prev = float(close.iloc[-2]) if len(close) >= 2 else close_now
+    # ── Mini stats bar (price/change/52W/volume) ────────────────────────────
+    close_now  = float(df['Close'].iloc[-1])
+    close_prev = float(df['Close'].iloc[-2]) if len(df) >= 2 else close_now
     pct_chg    = (close_now / close_prev - 1) * 100
     vol_avg30  = float(df['Volume'].iloc[-30:].mean())
     vol_str    = (f'{vol_avg30 / 1_000_000:.1f}M' if vol_avg30 >= 1_000_000
@@ -1567,6 +1846,42 @@ If win rate climbs steadily Q1 → Q5, the score is predictive.
 <b style="color:#7c9cff">Fade Rate</b> — <i>How often a gain is given back</i><br>
 At a +15% level, fade rate = % of trades that touched +15% then closed below it.
 Low fade rate = book partial profits there, the gain rarely escapes.
+</div>
+
+<div>
+<b style="color:#7c9cff">RSI (Relative Strength Index)</b> — <i>How overheated is the move?</i><br>
+0–100 score. Above 70 = overbought (stock may pause/pull back).
+Below 30 = oversold (potential bounce). Around 50 = neutral.
+</div>
+
+<div>
+<b style="color:#7c9cff">MACD</b> — <i>Trend & momentum crossover</i><br>
+Difference between two moving averages. When the MACD line crosses above the signal line
+(histogram turns green/positive) = bullish. When it crosses below = bearish.
+</div>
+
+<div>
+<b style="color:#7c9cff">ADX (Average Directional Index)</b> — <i>How strong is the trend?</i><br>
+0–100 score. Below 20 = weak / sideways. 20–25 = trend forming.
+Above 25 = strong trend. Above 40 = very strong trend.
+</div>
+
+<div>
+<b style="color:#7c9cff">ATR (Average True Range)</b> — <i>How much does the stock move daily?</i><br>
+Typical daily range in rupees. Use it to size stops: 2×ATR below entry is a
+common "give it room to breathe" stop-loss distance.
+</div>
+
+<div>
+<b style="color:#7c9cff">Bollinger Bands</b> — <i>Volatility envelope</i><br>
+20-day SMA with ±2σ bands. Price near upper band = stretched up.
+Bands squeezing tight = a big move is brewing. Width &lt; 5% = compressed.
+</div>
+
+<div>
+<b style="color:#7c9cff">OBV (On-Balance Volume)</b> — <i>Volume-weighted trend confirmation</i><br>
+Running sum of volume signed by close direction. OBV rising while price rises = healthy
+buying. OBV flat or falling while price rises = weak rally, watch out.
 </div>
 
 </div>
@@ -3402,6 +3717,78 @@ def render_momentum(mo: dict):
         st.plotly_chart(chart_plotly_table(t, row_colors=row_colors, score_col=None),
                         width='stretch')
 
+        # ── Loss-Free Holding Period analytic ─────────────────────────────
+        st.markdown('<br>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="sec-hdr" style="color:{color}">Loss-Free Holding Window — '
+            f'how long past signals stayed in profit before the first down-close</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div style="font-size:12px;color:#8892a4;margin:-4px 0 10px 0;">'
+            'For every past qualifying entry, we walk forward day-by-day and count '
+            'how many trading days the close stayed <b>at or above the entry price</b> '
+            'before it first dipped below. Higher numbers = the signal gives you more '
+            'cushion to set tight stops without getting shaken out.'
+            '</div>', unsafe_allow_html=True,
+        )
+
+        lfh = _loss_free_holding(trades)
+        if lfh.empty:
+            st.caption('No closed trades to analyse.')
+        else:
+            med  = float(lfh['Loss_Free_Days'].median())
+            p25  = float(lfh['Loss_Free_Days'].quantile(0.25))
+            p75  = float(lfh['Loss_Free_Days'].quantile(0.75))
+            pct_safe_5   = float((lfh['Loss_Free_Days'] >=  5).mean() * 100)
+            pct_safe_20  = float((lfh['Loss_Free_Days'] >= 20).mean() * 100)
+            pct_safe_60  = float((lfh['Loss_Free_Days'] >= 60).mean() * 100)
+            never_dipped = int((lfh['Never_Dipped']).sum())
+
+            k1, k2, k3, k4, k5 = st.columns(5)
+            with k1:
+                st.markdown(pill(
+                    'Median Safe Days', f'{med:.0f}', f'IQR {p25:.0f}–{p75:.0f}', color,
+                    explain='Half of past signals stayed at-or-above entry for at least this many trading days.',
+                ), unsafe_allow_html=True)
+            with k2:
+                st.markdown(pill(
+                    '≥ 1 Week Safe', f'{pct_safe_5:.0f}%', 'of all past signals', '#22C55E',
+                    explain='% of past entries that stayed in profit for at least 5 trading days.',
+                ), unsafe_allow_html=True)
+            with k3:
+                st.markdown(pill(
+                    '≥ 1 Month Safe', f'{pct_safe_20:.0f}%', 'of all past signals', '#22C55E',
+                    explain='% of past entries that stayed in profit for at least 20 trading days.',
+                ), unsafe_allow_html=True)
+            with k4:
+                st.markdown(pill(
+                    '≥ 3 Months Safe', f'{pct_safe_60:.0f}%', 'of all past signals', '#22C55E',
+                    explain='% of past entries that stayed in profit for at least 60 trading days.',
+                ), unsafe_allow_html=True)
+            with k5:
+                st.markdown(pill(
+                    'Never Dipped', f'{never_dipped}', f'of {len(lfh)} trades', '#60A5FA',
+                    explain='Trades where the close never went below the entry price for the entire hold.',
+                ), unsafe_allow_html=True)
+
+            # Per-trade detail table
+            with st.expander('Per-trade detail — loss-free days for every past signal'):
+                disp = lfh[[
+                    'Ticker', 'Entry_Date', 'Entry_Price', 'Loss_Free_Days',
+                    'First_Loss_Date', 'Holding_Days', 'PnL_Pct', 'Result',
+                ]].copy()
+                disp['Entry_Price'] = disp['Entry_Price'].apply(lambda x: f'₹{x:,.2f}')
+                disp['PnL_Pct']     = disp['PnL_Pct'].apply(lambda x: f'{x:+.2f}%')
+                row_colors_lfh = [
+                    'rgba(34,197,94,0.10)' if r == 'Win' else 'rgba(239,68,68,0.06)'
+                    for r in disp['Result']
+                ]
+                st.plotly_chart(
+                    chart_plotly_table(disp, row_colors=row_colors_lfh, score_col=None),
+                    width='stretch',
+                )
+
     # ── Glossary ───────────────────────────────────────────────────────────────
     st.markdown('<br>', unsafe_allow_html=True)
     _glossary_expander()
@@ -3745,10 +4132,56 @@ def _regime_snapshot() -> dict:
     }
 
 
+@st.cache_data(ttl=300)
+def _data_freshness() -> dict:
+    """Latest bar date across data folders + most-recent file mtime.
+
+    Returns dict with: latest_bar (date str), file_mtime (datetime str),
+    age_hours (float), source_file (str).
+    """
+    from datetime import datetime as _dt
+    candidates = [
+        Path(BASE_DIR) / 'data' / 'nse_bse',
+        Path(BASE_DIR) / 'data',
+        Path(BASE_DIR) / 'momentum_edge_data',
+    ]
+    latest_bar  = None
+    newest_file = None
+    newest_mtime = 0.0
+    for folder in candidates:
+        if not folder.exists():
+            continue
+        for probe in ('RELIANCE.NS.csv', 'HDFCBANK.NS.csv', 'INFY.NS.csv'):
+            p = folder / probe
+            if not p.exists():
+                continue
+            try:
+                last = pd.read_csv(p, index_col=0, parse_dates=True).index[-1]
+                if latest_bar is None or last > latest_bar:
+                    latest_bar = last
+                mtime = p.stat().st_mtime
+                if mtime > newest_mtime:
+                    newest_mtime = mtime
+                    newest_file  = str(p.relative_to(BASE_DIR))
+                break
+            except Exception:
+                continue
+    if latest_bar is None:
+        return {'latest_bar': '—', 'file_mtime': '—', 'age_hours': None, 'source_file': '—'}
+    age_h = (_dt.now().timestamp() - newest_mtime) / 3600.0
+    return {
+        'latest_bar':  latest_bar.strftime('%d %b %Y'),
+        'file_mtime':  _dt.fromtimestamp(newest_mtime).strftime('%d %b %Y %H:%M'),
+        'age_hours':   round(age_h, 1),
+        'source_file': newest_file or '—',
+    }
+
+
 def _render_regime_banner() -> None:
-    """Persistent Nifty regime banner shown above every page."""
+    """Persistent Nifty regime banner + data freshness shown above every page."""
     snap = _regime_snapshot()
     status = snap.get('status', 'Unknown')
+    fresh  = _data_freshness()
 
     if status == 'Bull':
         bg, border, accent, icon, msg = (
@@ -3778,6 +4211,26 @@ def _render_regime_banner() -> None:
             f'{snap["date"]}</span>'
         )
 
+    # Freshness chip — green if <24h, amber 24–72h, red >72h
+    age = fresh.get('age_hours')
+    if age is None:
+        f_bg, f_fg, f_lbl = 'rgba(148,163,184,0.10)', '#94A3B8', 'No data'
+    elif age < 24:
+        f_bg, f_fg, f_lbl = 'rgba(34,197,94,0.10)', '#22C55E', f'{age:.1f}h ago'
+    elif age < 72:
+        f_bg, f_fg, f_lbl = 'rgba(245,158,11,0.10)', '#F59E0B', f'{age:.0f}h ago'
+    else:
+        f_bg, f_fg, f_lbl = 'rgba(239,68,68,0.10)', '#EF4444', f'{age / 24:.0f}d ago'
+
+    fresh_chip = (
+        f'<span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;'
+        f'background:{f_bg};border:1px solid {f_fg}55;border-radius:6px;'
+        f'padding:4px 10px;font-size:11.5px;color:{f_fg};font-weight:500;"'
+        f' title="Last bar {fresh["latest_bar"]} · File saved {fresh["file_mtime"]}">'
+        f'● Data updated {f_lbl} · last bar {fresh["latest_bar"]}'
+        f'</span>'
+    )
+
     st.markdown(
         f"""
         <div style="background:{bg};border:1px solid {border};
@@ -3790,6 +4243,7 @@ def _render_regime_banner() -> None:
             {bars} bars since last flip
           </span>
           {extras}
+          {fresh_chip}
         </div>
         """,
         unsafe_allow_html=True,
