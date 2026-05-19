@@ -24,12 +24,20 @@ if errorlevel 1 (
     echo  ok Nifty 50 done >> "%LOG%"
 )
 
-echo [2/2] Downloading wider NSE/BSE ... >> "%LOG%"
+echo [2/3] Downloading wider NSE/BSE ... >> "%LOG%"
 "%PY%" nse_bse_downloader.py >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo  !! nse_bse_downloader.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
 ) else (
     echo  ok NSE/BSE done >> "%LOG%"
+)
+
+echo [3/3] Rebuilding Momentum Edge parquet cache + backtest ... >> "%LOG%"
+"%PY%" momentum_edge_backtest.py >> "%LOG%" 2>&1
+if errorlevel 1 (
+    echo  !! momentum_edge_backtest.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
+) else (
+    echo  ok parquet cache + backtest done >> "%LOG%"
 )
 
 echo Refresh finished: %DATE% %TIME% >> "%LOG%"

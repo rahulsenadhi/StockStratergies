@@ -1646,6 +1646,135 @@ _STRATEGY_OHLCV_FOLDERS = {
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def _verify_past_trades(trades: pd.DataFrame) -> pd.DataFrame:
+    """Re-verify each past trade against the strategy filters at the signal date.
+
+    Returns the trades DataFrame with extra columns:
+      - Prior_52W_High_Close  (the close-max in the 252 bars BEFORE entry)
+      - Breakout_Margin_Pct   ((entry_price / prior_high) - 1) * 100
+      - All_Filters_OK        bool — every one of F1..F6 + breakout was satisfied
+      - Filter_Detail         compact pass/fail string e.g. 'F1✓ F2✓ F3✓ F4✓ F5✓ F6✓ BK✓'
+
+    The check uses the bar BEFORE entry (signal day) for filter evaluation — exactly
+    what the backtest sees, zero look-ahead.
+    """
+    if trades is None or trades.empty:
+        return trades.copy() if trades is not None else pd.DataFrame()
+
+    folders = [
+        Path(BASE_DIR) / 'data' / 'nse_bse',
+        Path(BASE_DIR) / 'data',
+        Path(BASE_DIR) / 'momentum_edge_data',
+    ]
+    margin_pct: list[float | None] = []
+    prior_high_col: list[float | None] = []
+    all_ok_col: list[bool] = []
+    detail_col: list[str] = []
+
+    for _, tr in trades.iterrows():
+        ticker = str(tr['Ticker'])
+        stem = ticker if ticker.endswith('.NS') else f'{ticker}.NS'
+        path = None
+        for folder in folders:
+            for cand in (folder / f'{stem}.csv', folder / f'{ticker}.csv'):
+                if cand.exists():
+                    path = cand
+                    break
+            if path is not None:
+                break
+        if path is None:
+            margin_pct.append(None); prior_high_col.append(None)
+            all_ok_col.append(False); detail_col.append('no data')
+            continue
+        try:
+            df = pd.read_csv(path, index_col=0, parse_dates=True)
+        except Exception:
+            margin_pct.append(None); prior_high_col.append(None)
+            all_ok_col.append(False); detail_col.append('read fail')
+            continue
+        if 'Close' not in df.columns:
+            margin_pct.append(None); prior_high_col.append(None)
+            all_ok_col.append(False); detail_col.append('schema')
+            continue
+        try:
+            entry_dt = pd.to_datetime(tr['Entry_Date'])
+            entry_px = float(tr['Entry_Price'])
+        except Exception:
+            margin_pct.append(None); prior_high_col.append(None)
+            all_ok_col.append(False); detail_col.append('parse')
+            continue
+
+        # Signal day = the bar BEFORE entry
+        before_or_eq = df.loc[df.index < entry_dt]
+        if len(before_or_eq) < ME_HIGH52_P + 1:
+            margin_pct.append(None); prior_high_col.append(None)
+            all_ok_col.append(False); detail_col.append('< 252 bars')
+            continue
+
+        signal_close = float(before_or_eq['Close'].iloc[-1])
+        prior_high   = float(before_or_eq['Close'].iloc[-ME_HIGH52_P - 1:-1].max())
+        prior_high_col.append(prior_high)
+
+        # Margin = how much signal_close exceeded prior_high
+        margin = (signal_close / prior_high - 1) * 100 if prior_high > 0 else None
+        margin_pct.append(margin)
+
+        # Evaluate F1..F6 + breakout at signal day
+        c = before_or_eq['Close']
+        sma50  = c.rolling(ME_SMA50_P).mean().iloc[-1]
+        sma150 = c.rolling(ME_SMA150_P).mean().iloc[-1]
+        ema220 = c.ewm(span=ME_EMA220_P, adjust=False).mean().iloc[-1]
+        low52  = c.rolling(ME_LOW52_P).min().iloc[-1]
+        vol_window = before_or_eq.get('Volume')
+        if vol_window is not None and not vol_window.empty:
+            vol20 = vol_window.rolling(ME_VOLAVG_P).mean().iloc[-1]
+            vol50 = vol_window.rolling(ME_VOL_LOOKBACK).mean().iloc[-1]
+            v_last = float(vol_window.iloc[-1])
+            vol_ok = bool(not pd.isna(vol50) and vol50 > 0 and v_last >= ME_VOL_MULT * vol50)
+        else:
+            vol_ok = True  # cannot verify without volume — assume pass
+
+        # Dip check — was there a close < ema220 in last DIP_LB bars?
+        ema_series = c.ewm(span=ME_EMA220_P, adjust=False).mean()
+        dip_mask   = (c < ema_series).iloc[-ME_DIP_LB - 1:-1]
+        had_dip    = bool(dip_mask.any())
+
+        f1 = bool(sma150 > ema220)
+        f2 = bool(signal_close > sma50)
+        f3 = bool(sma50 > sma150)
+        f4 = bool(signal_close >= ME_MIN_PRICE_VS_LOW * low52)
+        f5 = had_dip
+        # F6 — choppiness on window up to signal day
+        try:
+            chop = float(_compute_choppiness(before_or_eq.tail(60)).iloc[-1])
+            f6 = bool(chop < ME_CHOP_THRESH)
+        except Exception:
+            f6 = True
+        bk = bool(signal_close > prior_high) and bool(signal_close > ema220)
+
+        all_ok = f1 and f2 and f3 and f4 and f5 and f6 and bk and vol_ok
+        all_ok_col.append(all_ok)
+        flags = [
+            f'F1{"✓" if f1 else "✗"}',
+            f'F2{"✓" if f2 else "✗"}',
+            f'F3{"✓" if f3 else "✗"}',
+            f'F4{"✓" if f4 else "✗"}',
+            f'F5{"✓" if f5 else "✗"}',
+            f'F6{"✓" if f6 else "✗"}',
+            f'BK{"✓" if bk else "✗"}',
+            f'V{"✓" if vol_ok else "✗"}',
+        ]
+        detail_col.append(' '.join(flags))
+
+    out = trades.copy()
+    out['Prior_52W_High'] = prior_high_col
+    out['Breakout_Margin_Pct'] = margin_pct
+    out['All_Filters_OK'] = all_ok_col
+    out['Filter_Detail'] = detail_col
+    return out
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def _loss_free_holding(trades: pd.DataFrame,
                         folder_keys: tuple[str, ...] = (
                             'data/nse_bse', 'data', 'momentum_edge_data',
@@ -2062,11 +2191,14 @@ def _load_parquet_indicators_parallel(folder: Path) -> dict[str, pd.DataFrame]:
     return out
 
 
-def _parquet_is_fresh(parquet_dir: Path, csv_folder: Path, tol_days: int = 7) -> bool:
+def _parquet_is_fresh(parquet_dir: Path, csv_folder: Path, tol_days: int = 1) -> bool:
     """Cheap freshness check: parquet's latest index >= CSV's latest index minus tol_days.
 
     Compares one widely-traded symbol (RELIANCE.NS preferred). Returns False if
-    either file is missing.
+    either file is missing. Default tolerance is 1 calendar day — if the CSVs
+    have been refreshed (typically post-market 16:00) and the parquet cache
+    has not been rebuilt by a backtest run, we fall back to CSV path so the
+    live screener reflects today's market.
     """
     probe = 'RELIANCE.NS'
     pq = parquet_dir / f'{probe}.parquet'
@@ -4631,16 +4763,17 @@ def render_momentum(mo: dict):
             '</div>', unsafe_allow_html=True,
         )
 
-        trades_sorted = trades.copy()
+        with st.spinner('Verifying past trades against all 8 filters…'):
+            trades_verified = _verify_past_trades(trades)
+        trades_sorted = trades_verified.copy()
         trades_sorted['Exit_Date'] = pd.to_datetime(trades_sorted['Exit_Date'], errors='coerce')
         trades_sorted = trades_sorted.sort_values('Exit_Date', ascending=False)
 
-        # ── Period filter ──────────────────────────────────────────────────
-        exit_min = trades_sorted['Exit_Date'].min()
+        # ── Period + Strict filter ─────────────────────────────────────────
         exit_max = trades_sorted['Exit_Date'].max()
         all_years = sorted({d.year for d in trades_sorted['Exit_Date'].dropna()}, reverse=True)
 
-        fc1, fc2 = st.columns([1, 2])
+        fc1, fc2, fc3 = st.columns([1.4, 1.2, 1.4])
         with fc1:
             period_choice = st.radio(
                 'Show', ['Last 1Y', 'Last 3Y', 'All', 'Pick year'],
@@ -4652,6 +4785,13 @@ def render_momentum(mo: dict):
             if period_choice == 'Pick year' and all_years:
                 year_pick = st.selectbox('Year', all_years, key='me_trades_year',
                                          label_visibility='collapsed')
+        with fc3:
+            strict_mode = st.toggle(
+                '🔒 Strict mode — clean signals only', value=False, key='me_trades_strict',
+                help='Hide marginal trades. Keeps only entries where ALL 8 filters passed at signal day '
+                     'AND breakout margin >= 1% above prior 52W close high. '
+                     'Cuts out edge cases like 0.25%-above-high entries.',
+            )
 
         if period_choice == 'Last 1Y':
             cutoff = exit_max - pd.Timedelta(days=365)
@@ -4664,27 +4804,162 @@ def render_momentum(mo: dict):
         else:
             view = trades_sorted
 
+        n_pre_strict = len(view)
+        n_marginal   = 0
+        if strict_mode and 'Breakout_Margin_Pct' in view.columns:
+            mask = (view['All_Filters_OK'] == True) & (view['Breakout_Margin_Pct'] >= 1.0)
+            n_marginal = int((~mask).sum())
+            view = view[mask]
+
         st.caption(
             f'Showing **{len(view)}** trades of {len(trades_sorted)} total. '
             f'Range: {view["Exit_Date"].min().strftime("%b %Y") if not view.empty else "—"} → '
             f'{view["Exit_Date"].max().strftime("%b %Y") if not view.empty else "—"}.'
+            + (f' **🔒 Strict mode** hid {n_marginal} marginal trade(s) in this window.' if strict_mode else
+               '  Toggle 🔒 Strict mode to hide marginal-breakout entries.')
         )
 
-        base_cols = ['Ticker', 'Entry_Date', 'Entry_Price', 'Exit_Date',
-                     'Exit_Price', 'PnL_Pct', 'Holding_Days', 'Exit_Reason', 'Result']
+        base_cols = ['Ticker', 'Entry_Date', 'Entry_Price', 'Prior_52W_High',
+                     'Breakout_Margin_Pct',
+                     'Exit_Date', 'Exit_Price', 'PnL_Pct', 'Holding_Days',
+                     'Exit_Reason', 'Result', 'Filter_Detail']
         extra = [c for c in ('Entry_Type', 'Recovery_Speed', 'Recovery_Days')
                  if c in view.columns]
-        t = view[base_cols + extra].copy()
+        keep = [c for c in base_cols + extra if c in view.columns]
+        t = view[keep].copy()
         t['Ticker']      = t['Ticker'].str.replace('.NS', '')
         t['Entry_Price'] = t['Entry_Price'].apply(lambda x: f'₹{x:,.2f}')
         t['Exit_Price']  = t['Exit_Price'].apply(lambda x: f'₹{x:,.2f}')
+        if 'Prior_52W_High' in t.columns:
+            t['Prior_52W_High'] = t['Prior_52W_High'].apply(
+                lambda x: f'₹{x:,.2f}' if pd.notna(x) else '—'
+            )
+        if 'Breakout_Margin_Pct' in t.columns:
+            t['Breakout_Margin_Pct'] = t['Breakout_Margin_Pct'].apply(
+                lambda x: f'+{x:.2f}%' if pd.notna(x) and x >= 0 else
+                          (f'{x:.2f}%' if pd.notna(x) else '—')
+            )
         t['Entry_Date']  = pd.to_datetime(t['Entry_Date']).dt.strftime('%Y-%m-%d')
         t['Exit_Date']   = pd.to_datetime(t['Exit_Date']).dt.strftime('%Y-%m-%d')
         t['PnL_Pct']     = t['PnL_Pct'].apply(lambda x: f'{x:+.2f}%')
+        # Rename for compactness
+        t = t.rename(columns={
+            'Prior_52W_High':      'Prior 52W High',
+            'Breakout_Margin_Pct': 'BK Margin',
+            'Filter_Detail':       'Filters',
+        })
         row_colors = ['rgba(34,197,94,0.10)' if r == 'Win' else 'rgba(239,68,68,0.08)'
                       for r in view['Result']]
         st.plotly_chart(chart_plotly_table(t, row_colors=row_colors, score_col=None),
                         width='stretch')
+
+        # Legend for the new BK Margin + Filters columns
+        st.markdown(
+            '<div style="font-size:11px;color:var(--muted-foreground);margin-top:6px;line-height:1.6;">'
+            '<b>BK Margin</b> = how much the signal-day close exceeded the prior 52-week close high. '
+            'Margins under +1% (like AXISBANK +0.25% on 14 Jan 2026) are knife-edge breakouts that often fail. '
+            'Strict mode hides them. <b>Filters</b> column shows pass/fail of every condition at signal day: '
+            'F1 trend · F2 close>SMA50 · F3 MA align · F4 vs 52W low · F5 dip · F6 choppiness · BK breakout · V volume.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        # ── Edge Proof — "did the strategy really work, on which stocks?" ──
+        st.markdown('<br>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="sec-hdr" style="color:{color}">🔬 Edge Proof — cross-check the SEBI claim</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div style="font-size:12px;color:var(--muted-foreground);margin:-4px 0 12px 0;line-height:1.65;">'
+            'Two views side by side: <b>All signals</b> (canonical strategy as documented) vs '
+            '<b>Strict signals</b> (only ATH-class entries with breakout margin ≥ 1%). '
+            'If the win rate AND compounded return both stay attractive under strict mode, the edge is real. '
+            'If strict mode kills the numbers, the strategy is over-reliant on marginal entries.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+        def _summary(df: pd.DataFrame) -> dict:
+            if df.empty:
+                return {'n': 0, 'wr': 0.0, 'avg': 0.0, 'lakh_to': 100_000.0, 'tickers': 0}
+            wins = (df['Result'] == 'Win').sum()
+            wr   = wins / len(df) * 100
+            avg  = df['PnL_Pct'].mean()
+            # Compounded equity if you took 100% of capital on each trade sequentially
+            comp_factor = (1 + df.sort_values('Entry_Date')['PnL_Pct'] / 100).prod()
+            return {
+                'n': len(df), 'wr': wr, 'avg': avg,
+                'lakh_to': 100_000.0 * comp_factor,
+                'tickers': df['Ticker'].nunique(),
+            }
+
+        strict_df = trades_verified[
+            (trades_verified['All_Filters_OK'] == True) &
+            (trades_verified['Breakout_Margin_Pct'] >= 1.0)
+        ]
+        s_all    = _summary(trades_verified)
+        s_strict = _summary(strict_df)
+
+        epc1, epc2 = st.columns(2)
+        for col_box, lbl, s, accent in [
+            (epc1, 'All Signals (canonical strategy)',     s_all,    '#94A3B8'),
+            (epc2, 'Strict Signals (margin ≥ 1%, all 8 ✓)', s_strict, '#22C55E'),
+        ]:
+            wr_color = '#22C55E' if s['wr'] >= 50 else '#EF4444'
+            grew_color = '#22C55E' if s['lakh_to'] > 100_000 else '#EF4444'
+            with col_box:
+                st.markdown(
+                    f'<div class="hub-card" style="border-top:3px solid {accent};">'
+                    f'  <div class="strategy-name" style="color:{accent}">{lbl}</div>'
+                    f'  <div style="font-size:11px;color:var(--muted-foreground);">If ₹1 lakh went into every signal sequentially</div>'
+                    f'  <div class="big-num" style="color:{grew_color}">₹{s["lakh_to"]:,.0f}</div>'
+                    f'  <div class="plain-label">compounded across {s["n"]} trades on {s["tickers"]} stocks</div>'
+                    f'  <div class="divider"></div>'
+                    f'  <div class="row">'
+                    f'    <div class="kv-block"><div class="kv-l">Win Rate</div>'
+                    f'      <div class="kv-v" style="color:{wr_color}">{s["wr"]:.0f}%</div></div>'
+                    f'    <div class="kv-block"><div class="kv-l">Avg PnL</div>'
+                    f'      <div class="kv-v">{s["avg"]:+.2f}%</div></div>'
+                    f'    <div class="kv-block"><div class="kv-l">Trades</div>'
+                    f'      <div class="kv-v">{s["n"]}</div></div>'
+                    f'  </div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+        # Per-ticker success table — "which stocks worked?"
+        st.markdown('<br>', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="font-size:13px;color:var(--foreground);margin-bottom:6px;">'
+            '<b>📋 Per-stock track record</b> — every ticker the strategy ever bought, sortable.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        track_src = strict_df if strict_mode else trades_verified
+        if track_src.empty:
+            st.caption('No trades match the current filter.')
+        else:
+            track = track_src.groupby('Ticker').agg(
+                Trades=('Result', 'count'),
+                Wins=('Result', lambda s: int((s == 'Win').sum())),
+                Win_Rate=('Result', lambda s: round((s == 'Win').mean() * 100, 0)),
+                Avg_PnL=('PnL_Pct', lambda s: round(s.mean(), 2)),
+                Best=('PnL_Pct', lambda s: round(s.max(), 2)),
+                Worst=('PnL_Pct', lambda s: round(s.min(), 2)),
+                Total_PnL=('PnL_Pct', lambda s: round(s.sum(), 2)),
+            ).reset_index()
+            track['Ticker'] = track['Ticker'].str.replace('.NS', '')
+            track = track.sort_values('Total_PnL', ascending=False)
+            track.columns = ['Ticker', 'Trades', 'Wins', 'Win %', 'Avg PnL %',
+                              'Best %', 'Worst %', 'Total PnL %']
+            st.dataframe(track, hide_index=True, width='stretch', height=min(600, 38 * len(track) + 40))
+            st.caption(
+                f'**{len(track)}** distinct stocks traded. '
+                f'**{int((track["Total PnL %"] > 0).sum())}** were net-positive contributors; '
+                f'**{int((track["Total PnL %"] <= 0).sum())}** were net-negative. '
+                'Sort by Total PnL % to see your real winners and losers.'
+            )
 
         # ── Loss-Free Holding Period analytic ─────────────────────────────
         st.markdown('<br>', unsafe_allow_html=True)
