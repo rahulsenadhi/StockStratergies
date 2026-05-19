@@ -440,7 +440,7 @@ def _score_bar(score: float, max_score: int = 10) -> str:
 #  DATA LOADERS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=3600)
 def load_monthly():
     """Load Monthly Rotation outputs."""
     out = {}
@@ -476,7 +476,7 @@ def load_monthly():
     return out
 
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=3600)
 def load_ipo():
     """Load IPO Edge outputs and compute live signals."""
     out = {}
@@ -504,7 +504,7 @@ def load_ipo():
     return out
 
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=3600)
 def load_momentum():
     """Load Momentum Edge outputs and compute live signals."""
     out = {}
@@ -3010,6 +3010,106 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
         with cc[2]:
             _kpi_card('Total Losses', f'{cl.get("total_losses", 0)}',
                       f'of {n} trades', '#6a748a')
+
+    st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
+
+    # ── Best Hold Period — when to take the win ────────────────────────────
+    st.markdown('### ⏱️ Best Hold Period — how long to stay in')
+    oh = report.get('optimal_hold', {})
+    if oh and oh.get('best_return_bucket'):
+        br = oh['best_return_bucket']
+        bw = oh['best_winrate_bucket']
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(
+                f"""
+                <div style="background:rgba(0,200,83,0.08);border:1px solid rgba(0,200,83,0.35);
+                            border-left:4px solid #00c853;border-radius:10px;padding:14px 16px;">
+                  <div style="font-size:10px;color:#6a748a;letter-spacing:.08em;text-transform:uppercase;">
+                    Best for big returns
+                  </div>
+                  <div style="font-size:22px;font-weight:800;color:#00c853;margin-top:4px;">
+                    Hold {br['bucket']} days
+                  </div>
+                  <div style="font-size:12px;color:#a0b0cc;margin-top:6px;">
+                    Won {br['win_rate']:.0f}% of the time · Averaged
+                    <b style="color:#e4e8f0">{br['avg_pnl']:+.1f}%</b> per trade
+                  </div>
+                  <div style="font-size:11px;color:#6a748a;margin-top:4px;">
+                    Based on {br['count']} past trades
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with c2:
+            st.markdown(
+                f"""
+                <div style="background:rgba(124,156,255,0.08);border:1px solid rgba(124,156,255,0.35);
+                            border-left:4px solid #7c9cff;border-radius:10px;padding:14px 16px;">
+                  <div style="font-size:10px;color:#6a748a;letter-spacing:.08em;text-transform:uppercase;">
+                    Safest profit
+                  </div>
+                  <div style="font-size:22px;font-weight:800;color:#7c9cff;margin-top:4px;">
+                    Hold {bw['bucket']} days
+                  </div>
+                  <div style="font-size:12px;color:#a0b0cc;margin-top:6px;">
+                    Won <b style="color:#e4e8f0">{bw['win_rate']:.0f}%</b> · Averaged
+                    {bw['avg_pnl']:+.1f}% per trade
+                  </div>
+                  <div style="font-size:11px;color:#6a748a;margin-top:4px;">
+                    Best historical hit-rate ({bw['count']} trades)
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    sh = report.get('safe_hold', {})
+    if sh and sh.get('safe_bucket'):
+        sb = sh['safe_bucket']
+        stop = sh.get('stop_pct', 15.0)
+        st.markdown(
+            f"""
+            <div style="background:rgba(249,194,0,0.06);border:1px solid rgba(249,194,0,0.3);
+                        border-radius:10px;padding:12px 16px;margin-top:14px;font-size:13px;">
+              🛟 <b style="color:#f9c200">Safe Hold Window</b> —
+              Holding for <b style="color:#e4e8f0">{sb['bucket']} days</b> kept
+              average losses to <b style="color:#e4e8f0">{sb['avg_loser']:+.1f}%</b>,
+              within the {stop:.0f}% hard-stop budget.
+              {len(sh.get('all_safe_buckets', []))} of {len(sh.get('all_buckets', []))} hold
+              buckets historically stayed inside the stop.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # Full curve for transparency
+    with st.expander('Full hold-day breakdown'):
+        st.dataframe(report.get('hold_curve', pd.DataFrame()),
+                     hide_index=True, width='stretch')
+
+    st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
+
+    # ── Per-ticker history ─────────────────────────────────────────────────
+    th = report.get('ticker_history', pd.DataFrame())
+    if not th.empty:
+        st.markdown('### 📜 Past Stocks — which tickers earned/lost the most')
+        st.caption('Every closed trade aggregated by stock. Total_PnL = sum of all PnL% from this ticker.')
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown('**🏆 Top 10 winners (by total return)**')
+            st.dataframe(th.head(10), hide_index=True, width='stretch')
+        with c2:
+            losers = th.sort_values('Total_PnL').head(10)
+            st.markdown('**💀 Top 10 losers**')
+            st.dataframe(losers, hide_index=True, width='stretch')
+
+        with st.expander(f'All {len(th)} traded tickers'):
+            st.dataframe(th, hide_index=True, width='stretch')
+
+    st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
 
     # ── Trade-level MAE/MFE table (collapsed) ──────────────────────────────
     with st.expander('🔍 Full trade table with MAE / MFE'):

@@ -267,6 +267,131 @@ def loss_clusters(trades: pd.DataFrame) -> dict:
     }
 
 
+# ── Hold-period recommendations ──────────────────────────────────────────────
+
+def optimal_hold_period(trades: pd.DataFrame) -> dict:
+    """Recommend best holding-day buckets from historical trades.
+
+    Returns dict with:
+      best_return_bucket  — bucket with highest avg PnL (max expectancy)
+      best_winrate_bucket — bucket with highest win rate (safest profit)
+      curve               — full hold_day_curve DataFrame
+    """
+    curve = hold_day_curve(trades)
+    if curve.empty:
+        return {'curve': curve, 'best_return_bucket': None, 'best_winrate_bucket': None}
+
+    # Need minimum 3 trades to consider a bucket reliable
+    reliable = curve[curve['Count'] >= 3].copy()
+    if reliable.empty:
+        reliable = curve.copy()
+
+    br = reliable.loc[reliable['Avg_PnL'].idxmax()]
+    bw = reliable.loc[reliable['Win_Rate'].idxmax()]
+
+    def _row_to_dict(row) -> dict:
+        return {
+            'bucket':    str(row.get('Hold_Bucket')),
+            'count':     int(row['Count']),
+            'win_rate':  float(row['Win_Rate']),
+            'avg_pnl':   float(row['Avg_PnL']),
+            'median_pnl': float(row.get('Median_PnL', 0)),
+        }
+
+    return {
+        'curve':               curve,
+        'best_return_bucket':  _row_to_dict(br),
+        'best_winrate_bucket': _row_to_dict(bw),
+    }
+
+
+def safe_hold_period(trades: pd.DataFrame, stop_pct: float = 15.0) -> dict:
+    """Find bucket where average loser-PnL stays better than -stop_pct.
+
+    "Safe" = even if it's a loss, you won't lose more than the strategy's
+    hard stop. Returns the longest such bucket (gives time for thesis to play out)
+    and overall stats.
+
+    Args:
+        trades: trades DataFrame
+        stop_pct: positive number — strategy's hard stop, e.g. 15 for ME's 15%
+
+    Returns:
+        dict with safe_bucket (best long safe hold), all_safe_buckets (list).
+    """
+    curve = hold_day_curve(trades)
+    if curve.empty:
+        return {'curve': curve, 'safe_bucket': None, 'all_safe_buckets': []}
+
+    # For each bucket, compute avg loser PnL (only losing trades within bucket)
+    if 'Holding_Days' not in trades.columns or 'PnL_Pct' not in trades.columns:
+        return {'curve': curve, 'safe_bucket': None, 'all_safe_buckets': []}
+
+    t = trades.copy()
+    t['Hold_Bucket'] = pd.cut(
+        t['Holding_Days'].clip(upper=130),
+        bins=[0, 10, 20, 30, 45, 60, 90, 130],
+        include_lowest=True,
+    )
+
+    safe_rows = []
+    for bucket, grp in t.groupby('Hold_Bucket', dropna=False, observed=True):
+        if grp.empty:
+            continue
+        losers = grp[grp['PnL_Pct'] < 0]
+        avg_loser = float(losers['PnL_Pct'].mean()) if len(losers) else 0.0
+        win_rate  = float((grp['PnL_Pct'] > 0).sum() / len(grp) * 100)
+        avg_pnl   = float(grp['PnL_Pct'].mean())
+        # Safe = average loser stays within stop budget (-stop_pct or better)
+        is_safe = (len(losers) == 0) or (avg_loser >= -stop_pct)
+        safe_rows.append({
+            'bucket':     str(bucket),
+            'count':      len(grp),
+            'win_rate':   round(win_rate, 1),
+            'avg_pnl':    round(avg_pnl, 2),
+            'avg_loser':  round(avg_loser, 2),
+            'is_safe':    is_safe,
+        })
+
+    all_safe = [r for r in safe_rows if r['is_safe'] and r['count'] >= 3]
+    safe_bucket = all_safe[-1] if all_safe else None  # longest = last in time-ordered bins
+
+    return {
+        'curve':            curve,
+        'safe_bucket':      safe_bucket,
+        'all_safe_buckets': all_safe,
+        'all_buckets':      safe_rows,
+        'stop_pct':         stop_pct,
+    }
+
+
+# ── Per-ticker history ───────────────────────────────────────────────────────
+
+def per_ticker_history(trades: pd.DataFrame, min_trades: int = 1) -> pd.DataFrame:
+    """Aggregate every closed trade by ticker. Reveals recurring winners/losers."""
+    if trades is None or trades.empty:
+        return pd.DataFrame()
+    if 'Ticker' not in trades.columns:
+        return pd.DataFrame()
+
+    g = trades.groupby('Ticker', dropna=False)
+    out = pd.DataFrame({
+        'Trades':        g.size(),
+        'Wins':          g['PnL_Pct'].apply(lambda s: (s > 0).sum()),
+        'Losses':        g['PnL_Pct'].apply(lambda s: (s <= 0).sum()),
+        'Win_Rate':      g['PnL_Pct'].apply(_safe_win_rate).round(1),
+        'Avg_PnL':       g['PnL_Pct'].mean().round(2),
+        'Total_PnL':     g['PnL_Pct'].sum().round(2),
+        'Best_Trade':    g['PnL_Pct'].max().round(2),
+        'Worst_Trade':   g['PnL_Pct'].min().round(2),
+    })
+    if 'Holding_Days' in trades.columns:
+        out['Avg_Hold']  = g['Holding_Days'].mean().round(0).astype(int)
+    out = out[out['Trades'] >= min_trades].reset_index()
+    out = out.sort_values('Total_PnL', ascending=False)
+    return out
+
+
 # ── Top-level summary ────────────────────────────────────────────────────────
 
 def full_report(
@@ -303,6 +428,11 @@ def full_report_from_df(
     trades_x = compute_mae_mfe(trades, ohlcv)
     trades_x = tag_regime_at_entry(trades_x, benchmark, regime_cfg)
 
+    # Hold-period analytics — best return + safe hold
+    stop_default = 15.0  # ME default; IPO/Rotation can pass their own via regime_cfg later
+    if regime_cfg and 'stop_loss_pct' in regime_cfg:
+        stop_default = float(regime_cfg['stop_loss_pct']) * 100
+
     report = {
         'trades':            trades_x,
         'overall_win_rate':  round(_safe_win_rate(trades_x['PnL_Pct']), 1),
@@ -314,6 +444,9 @@ def full_report_from_df(
         'by_regime':         win_rate_by(trades_x, 'Regime_At_Entry'),
         'by_score_bucket':   win_rate_by_score_bucket(trades_x),
         'hold_curve':        hold_day_curve(trades_x),
+        'optimal_hold':      optimal_hold_period(trades_x),
+        'safe_hold':         safe_hold_period(trades_x, stop_pct=stop_default),
+        'ticker_history':    per_ticker_history(trades_x),
         'partial_levels':    optimal_partial_levels(trades_x),
         'stop_recommendation': stop_loss_recommendation(trades_x),
         'loss_clusters':     loss_clusters(trades_x),
