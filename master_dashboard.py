@@ -1669,11 +1669,12 @@ def chart_equity(eq_df: pd.DataFrame, col: str, name: str,
     ))
     if bench_col and bench_col in eq_df.columns:
         b = eq_df[bench_col].dropna()
-        b_ret = (b / b.iloc[0] - 1) * 100
-        fig.add_trace(go.Scatter(
-            x=b_ret.index, y=b_ret.values, name='NiftyBees',
-            line=dict(color='#ff9800', width=1.2, dash='dot'),
-        ))
+        if not b.empty:
+            b_ret = (b / b.iloc[0] - 1) * 100
+            fig.add_trace(go.Scatter(
+                x=b_ret.index, y=b_ret.values, name='NiftyBees',
+                line=dict(color='#ff9800', width=1.2, dash='dot'),
+            ))
     fig.add_hline(y=0, line=dict(color='#333', dash='dash', width=1))
     fig.update_layout(
         **PLOTLY_BASE,
