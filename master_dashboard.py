@@ -62,6 +62,20 @@ PLOTLY_BASE = dict(paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
 CHOPPINESS_P     = 14
 CHOPPINESS_THRESH = 61.8
 
+# Momentum Edge filter constants (used by criteria panel)
+ME_SMA50_P    = 50
+ME_SMA150_P   = 150
+ME_EMA220_P   = 220
+ME_HIGH52_P   = 252
+ME_LOW52_P    = 252
+ME_DIP_LB     = 90
+ME_VOLAVG_P   = 20
+ME_VOL_LOOKBACK = 50
+ME_VOL_THRESH = 1.5
+ME_VOL_MULT   = 1.5
+ME_MIN_PRICE_VS_LOW = 1.25
+ME_CHOP_THRESH = 61.8
+
 # IPO constants
 MIN_IPO_LIQUIDITY_CR = 10.0
 
@@ -508,6 +522,70 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .stCheckbox label {
     font-size: 13px !important;
     color: var(--foreground) !important;
+}
+
+/* ── Action badges (BUY / WATCH / FORMING / BEAR) ── */
+.badge-buy, .badge-watch, .badge-forming, .badge-bear {
+    display: inline-block; border-radius: 4px;
+    padding: 3px 9px; font-size: 11px; font-weight: 600; letter-spacing: .02em;
+}
+.badge-buy     { background: color-mix(in oklch, var(--success) 14%, transparent); color: var(--success); border: 1px solid color-mix(in oklch, var(--success) 35%, transparent); }
+.badge-watch   { background: color-mix(in oklch, var(--warning) 14%, transparent); color: var(--warning); border: 1px solid color-mix(in oklch, var(--warning) 35%, transparent); }
+.badge-forming { background: color-mix(in oklch, var(--info) 14%, transparent);    color: var(--info);    border: 1px solid color-mix(in oklch, var(--info) 35%, transparent); }
+.badge-bear    { background: color-mix(in oklch, var(--destructive) 14%, transparent); color: var(--destructive); border: 1px solid color-mix(in oklch, var(--destructive) 35%, transparent); }
+
+/* ── Criteria filter cards (Strategy Conditions) ── */
+.crit-ok, .crit-fail {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--success);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    height: 100%;
+    transition: border-color 180ms ease;
+}
+.crit-fail { border-left-color: var(--destructive); }
+.crit-ok:hover, .crit-fail:hover { border-color: var(--ring); }
+.crit-icon  { font-size: 16px; line-height: 1; margin-bottom: 4px; }
+.crit-label { font-size: 12px; font-weight: 600; color: var(--foreground); margin-bottom: 2px; letter-spacing: -.005em; }
+.crit-detail{ font-size: 10.5px; color: var(--muted-foreground); margin-top: 6px; font-family: var(--font-mono); }
+
+/* ── Strategy Health hero banner ── */
+.health-hero {
+    background: linear-gradient(135deg, var(--card) 0%, var(--bg-surface-2) 100%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 20px 24px;
+    box-shadow: var(--shadow-md);
+    margin-bottom: 20px;
+}
+.health-hero .verdict-line {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 6px 14px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    margin-bottom: 14px;
+}
+.health-hero h3 {
+    font-size: 18px; font-weight: 600; color: var(--foreground); margin: 0 0 4px 0;
+    letter-spacing: -.02em;
+}
+.health-hero p.subline {
+    font-size: 13px; color: var(--muted-foreground); margin: 0 0 16px 0; line-height: 1.6;
+}
+.health-hero .health-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 10px;
+}
+.health-hero .h-num {
+    font-size: 22px; font-weight: 600; letter-spacing: -.025em; color: var(--foreground);
+    font-variant-numeric: tabular-nums;
+}
+.health-hero .h-lbl {
+    font-size: 10.5px; color: var(--muted-foreground);
+    text-transform: uppercase; letter-spacing: .10em; font-weight: 500;
+}
+.health-hero .h-sub {
+    font-size: 11px; color: var(--fg-subtle); margin-top: 2px;
 }
 
 /* Respect reduced motion */
@@ -992,6 +1070,334 @@ def _suggest_stop(entry_price: float, atr: float | None,
 
     stop_price = entry_price * (1 - pct / 100.0)
     return {'stop_price': stop_price, 'stop_pct': pct, 'source': label}
+
+
+def _action_from_signal(signal: str, is_bull: bool = True) -> str:
+    """Map master's Signal label to standalone-style Action label."""
+    if not is_bull:
+        return 'BEAR MARKET'
+    return {
+        'Breakout Today': 'BUY NOW',
+        'Near Breakout':  'WATCH',
+        'Watch Zone':     'FORMING',
+    }.get(signal, signal or '—')
+
+
+def _action_badge_html(action: str) -> str:
+    """SVG-free action badge — used inline in HTML."""
+    badges = {
+        'BUY NOW':     '<span class="badge-buy">● BUY NOW</span>',
+        'WATCH':       '<span class="badge-watch">● WATCH</span>',
+        'FORMING':     '<span class="badge-forming">● FORMING</span>',
+        'BEAR MARKET': '<span class="badge-bear">● BEAR MARKET</span>',
+    }
+    return badges.get(action, f'<span class="badge-grey">{action}</span>')
+
+
+def _render_criteria_panel(ticker: str) -> None:
+    """Render 6 filters + breakout trigger pass/fail grid for the given ticker.
+
+    Reads OHLCV from disk and evaluates each filter using yesterday's close
+    (the bar that the strategy actually trades on — no look-ahead).
+    """
+    folders = [
+        Path(BASE_DIR) / 'data' / 'nse_bse',
+        Path(BASE_DIR) / 'data',
+        Path(BASE_DIR) / 'momentum_edge_data',
+    ]
+    stem = ticker if ticker.endswith('.NS') else f'{ticker}.NS'
+    path = None
+    for folder in folders:
+        for cand in (folder / f'{stem}.csv', folder / f'{ticker}.csv'):
+            if cand.exists():
+                path = cand
+                break
+        if path is not None:
+            break
+    if path is None:
+        st.info(f'No OHLCV file for {ticker} — cannot render criteria.')
+        return
+
+    df = _load_ohlcv_csv(path)
+    if df is None or len(df) < 60:
+        st.info('Not enough data to evaluate criteria.')
+        return
+
+    close, volume = df['Close'], df['Volume']
+    sma50  = close.rolling(ME_SMA50_P).mean()
+    sma150 = close.rolling(ME_SMA150_P).mean()
+    ema220 = close.ewm(span=ME_EMA220_P, adjust=False).mean()
+    high52 = close.rolling(ME_HIGH52_P).max()
+    low52  = close.rolling(ME_LOW52_P).min()
+    vol20  = volume.rolling(ME_VOLAVG_P).mean()
+    vol50  = volume.rolling(ME_VOL_LOOKBACK).mean()
+
+    def _sv(s):
+        return float(s.iloc[-2]) if len(s) >= 2 else float('nan')
+
+    close_s  = _sv(close)
+    sma50_s  = _sv(sma50)
+    sma150_s = _sv(sma150)
+    ema220_s = _sv(ema220)
+    low52_s  = _sv(low52)
+    vol20_s  = _sv(vol20)
+    vol50_s  = _sv(vol50)
+    close_now  = float(close.iloc[-1])
+    ema220_now = float(ema220.iloc[-1])
+    vol_today  = float(volume.iloc[-1])
+
+    dip_mask   = close < ema220
+    dip_recent = dip_mask.iloc[-ME_DIP_LB - 1:-1]
+    had_dip    = bool(dip_recent.any())
+    last_dip = '—'
+    if had_dip:
+        dates = dip_recent[dip_recent].index
+        if len(dates) > 0:
+            last_dip = pd.Timestamp(dates[-1]).strftime('%d %b %Y')
+
+    chop_val = float(_compute_choppiness(df).iloc[-1]) if len(df) >= CHOPPINESS_P else float('nan')
+    chop_ok  = (not np.isnan(chop_val)) and chop_val < ME_CHOP_THRESH
+    threshold_4 = ME_MIN_PRICE_VS_LOW * low52_s if not np.isnan(low52_s) else float('nan')
+
+    resistance_p = close.shift(1).rolling(ME_HIGH52_P).max()
+    res_today    = float(resistance_p.iloc[-1]) if not np.isnan(resistance_p.iloc[-1]) else float('nan')
+    close_prev   = float(close.iloc[-2]) if len(close) >= 2 else float('nan')
+    vol_ratio    = (vol_today / vol20_s) if vol20_s and not np.isnan(vol20_s) else 0.0
+    vol_ratio50  = (vol_today / vol50_s) if (vol50_s and not np.isnan(vol50_s)) else None
+    vol_ok       = (vol_ratio >= ME_VOL_THRESH) and (vol_ratio50 is None or vol_ratio50 >= ME_VOL_MULT)
+    is_bk_today  = (
+        not np.isnan(res_today)
+        and close_now > res_today
+        and close_prev <= res_today
+        and close_now > ema220_now
+        and vol_ok
+    )
+
+    conditions = [
+        (sma150_s > ema220_s, 'F1 — SMA 150 > EMA 220',
+         'Long-term trend is bullish',
+         f'SMA150 = ₹{sma150_s:,.2f}   EMA220 = ₹{ema220_s:,.2f}'),
+        (close_s > sma50_s, 'F2 — Close > SMA 50',
+         'Short-term price above MA',
+         f'Close = ₹{close_s:,.2f}   SMA50 = ₹{sma50_s:,.2f}'),
+        (sma50_s > sma150_s, 'F3 — SMA 50 > SMA 150',
+         'Moving average stack aligned',
+         f'SMA50 = ₹{sma50_s:,.2f}   SMA150 = ₹{sma150_s:,.2f}'),
+        (close_s >= threshold_4, 'F4 — Close ≥ 1.25 × 52W Low',
+         'Stock well above its yearly low',
+         f'Close = ₹{close_s:,.2f}   Min = ₹{threshold_4:,.2f}   52W Low = ₹{low52_s:,.2f}'),
+        (had_dip, f'F5 — Dipped below EMA 220 (last {ME_DIP_LB}d)',
+         'The shakeout dip occurred — confirms the setup',
+         f'Last dip: {last_dip}'),
+        (chop_ok, 'F6 — Choppiness < 61.8',
+         'Clean trending chart, not sideways',
+         f'Choppiness = {chop_val:.1f}   (threshold = {ME_CHOP_THRESH})'),
+    ]
+
+    for row_start in (0, 3):
+        cols = st.columns(3)
+        for i, col in enumerate(cols):
+            ci = row_start + i
+            if ci >= len(conditions):
+                break
+            ok, label, sub, detail = conditions[ci]
+            css = 'crit-ok' if ok else 'crit-fail'
+            icon = '✅' if ok else '❌'
+            with col:
+                st.markdown(
+                    f'<div class="{css}">'
+                    f'<div class="crit-icon">{icon}</div>'
+                    f'<div class="crit-label">{label}</div>'
+                    f'<div style="font-size:10.5px;color:var(--muted-foreground);margin-top:2px;">{sub}</div>'
+                    f'<div class="crit-detail">{detail}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+    # Breakout Trigger — full-width row
+    vol50_str = f'{vol_ratio50:.2f}×' if vol_ratio50 is not None else 'N/A'
+    res_str   = f'₹{res_today:,.2f}' if not np.isnan(res_today) else '—'
+    bk_detail = (
+        f'Close ₹{close_now:,.2f}   Resistance {res_str}   '
+        f'Prev close ₹{close_prev:,.2f}   EMA220 ₹{ema220_now:,.2f}   '
+        f'Vol/20d {vol_ratio:.2f}× (need ≥{ME_VOL_THRESH}×)   '
+        f'Vol/50d {vol50_str} (need ≥{ME_VOL_MULT}×)'
+    )
+    bk_css = 'crit-ok' if is_bk_today else 'crit-fail'
+    bk_icon = '✅' if is_bk_today else '❌'
+    st.markdown(
+        f'<div class="{bk_css}" style="border-left-color:var(--warning);margin-top:8px;">'
+        f'<div class="crit-icon">{bk_icon}</div>'
+        f'<div class="crit-label">🚀 Breakout Trigger — Close > 52W High + Volume confirmed</div>'
+        f'<div style="font-size:10.5px;color:var(--muted-foreground);margin-top:2px;">'
+        f'This is what triggers the BUY signal. All 6 filters above must also pass.</div>'
+        f'<div class="crit-detail">{bk_detail}</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _chart_monthly_heatmap(trades: pd.DataFrame) -> go.Figure:
+    """Calendar-style heatmap of avg PnL% per (year, month).
+
+    Accepts master's trade schema: Exit_Date + PnL_Pct.
+    """
+    import calendar as _cal
+    if trades is None or trades.empty:
+        return go.Figure().update_layout(height=160, paper_bgcolor='#1c1c1c')
+    df = trades.copy()
+    df['ExitDate'] = pd.to_datetime(df.get('Exit_Date', df.get('ExitDate')), errors='coerce')
+    df['Return%']  = pd.to_numeric(df.get('PnL_Pct', df.get('Return%')), errors='coerce')
+    df = df.dropna(subset=['ExitDate', 'Return%'])
+    if df.empty:
+        return go.Figure().update_layout(height=160, paper_bgcolor='#1c1c1c')
+
+    df['Year']  = df['ExitDate'].dt.year
+    df['Month'] = df['ExitDate'].dt.month
+    monthly = df.groupby(['Year', 'Month'])['Return%'].mean().reset_index()
+    years = sorted(monthly['Year'].unique())
+    months = list(range(1, 13))
+    z = []
+    for yr in years:
+        row = []
+        for mo in months:
+            v = monthly[(monthly['Year'] == yr) & (monthly['Month'] == mo)]['Return%']
+            row.append(round(float(v.iloc[0]), 2) if len(v) > 0 else None)
+        z.append(row)
+    flat = [v for row in z for v in row if v is not None]
+    zmax = max(abs(min(flat, default=0)), abs(max(flat, default=0)), 1)
+    fig = go.Figure(go.Heatmap(
+        z=z,
+        x=[_cal.month_abbr[m] for m in months],
+        y=[str(yr) for yr in years],
+        colorscale=[
+            [0.0, '#7b0000'], [0.35, '#cc3333'],
+            [0.5, '#1c1c1c'],
+            [0.65, '#33aa66'], [1.0, '#006622'],
+        ],
+        zmid=0, zmin=-zmax, zmax=zmax,
+        text=[[f'{v:+.1f}%' if v is not None else '—' for v in row] for row in z],
+        texttemplate='%{text}',
+        textfont=dict(size=10, color='#fafafa'),
+        hovertemplate='%{y}  %{x}: %{z:+.2f}%<extra></extra>',
+        showscale=True,
+        colorbar=dict(ticksuffix='%', thickness=12,
+                      tickfont=dict(color='#94A3B8', size=10),
+                      title=dict(text='Avg %', font=dict(color='#94A3B8', size=10))),
+    ))
+    fig.update_layout(
+        height=max(180, 38 * len(years) + 80),
+        paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
+        font=dict(color='#fafafa', family='Inter', size=11),
+        margin=dict(l=60, r=60, t=40, b=20),
+        xaxis=dict(side='top', tickfont=dict(size=11)),
+        yaxis=dict(tickfont=dict(size=11), autorange='reversed'),
+    )
+    return fig
+
+
+def _strategy_health(trades: pd.DataFrame, signals: pd.DataFrame) -> dict:
+    """Compute a health summary for a strategy.
+
+    Returns dict: n_trades, win_rate, avg_pnl, median_pnl, median_hold,
+    safe_20d_pct, universe, verdict_text, verdict_color, top_lift.
+    """
+    out = {
+        'n_trades': 0, 'win_rate': 0.0, 'avg_pnl': 0.0, 'median_pnl': 0.0,
+        'median_hold': 0, 'safe_20d_pct': 0.0, 'universe': '—',
+        'verdict_text': 'NO DATA', 'verdict_color': 'var(--muted-foreground)',
+        'verdict_bg': 'color-mix(in oklch, var(--muted) 50%, transparent)',
+        'top_lift': '—', 'best_combo': '—',
+    }
+    if trades is None or trades.empty:
+        return out
+    out['n_trades'] = len(trades)
+    out['win_rate'] = float((trades['Result'] == 'Win').mean() * 100) if 'Result' in trades.columns else 0.0
+    if 'PnL_Pct' in trades.columns:
+        out['avg_pnl']    = float(trades['PnL_Pct'].mean())
+        out['median_pnl'] = float(trades['PnL_Pct'].median())
+    if 'Holding_Days' in trades.columns:
+        out['median_hold'] = int(trades['Holding_Days'].median())
+
+    # Universe size — distinct tickers
+    if 'Ticker' in trades.columns:
+        n_uniq = trades['Ticker'].nunique()
+        n_now  = len(signals) if signals is not None else 0
+        out['universe'] = f'{n_uniq} tickers traded · {n_now} on screener today'
+
+    # Loss-free 20d% via cached helper
+    try:
+        lfh = _loss_free_holding(trades, ('data/nse_bse', 'data', 'momentum_edge_data'))
+        if not lfh.empty:
+            out['safe_20d_pct'] = float((lfh['Loss_Free_Days'] >= 20).mean() * 100)
+    except Exception:
+        pass
+
+    # Verdict
+    if out['win_rate'] >= 65 and out['safe_20d_pct'] >= 50:
+        out['verdict_text']  = '✅ STRATEGY WORKING — safe to scale capital'
+        out['verdict_color'] = 'var(--success)'
+        out['verdict_bg']    = 'color-mix(in oklch, var(--success) 14%, transparent)'
+    elif out['win_rate'] >= 50 and out['safe_20d_pct'] >= 30:
+        out['verdict_text']  = '⚠️ CONDITIONAL — works, size carefully'
+        out['verdict_color'] = 'var(--warning)'
+        out['verdict_bg']    = 'color-mix(in oklch, var(--warning) 14%, transparent)'
+    else:
+        out['verdict_text']  = '❌ WEAK — do not scale up'
+        out['verdict_color'] = 'var(--destructive)'
+        out['verdict_bg']    = 'color-mix(in oklch, var(--destructive) 14%, transparent)'
+
+    # Path to 100% — best Entry Type × Recovery Speed combo
+    if {'Entry_Type', 'Recovery_Speed', 'Result'}.issubset(trades.columns):
+        g = trades.groupby(['Entry_Type', 'Recovery_Speed']).agg(
+            n=('Result', 'count'),
+            wr=('Result', lambda s: (s == 'Win').mean() * 100),
+        ).reset_index()
+        g = g[g['n'] >= 3].sort_values('wr', ascending=False)
+        if not g.empty:
+            top = g.iloc[0]
+            out['best_combo'] = (f"{top['Entry_Type']} × {top['Recovery_Speed']} "
+                                 f"→ {top['wr']:.0f}% win rate ({int(top['n'])} trades)")
+            base_wr = out['win_rate']
+            lift = top['wr'] - base_wr
+            out['top_lift'] = f'+{lift:.0f}% lift vs overall' if lift > 0 else 'no lift over baseline'
+    return out
+
+
+def _render_health_hero(strategy_name: str, trades: pd.DataFrame,
+                         signals: pd.DataFrame) -> None:
+    """Render the Strategy Health hero card at the top of a strategy page."""
+    h = _strategy_health(trades, signals)
+    inner_grid = (
+        '<div class="health-grid">'
+        f'  <div><div class="h-lbl">Trades Backtested</div>'
+        f'       <div class="h-num">{h["n_trades"]}</div>'
+        f'       <div class="h-sub">{h["universe"]}</div></div>'
+        f'  <div><div class="h-lbl">Win Rate</div>'
+        f'       <div class="h-num" style="color:{"var(--success)" if h["win_rate"]>=50 else "var(--destructive)"}">{h["win_rate"]:.0f}%</div>'
+        f'       <div class="h-sub">need ≥ 50% with R:R 1:1 to break even</div></div>'
+        f'  <div><div class="h-lbl">Avg PnL / Trade</div>'
+        f'       <div class="h-num" style="color:{"var(--success)" if h["avg_pnl"]>0 else "var(--destructive)"}">{h["avg_pnl"]:+.2f}%</div>'
+        f'       <div class="h-sub">median {h["median_pnl"]:+.2f}%</div></div>'
+        f'  <div><div class="h-lbl">Median Hold</div>'
+        f'       <div class="h-num">{h["median_hold"]}d</div>'
+        f'       <div class="h-sub">typical days held per trade</div></div>'
+        f'  <div><div class="h-lbl">Safe Hold ≥ 20d</div>'
+        f'       <div class="h-num" style="color:{"var(--success)" if h["safe_20d_pct"]>=40 else "var(--warning)"}">{h["safe_20d_pct"]:.0f}%</div>'
+        f'       <div class="h-sub">of signals stay loss-free 20+ days</div></div>'
+        '</div>'
+    )
+    st.markdown(
+        f'<div class="health-hero">'
+        f'  <span class="verdict-line" style="background:{h["verdict_bg"]};color:{h["verdict_color"]};border:1px solid {h["verdict_color"]}55;">{h["verdict_text"]}</span>'
+        f'  <h3>{strategy_name} — Strategy Health</h3>'
+        f'  <p class="subline">Path to 100% success: focus on <b style="color:var(--foreground)">{h["best_combo"]}</b> '
+        f'  &nbsp;({h["top_lift"]}). Holding strategy: exit on 15% hard stop OR price closes below 220-day EMA OR target hit. '
+        f'  Median trade lasts <b style="color:var(--foreground)">{h["median_hold"]} days</b>.</p>'
+        f'  {inner_grid}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
 
 _STRATEGY_OHLCV_FOLDERS = {
@@ -3622,19 +4028,23 @@ def render_momentum(mo: dict):
         unsafe_allow_html=True,
     )
 
+    eq     = mo.get('equity')
+    trades = mo.get('trades')
+    sigs   = mo.get('signals', pd.DataFrame())
+
+    # ── Strategy Health hero — answers "is it working? how many stocks? hold?" ──
+    _render_health_hero(S_MOMENTUM, trades, sigs)
+
     # ── How it works callout ───────────────────────────────────────────────────
     st.markdown(_explain_box(
         '🧠 <b>How This Strategy Works (Plain English)</b><br>'
         'We look for strong NSE stocks that recently dipped below their long-term average (220-day line), '
         'then bounced back up — showing the dip was temporary, not a collapse. '
         'We only buy when the stock is also breaking to an <b>all-time high (ATH)</b>, meaning buyers are fully in control. '
-        'We exit if the stock falls 15% from our buy price (hard stop) or breaks back below the 220-day average.',
+        '<b>Hold strategy:</b> sit tight until ONE of these fires — (1) price falls 15% from entry (hard stop), '
+        '(2) close drops below the 220-day EMA, OR (3) price hits a profit target. No emotional exits.',
         color,
     ), unsafe_allow_html=True)
-
-    eq     = mo.get('equity')
-    trades = mo.get('trades')
-    sigs   = mo.get('signals', pd.DataFrame())
 
     mx     = _equity_metrics(eq, 'Equity', 'Equity') if eq is not None else {}
     n_bk   = int((sigs['Signal'] == 'Breakout Today').sum())  if not sigs.empty else 0
@@ -3791,46 +4201,67 @@ def render_momentum(mo: dict):
             sigs['Stop (₹)'] = stop_rows.apply(lambda d: d.get('stop_price'))
             sigs['Stop %']   = stop_rows.apply(lambda d: -abs(d.get('stop_pct') or 0))
 
+        # ── Action filter tabs (BUY / WATCH / FORMING) ──────────────────────
+        sigs['Action'] = sigs['Signal'].map(lambda s: _action_from_signal(s, True))
+        tab_all, tab_buy, tab_watch, tab_form = st.tabs([
+            f'🔍 All ({len(sigs)})',
+            f'🟢 BUY NOW ({(sigs["Action"]=="BUY NOW").sum()})',
+            f'🟡 WATCH ({(sigs["Action"]=="WATCH").sum()})',
+            f'🔵 FORMING ({(sigs["Action"]=="FORMING").sum()})',
+        ])
+        # Active subset selection via session state
+        action_key = 'me_screener_action'
+        # Streamlit's tabs don't return selection — render the same table in each,
+        # with its own filtered subset. Cheap and consistent.
+        def _render_subset(subset: pd.DataFrame, key_suffix: str) -> None:
+            if subset.empty:
+                st.info('No signals in this bucket.')
+                return
+            sub_display = display_cols
+            d = subset[[c for c in sub_display if c in subset.columns]].copy()
+            colors = [sig_color_map.get(s, '#1c1c1c') for s in subset['Signal']]
+            for c in ('Close', 'ATH (₹)', '220 EMA', '52W High', 'Stop (₹)'):
+                if c in d.columns:
+                    d[c] = d[c].apply(lambda x: f'₹{x:,.2f}' if pd.notna(x) else '—')
+            if 'Stop %' in d.columns:
+                d['Stop %'] = d['Stop %'].apply(lambda x: f'{x:+.1f}%' if pd.notna(x) else '—')
+            for c in ('Dist ATH%', 'vs High%'):
+                if c in d.columns:
+                    d[c] = d[c].apply(lambda x: f'{x:+.1f}%')
+            if 'Vol Ratio' in d.columns:
+                d['Vol Ratio'] = d['Vol Ratio'].apply(lambda x: f'{x:.2f}×')
+            if 'Hist Win%' in d.columns:
+                d['Hist Win%'] = d['Hist Win%'].apply(lambda x: f'{x:.0f}%')
+            if 'Hist Avg%' in d.columns:
+                d['Hist Avg%'] = d['Hist Avg%'].apply(lambda x: f'{x:+.1f}%')
+            n_c = len(d.columns)
+            w   = ([60, 130, 90, 70, 80, 70, 80, 70, 70, 70, 70, 75, 70, 70, 65, 55, 60, 60])[:n_c]
+            st.plotly_chart(
+                chart_plotly_table(d, w, colors, score_col='Score'),
+                width='stretch',
+                key=f'me_table_{key_suffix}',
+            )
+
+        sig_color_map = {
+            'Breakout Today': 'rgba(34,197,94,0.10)',
+            'Near Breakout':  'rgba(245,158,11,0.10)',
+            'Watch Zone':     'rgba(96,165,250,0.08)',
+            'Watchlist':      'rgba(148,163,184,0.05)',
+        }
+
         display_cols = [
-            'Ticker', 'Company', 'Signal',
+            'Ticker', 'Company', 'Signal', 'Action',
             'Close', 'Stop (₹)', 'Stop %',
             'ATH (₹)', 'Dist ATH%',
             'Entry Type', 'Chart Qual', 'Choppiness',
             'Recovery', '220 EMA', '52W High', 'vs High%', 'Vol Ratio',
             'Score', 'Hist Win%', 'Hist Avg%',
         ]
-        disp = sigs[[c for c in display_cols if c in sigs.columns]].copy()
+        with tab_all:   _render_subset(sigs, 'all')
+        with tab_buy:   _render_subset(sigs[sigs['Action'] == 'BUY NOW'],  'buy')
+        with tab_watch: _render_subset(sigs[sigs['Action'] == 'WATCH'],    'watch')
+        with tab_form:  _render_subset(sigs[sigs['Action'] == 'FORMING'],  'forming')
 
-        sig_color_map = {
-            'Breakout Today': 'rgba(0,200,83,0.10)',
-            'Near Breakout':  'rgba(249,194,0,0.09)',
-            'Watch Zone':     'rgba(124,156,255,0.07)',
-            'Watchlist':      'rgba(136,146,164,0.05)',
-        }
-        row_colors = [sig_color_map.get(s, '#12172a') for s in sigs['Signal']]
-
-        for c in ('Close', 'ATH (₹)', '220 EMA', '52W High', 'Stop (₹)'):
-            if c in disp.columns:
-                disp[c] = disp[c].apply(lambda x: f'₹{x:,.2f}' if pd.notna(x) else '—')
-        if 'Stop %' in disp.columns:
-            disp['Stop %'] = disp['Stop %'].apply(lambda x: f'{x:+.1f}%' if pd.notna(x) else '—')
-        if 'Dist ATH%' in disp.columns:
-            disp['Dist ATH%'] = disp['Dist ATH%'].apply(lambda x: f'{x:+.1f}%')
-        if 'vs High%' in disp.columns:
-            disp['vs High%']  = disp['vs High%'].apply(lambda x: f'{x:+.1f}%')
-        if 'Vol Ratio' in disp.columns:
-            disp['Vol Ratio'] = disp['Vol Ratio'].apply(lambda x: f'{x:.2f}×')
-        if 'Hist Win%' in disp.columns:
-            disp['Hist Win%'] = disp['Hist Win%'].apply(lambda x: f'{x:.0f}%')
-        if 'Hist Avg%' in disp.columns:
-            disp['Hist Avg%'] = disp['Hist Avg%'].apply(lambda x: f'{x:+.1f}%')
-
-        n_cols = len(disp.columns)
-        widths = ([60, 130, 90, 65, 70, 65, 65, 65, 65, 75, 65, 65, 55, 55, 130, 60, 60])[:n_cols]
-        st.plotly_chart(
-            chart_plotly_table(disp, widths, row_colors, score_col='Score'),
-            width='stretch',
-        )
         st.caption(
             '📊 *Hist Win%* / *Hist Avg%* — historical performance of past trades '
             'with the same Entry Type + Recovery Speed combo. Based on closed backtest trades only.'
@@ -3865,6 +4296,22 @@ def render_momentum(mo: dict):
                 _render_me_detail(sel, trades)
             except Exception as e:
                 st.warning(f'Could not render chart: {e}')
+
+            # ── Strategy Conditions — 8 filters pass/fail for this ticker ─────
+            st.markdown('<br>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="sec-hdr" style="color:{color}">Strategy Conditions — '
+                f'why {sel} did or did not qualify</div>',
+                unsafe_allow_html=True,
+            )
+            st.caption(
+                'Each card is one of the 8 filters the backtest uses. '
+                'Evaluated on yesterday\'s close (no look-ahead) — exactly what the strategy sees.'
+            )
+            try:
+                _render_criteria_panel(sel)
+            except Exception as e:
+                st.warning(f'Could not render criteria: {e}')
 
     # ── How to read the screener ───────────────────────────────────────────────
     with st.expander('📖 How to read this screener — what each column means'):
@@ -4495,6 +4942,19 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
 
         with st.expander(f'All {len(th)} traded tickers'):
             st.dataframe(th, hide_index=True, width='stretch')
+
+    st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
+
+    # ── Monthly Returns Heatmap ────────────────────────────────────────────
+    st.markdown('### 📅 Monthly Returns Heatmap — when does this strategy print money?')
+    st.caption(
+        'Each cell shows the average trade % return for trades that closed in that month. '
+        'Green = profitable month, red = losing month. Patterns by month/year reveal market regimes.'
+    )
+    try:
+        st.plotly_chart(_chart_monthly_heatmap(trades_x), width='stretch')
+    except Exception as e:
+        st.info(f'Could not render heatmap: {e}')
 
     st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
 
