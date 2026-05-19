@@ -818,10 +818,61 @@ def _compute_ipo_signals() -> pd.DataFrame:
 _PERIOD_BARS = {'1M': 21, '3M': 63, '6M': 126, '1Y': 252, '3Y': 756, 'All': None}
 
 
+def _suggest_stop(entry_price: float, atr: float | None,
+                  winner_mae_p95_pct: float | None = None,
+                  atr_mult: float = 2.0,
+                  hard_cap_pct: float = 15.0,
+                  min_pct: float = 5.0) -> dict:
+    """Suggest a stop-loss price + distance using ATR and (optionally) Winner MAE p95.
+
+    Logic:
+      1. ATR stop = entry - atr_mult * ATR (volatility-adjusted, "gives the trade room").
+      2. If Winner MAE p95 is available, the stop must be at least as loose (otherwise we
+         stop ourselves out before normal winner pullbacks).
+      3. Cap at hard_cap_pct (default 15%) — never wider than the strategy hard stop.
+      4. Floor at min_pct  (default  5%) — never tighter than typical daily noise.
+
+    Returns dict: stop_price, stop_pct, source ('ATR' / 'MAE p95' / 'Hard cap' / 'Floor').
+    """
+    if entry_price is None or entry_price <= 0:
+        return {'stop_price': None, 'stop_pct': None, 'source': '—'}
+
+    candidates = []
+    if atr is not None and atr > 0:
+        candidates.append(('ATR×' + str(atr_mult), atr_mult * atr / entry_price * 100))
+    if winner_mae_p95_pct is not None and winner_mae_p95_pct > 0:
+        # MAE p95 is usually given as a negative % (e.g. -8.5). Take abs and pad 20%.
+        candidates.append(('Winner MAE p95 +20%', abs(winner_mae_p95_pct) * 1.2))
+    if not candidates:
+        candidates.append(('Default', 10.0))
+
+    # Pick the LOOSER of the two so winners survive
+    label, pct = max(candidates, key=lambda x: x[1])
+    if pct > hard_cap_pct:
+        pct, label = hard_cap_pct, 'Hard cap (-15%)'
+    elif pct < min_pct:
+        pct, label = min_pct, 'Floor (-5%)'
+
+    stop_price = entry_price * (1 - pct / 100.0)
+    return {'stop_price': stop_price, 'stop_pct': pct, 'source': label}
+
+
+_STRATEGY_OHLCV_FOLDERS = {
+    S_MONTHLY:  ('data', 'data/nse_bse'),
+    S_IPO:      ('ipo_data', 'data', 'data/nse_bse'),
+    S_MOMENTUM: ('data/nse_bse', 'data', 'momentum_edge_data'),
+}
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
-def _loss_free_holding(trades: pd.DataFrame) -> pd.DataFrame:
+def _loss_free_holding(trades: pd.DataFrame,
+                        folder_keys: tuple[str, ...] = (
+                            'data/nse_bse', 'data', 'momentum_edge_data',
+                        )) -> pd.DataFrame:
     """For each past trade, count consecutive days from Entry_Date where Close
     stayed at-or-above Entry_Price before first close below.
+
+    folder_keys: relative folders searched for the ticker's OHLCV csv.
 
     Returns DataFrame columns: Ticker, Entry_Date, Entry_Price, Loss_Free_Days,
     First_Loss_Date, Holding_Days, PnL_Pct, Result, Never_Dipped (bool).
@@ -832,11 +883,7 @@ def _loss_free_holding(trades: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     rows = []
-    folders = [
-        Path(BASE_DIR) / 'data' / 'nse_bse',
-        Path(BASE_DIR) / 'data',
-        Path(BASE_DIR) / 'momentum_edge_data',
-    ]
+    folders = [Path(BASE_DIR) / f for f in folder_keys]
 
     for _, tr in trades.iterrows():
         ticker = str(tr['Ticker'])
@@ -3588,18 +3635,29 @@ def render_momentum(mo: dict):
         ), unsafe_allow_html=True)
     else:
         # ── Enrich w/ historical analytics overlay ──────────────────────────
+        stop_p95 = None
         try:
             me_report = _build_report(S_MOMENTUM)
             sigs = core_scorer.enrich_signals(
                 sigs, me_report,
                 feature_map={'Entry Type': 'Entry_Type', 'Recovery': 'Recovery_Speed'},
             )
+            stop_p95 = (me_report.get('stop_recommendation') or {}).get('winner_mae_p95')
         except Exception:
             pass
 
+        # Per-signal suggested stop based on Winner MAE p95 (or default 10%)
+        if 'Close' in sigs.columns:
+            stop_rows = sigs['Close'].apply(
+                lambda px: _suggest_stop(float(px), atr=None, winner_mae_p95_pct=stop_p95)
+            )
+            sigs['Stop (₹)'] = stop_rows.apply(lambda d: d.get('stop_price'))
+            sigs['Stop %']   = stop_rows.apply(lambda d: -abs(d.get('stop_pct') or 0))
+
         display_cols = [
             'Ticker', 'Company', 'Signal',
-            'Close', 'ATH (₹)', 'Dist ATH%',
+            'Close', 'Stop (₹)', 'Stop %',
+            'ATH (₹)', 'Dist ATH%',
             'Entry Type', 'Chart Qual', 'Choppiness',
             'Recovery', '220 EMA', '52W High', 'vs High%', 'Vol Ratio',
             'Score', 'Hist Win%', 'Hist Avg%',
@@ -3614,9 +3672,11 @@ def render_momentum(mo: dict):
         }
         row_colors = [sig_color_map.get(s, '#12172a') for s in sigs['Signal']]
 
-        for c in ('Close', 'ATH (₹)', '220 EMA', '52W High'):
+        for c in ('Close', 'ATH (₹)', '220 EMA', '52W High', 'Stop (₹)'):
             if c in disp.columns:
-                disp[c] = disp[c].apply(lambda x: f'₹{x:,.2f}')
+                disp[c] = disp[c].apply(lambda x: f'₹{x:,.2f}' if pd.notna(x) else '—')
+        if 'Stop %' in disp.columns:
+            disp['Stop %'] = disp['Stop %'].apply(lambda x: f'{x:+.1f}%' if pd.notna(x) else '—')
         if 'Dist ATH%' in disp.columns:
             disp['Dist ATH%'] = disp['Dist ATH%'].apply(lambda x: f'{x:+.1f}%')
         if 'vs High%' in disp.columns:
@@ -3875,6 +3935,216 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
         _kpi_card('Avg PnL', f'{report.get("overall_avg_pnl", 0):+.2f}%', 'per trade', color)
     with c4:
         _kpi_card('Median PnL', f'{report.get("overall_median", 0):+.2f}%', 'half above/below', color)
+
+    st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
+
+    # ── Loss-Free Holding Window — proof the strategy "works" ───────────────
+    st.markdown('### 🛟 Loss-Free Holding Window — does this strategy actually work?')
+    st.markdown(
+        '<div style="font-size:12px;color:#94A3B8;margin:-4px 0 10px 0;line-height:1.65;">'
+        'For every past qualifying signal, we walk forward day-by-day and count how many '
+        '<b>trading days</b> the close stayed <b>at or above the entry price</b> before the first down-close. '
+        'High numbers across the board = the strategy gives reliable cushion, safe to scale capital. '
+        'Low numbers = signals dip immediately, capital at risk.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    folders = _STRATEGY_OHLCV_FOLDERS.get(strategy, ('data/nse_bse', 'data'))
+    lfh = _loss_free_holding(trades_x, folders)
+    if lfh.empty:
+        st.caption('Could not match any trades to OHLCV data for this strategy.')
+    else:
+        med   = float(lfh['Loss_Free_Days'].median())
+        p25   = float(lfh['Loss_Free_Days'].quantile(0.25))
+        p75   = float(lfh['Loss_Free_Days'].quantile(0.75))
+        mean_ = float(lfh['Loss_Free_Days'].mean())
+        pct5  = float((lfh['Loss_Free_Days'] >=  5).mean() * 100)
+        pct20 = float((lfh['Loss_Free_Days'] >= 20).mean() * 100)
+        pct60 = float((lfh['Loss_Free_Days'] >= 60).mean() * 100)
+        never = int(lfh['Never_Dipped'].sum())
+
+        # Verdict — strategy "works" if median >= 5 and ≥40% safe 20+ days
+        if med >= 10 and pct20 >= 50:
+            verdict, vcolor, vicon = ('STRATEGY WORKING — safe to scale capital',  '#22C55E', '✅')
+        elif med >= 5 and pct20 >= 30:
+            verdict, vcolor, vicon = ('CONDITIONAL — works but size positions carefully', '#F59E0B', '⚠️')
+        else:
+            verdict, vcolor, vicon = ('WEAK — signals dip fast, do not scale up', '#EF4444', '❌')
+
+        st.markdown(
+            f'<div style="background:{vcolor}1A;border:1px solid {vcolor}55;border-left:4px solid {vcolor};'
+            f'border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px;">'
+            f'<span style="font-size:18px;margin-right:10px;">{vicon}</span>'
+            f'<b style="color:{vcolor};letter-spacing:.03em;">{verdict}</b>'
+            f'<span style="color:#94A3B8;margin-left:16px;">'
+            f'median {med:.0f}d safe · {pct20:.0f}% of signals stay loss-free ≥ 20d · {never} never dipped'
+            f'</span></div>',
+            unsafe_allow_html=True,
+        )
+
+        k1, k2, k3, k4, k5 = st.columns(5)
+        with k1:
+            _kpi_card('Median Safe Days', f'{med:.0f}',
+                      f'IQR {p25:.0f}–{p75:.0f} · mean {mean_:.1f}', color)
+        with k2:
+            _kpi_card('≥ 1 Week Safe', f'{pct5:.0f}%',
+                      f'{int((lfh["Loss_Free_Days"]>=5).sum())} of {len(lfh)} trades', '#22C55E')
+        with k3:
+            _kpi_card('≥ 1 Month Safe', f'{pct20:.0f}%',
+                      f'{int((lfh["Loss_Free_Days"]>=20).sum())} of {len(lfh)} trades', '#22C55E')
+        with k4:
+            _kpi_card('≥ 3 Months Safe', f'{pct60:.0f}%',
+                      f'{int((lfh["Loss_Free_Days"]>=60).sum())} of {len(lfh)} trades', '#22C55E')
+        with k5:
+            _kpi_card('Never Dipped', f'{never}',
+                      f'of {len(lfh)} trades · {never/len(lfh)*100:.0f}%', '#60A5FA')
+
+        # Distribution histogram
+        try:
+            import plotly.express as px  # noqa
+        except Exception:
+            px = None
+        bins = [0, 1, 5, 10, 20, 40, 60, 120, 9999]
+        labels = ['0d', '1-4d', '5-9d', '10-19d', '20-39d', '40-59d', '60-119d', '120d+']
+        lfh_bucketed = pd.cut(lfh['Loss_Free_Days'], bins=bins, labels=labels, right=False)
+        hist = lfh_bucketed.value_counts().reindex(labels, fill_value=0).reset_index()
+        hist.columns = ['Loss_Free_Bucket', 'Trade_Count']
+        fig_h = go.Figure(go.Bar(
+            x=hist['Loss_Free_Bucket'], y=hist['Trade_Count'],
+            marker_color=['#EF4444', '#EF4444', '#F59E0B', '#F59E0B',
+                          '#22C55E', '#22C55E', '#22C55E', '#22C55E'],
+            text=hist['Trade_Count'], textposition='outside',
+            hovertemplate='%{x}<br>%{y} trades<extra></extra>',
+        ))
+        fig_h.update_layout(
+            height=240, margin=dict(l=40, r=20, t=30, b=30),
+            paper_bgcolor='#020617', plot_bgcolor='#020617',
+            font=dict(color='#F1F5F9', family='IBM Plex Sans'),
+            title=dict(text='Distribution — how long signals stayed loss-free',
+                       font=dict(size=12, color='#94A3B8')),
+            xaxis=dict(showgrid=False, tickfont=dict(size=11)),
+            yaxis=dict(title='# Trades', gridcolor='#1E293B', tickfont=dict(size=10)),
+            showlegend=False,
+        )
+        st.plotly_chart(fig_h, width='stretch')
+
+        # Per-trade detail (sorted by Loss_Free_Days desc — best signals first)
+        with st.expander(f'📋 Per-trade detail ({len(lfh)} signals) — sortable, see exactly what worked'):
+            disp = lfh[[
+                'Ticker', 'Entry_Date', 'Entry_Price', 'Loss_Free_Days',
+                'First_Loss_Date', 'Holding_Days', 'PnL_Pct', 'Result',
+            ]].copy().sort_values('Loss_Free_Days', ascending=False)
+            disp['Entry_Price'] = disp['Entry_Price'].apply(lambda x: f'₹{x:,.2f}')
+            disp['PnL_Pct']     = disp['PnL_Pct'].apply(lambda x: f'{x:+.2f}%')
+            st.dataframe(disp, hide_index=True, width='stretch')
+
+    st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
+
+    # ── Stop-Loss Recommendation + Position Sizer ──────────────────────────
+    st.markdown('### 🛡️ Stop-Loss & Position Sizing — buy size that limits loss')
+    st.markdown(
+        '<div style="font-size:12px;color:#94A3B8;margin:-4px 0 12px 0;line-height:1.65;">'
+        'A good stop-loss is <b>loose enough that 95% of past winners survive their normal pullback</b>, '
+        'but <b>tight enough that losers get cut early</b>. We derive it from the Winner MAE p95 '
+        '(plus a 20% buffer) and the recent ATR. Hard-capped at -15% and floored at -5%.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    rec = report.get('stop_recommendation', {}) or {}
+    winner_mae_p95 = rec.get('winner_mae_p95')
+
+    sc1, sc2, sc3 = st.columns([1, 1, 1])
+    with sc1:
+        if winner_mae_p95 is not None:
+            sugg = _suggest_stop(100.0, atr=None, winner_mae_p95_pct=winner_mae_p95)
+            stop_pct = sugg['stop_pct']
+            source   = sugg['source']
+        else:
+            stop_pct = 10.0
+            source   = 'Default (no MAE data)'
+        _kpi_card('Suggested Stop %', f'-{stop_pct:.1f}%',
+                  f'derived from: {source}', '#EF4444')
+    with sc2:
+        # Reward needed to make this risk/reward >= 2:1
+        rr_target_pct = stop_pct * 2
+        _kpi_card('Target Move (R:R 2:1)', f'+{rr_target_pct:.1f}%',
+                  'minimum profit goal per trade', '#22C55E')
+    with sc3:
+        # Win-rate breakeven for this R:R
+        breakeven = 100 / (1 + 2)  # for 2:1, need 33.3% win rate
+        actual_wr = report.get('overall_win_rate', 0)
+        verdict_clr = '#22C55E' if actual_wr >= breakeven else '#EF4444'
+        _kpi_card('Breakeven Win Rate', f'{breakeven:.0f}%',
+                  f'strategy actual: {actual_wr}% ({"OK ✓" if actual_wr >= breakeven else "below break-even"})',
+                  verdict_clr)
+
+    # ── Interactive Position Sizer ─────────────────────────────────────────
+    with st.expander('💼 Position Sizer — type your capital, get exact buy quantity', expanded=False):
+        st.markdown(
+            '<div style="font-size:12px;color:#94A3B8;margin-bottom:10px;line-height:1.6;">'
+            'Risk-based sizing: you decide what % of your portfolio you are willing to lose if the stop hits. '
+            'We then compute the maximum shares you can buy so that a stop-out loses exactly that amount. '
+            'Rule of thumb: <b>1-2% risk per trade</b>.'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        ps1, ps2, ps3, ps4 = st.columns(4)
+        with ps1:
+            capital = st.number_input(
+                'Portfolio capital (₹)', min_value=10_000, max_value=100_000_000,
+                value=500_000, step=10_000, key=f'sizer_cap_{strategy}',
+            )
+        with ps2:
+            risk_pct = st.number_input(
+                'Risk per trade (%)', min_value=0.1, max_value=10.0,
+                value=2.0, step=0.1, key=f'sizer_risk_{strategy}',
+            )
+        with ps3:
+            entry_price = st.number_input(
+                'Planned entry (₹)', min_value=1.0, max_value=500_000.0,
+                value=1000.0, step=10.0, key=f'sizer_entry_{strategy}',
+            )
+        with ps4:
+            stop_used = st.number_input(
+                'Stop-loss %', min_value=1.0, max_value=30.0,
+                value=float(stop_pct), step=0.5, key=f'sizer_stop_{strategy}',
+            )
+
+        stop_price_user = entry_price * (1 - stop_used / 100.0)
+        risk_per_share  = entry_price - stop_price_user
+        risk_budget     = capital * risk_pct / 100.0
+        shares          = int(risk_budget // risk_per_share) if risk_per_share > 0 else 0
+        position_size   = shares * entry_price
+        position_pct    = (position_size / capital) * 100 if capital else 0
+        max_loss_rs     = shares * risk_per_share
+
+        # Target prices for 2:1 and 3:1
+        tgt_2r = entry_price * (1 + 2 * stop_used / 100.0)
+        tgt_3r = entry_price * (1 + 3 * stop_used / 100.0)
+
+        st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+        r1, r2, r3, r4 = st.columns(4)
+        with r1:
+            _kpi_card('Buy Quantity', f'{shares:,}',
+                      f'₹{position_size:,.0f} deployed ({position_pct:.1f}% of capital)', '#22C55E')
+        with r2:
+            _kpi_card('Stop Price', f'₹{stop_price_user:,.2f}',
+                      f'risk/share ₹{risk_per_share:,.2f}', '#EF4444')
+        with r3:
+            _kpi_card('Max Loss if Stop Hit', f'₹{max_loss_rs:,.0f}',
+                      f'= {risk_pct:.1f}% of portfolio', '#EF4444')
+        with r4:
+            _kpi_card('Target 2:1 / 3:1', f'₹{tgt_2r:,.2f}',
+                      f'3:1 target ₹{tgt_3r:,.2f}', '#22C55E')
+
+        st.caption(
+            f'📋 **Trade plan:** Buy {shares:,} shares of this ticker at ₹{entry_price:,.2f}, '
+            f'place stop at ₹{stop_price_user:,.2f} (-{stop_used:.1f}%), '
+            f'book partial profit at ₹{tgt_2r:,.2f} (+{stop_used*2:.1f}%). '
+            f'If stop hits, you lose ₹{max_loss_rs:,.0f} = {risk_pct:.1f}% of your ₹{capital:,.0f} capital.'
+        )
 
     st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
 
