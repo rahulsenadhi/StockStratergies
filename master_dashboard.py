@@ -528,7 +528,9 @@ def load_momentum():
         except Exception:
             pass
 
-    out['signals'] = _compute_momentum_signals()
+    sig_df, funnel = _compute_momentum_signals()
+    out['signals'] = sig_df
+    out['funnel']  = funnel
     return out
 
 
@@ -874,12 +876,21 @@ def _parquet_is_fresh(parquet_dir: Path, csv_folder: Path, tol_days: int = 7) ->
         return False
 
 
+def _empty_funnel() -> dict:
+    return {'total': 0, 'sufficient_data': 0,
+            'f1': 0, 'f2': 0, 'f3': 0, 'f4': 0, 'f5': 0, 'f6': 0,
+            'vol_bk': 0, 'final': 0}
+
+
 def _compute_momentum_signals_from_parquet(
     cache_dir: Path,
     universe: dict[str, str],
     bench: pd.Series | None,
-) -> pd.DataFrame:
-    """Parquet fast-path. ~3-5s for 2000 tickers vs 30-60s via CSV+recompute."""
+) -> tuple[pd.DataFrame, dict]:
+    """Parquet fast-path. ~3-5s for 2000 tickers vs 30-60s via CSV+recompute.
+
+    Returns (signals_df, funnel_dict).
+    """
     # ── Regime gate ─────────────────────────────────────────────────────────
     is_bull_today = True
     if bench is not None and len(bench) >= 200:
@@ -901,10 +912,12 @@ def _compute_momentum_signals_from_parquet(
 
     parquet_map = _load_parquet_indicators_parallel(cache_dir)
     if not parquet_map:
-        return pd.DataFrame()
+        return pd.DataFrame(), _empty_funnel()
 
     rows = []
     skip_stems = {'NIFTYBEES.NS', 'me_summary', '^NSEI'}
+    funnel = _empty_funnel()
+    funnel['total'] = len([t for t in parquet_map if t not in skip_stems])
 
     for ticker, ind in parquet_map.items():
         if ticker in skip_stems:
@@ -919,6 +932,7 @@ def _compute_momentum_signals_from_parquet(
             continue
         if not volume.empty and volume.iloc[-30:].mean() < MIN_AVG_VOL:
             continue
+        funnel['sufficient_data'] += 1
 
         ema220 = ind['ema220']
         # Resistance series = close.shift(1).rolling(252).max() == high52w shifted by 1.
@@ -973,12 +987,18 @@ def _compute_momentum_signals_from_parquet(
 
         # F1-F4 day-T, F5 had_dip_s, F6 choppiness_s
         if not (sma150_now > ema220_now): continue
+        funnel['f1'] += 1
         if not (close_now  > sma50_now):  continue
+        funnel['f2'] += 1
         if not (sma50_now  > sma150_now): continue
+        funnel['f3'] += 1
         if not (close_now  >= MIN_PRICE_VS_LOW * low52_now): continue
+        funnel['f4'] += 1
         if not had_dip_s: continue
+        funnel['f5'] += 1
         if not pd.isna(chop_s) and chop_s > CHOPPINESS_THRESH:
             continue
+        funnel['f6'] += 1
 
         vol_ok = (
             not pd.isna(vol50_s) and vol50_s > 0
@@ -998,6 +1018,7 @@ def _compute_momentum_signals_from_parquet(
         )
         if is_breakout and vol_ok:
             signal = 'Breakout Today'
+            funnel['vol_bk'] += 1
         elif is_near_bk:
             signal = 'Near Breakout'
         else:
@@ -1038,15 +1059,17 @@ def _compute_momentum_signals_from_parquet(
         })
 
     if not rows:
-        return pd.DataFrame()
+        return pd.DataFrame(), funnel
     df_out = pd.DataFrame(rows)
     sig_rank = {'Breakout Today': 0, 'Near Breakout': 1, 'Watch Zone': 2}
     df_out['_rank'] = df_out['Signal'].map(sig_rank).fillna(3)
     df_out = df_out.sort_values(['_rank', '_score'], ascending=[True, False])
-    return df_out.drop(columns=['_rank', '_score', '_is_bull']).reset_index(drop=True)
+    df_out = df_out.drop(columns=['_rank', '_score', '_is_bull']).reset_index(drop=True)
+    funnel['final'] = len(df_out)
+    return df_out, funnel
 
 
-def _compute_momentum_signals() -> pd.DataFrame:
+def _compute_momentum_signals() -> tuple[pd.DataFrame, dict]:
     """Detect Momentum Edge live signals — SPEC-ALIGNED with momentum_edge_dashboard.py.
 
     F1-F4 use day-T values (per spec); F5/F6 use T-1; breakout-ref uses T-1 (resistance =
@@ -1063,7 +1086,7 @@ def _compute_momentum_signals() -> pd.DataFrame:
     folder = full_folder if full_folder.exists() and any(full_folder.glob('*.csv')) else legacy_folder
     sym_file = Path(BASE_DIR) / 'momentum_edge_symbols.csv'
     if not folder.exists():
-        return pd.DataFrame()
+        return pd.DataFrame(), _empty_funnel()
 
     universe: dict[str, str] = {}
     if sym_file.exists():
@@ -1079,10 +1102,11 @@ def _compute_momentum_signals() -> pd.DataFrame:
     # ── Parquet fast path ──────────────────────────────────────────────────
     cache_dir = Path(BASE_DIR) / 'data' / 'indicator_cache'
     if cache_dir.exists() and _parquet_is_fresh(cache_dir, folder):
-        df_fast = _compute_momentum_signals_from_parquet(cache_dir, universe, bench)
+        df_fast, funnel_fast = _compute_momentum_signals_from_parquet(cache_dir, universe, bench)
         if not df_fast.empty:
-            return df_fast
+            return df_fast, funnel_fast
         # parquet exists but yielded nothing → fall through to CSV
+    funnel = _empty_funnel()
     is_bull_today = True
     if bench is not None and len(bench) >= 200:
         _sma50  = bench.rolling(50).mean()
@@ -1109,10 +1133,10 @@ def _compute_momentum_signals() -> pd.DataFrame:
 
     rows       = []
     skip_stems = {'NIFTYBEES.NS', 'me_summary', '^NSEI'}
+    all_csv = [c for c in sorted(folder.glob('*.csv')) if c.stem not in skip_stems]
+    funnel['total'] = len(all_csv)
 
-    for csv_path in sorted(folder.glob('*.csv')):
-        if csv_path.stem in skip_stems:
-            continue
+    for csv_path in all_csv:
         ticker  = csv_path.stem
         company = universe.get(ticker, ticker.replace('.NS', ''))
         df      = _load_ohlcv_csv(csv_path)
@@ -1122,6 +1146,7 @@ def _compute_momentum_signals() -> pd.DataFrame:
             continue
         if df['Volume'].iloc[-30:].mean() < MIN_AVG_VOL:
             continue
+        funnel['sufficient_data'] += 1
 
         close  = df['Close']
         volume = df['Volume']
@@ -1188,15 +1213,21 @@ def _compute_momentum_signals() -> pd.DataFrame:
 
         # ── F1-F4 on day T, F5 / F6 on T-1 ────────────────────────────────
         if not (sma150_now > ema220_now): continue
+        funnel['f1'] += 1
         if not (close_now  > sma50_now):  continue
+        funnel['f2'] += 1
         if not (sma50_now  > sma150_now): continue
+        funnel['f3'] += 1
         if not (close_now  >= MIN_PRICE_VS_LOW * low52_now): continue
+        funnel['f4'] += 1
         if not had_dip_s: continue
+        funnel['f5'] += 1
 
         chop_series = _compute_choppiness(df, CHOPPINESS_P)
         chop_val    = float(chop_series.iloc[-2]) if len(chop_series) >= 2 and not pd.isna(chop_series.iloc[-2]) else float('nan')
         if not pd.isna(chop_val) and chop_val > CHOPPINESS_THRESH:
             continue
+        funnel['f6'] += 1
 
         # ── Volume + breakout (vol50 per spec) ────────────────────────────
         vol_ok = (
@@ -1222,6 +1253,7 @@ def _compute_momentum_signals() -> pd.DataFrame:
 
         if is_breakout and vol_ok:
             signal = 'Breakout Today'
+            funnel['vol_bk'] += 1
         elif is_near_bk:
             signal = 'Near Breakout'
         else:
@@ -1261,13 +1293,15 @@ def _compute_momentum_signals() -> pd.DataFrame:
         })
 
     if not rows:
-        return pd.DataFrame()
+        return pd.DataFrame(), funnel
 
     df_out = pd.DataFrame(rows)
     sig_rank = {'Breakout Today': 0, 'Near Breakout': 1, 'Watch Zone': 2}
     df_out['_rank'] = df_out['Signal'].map(sig_rank).fillna(3)
     df_out = df_out.sort_values(['_rank', '_score'], ascending=[True, False])
-    return df_out.drop(columns=['_rank', '_score', '_is_bull']).reset_index(drop=True)
+    df_out = df_out.drop(columns=['_rank', '_score', '_is_bull']).reset_index(drop=True)
+    funnel['final'] = len(df_out)
+    return df_out, funnel
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2919,6 +2953,33 @@ def render_ipo(i: dict):
 #  MOMENTUM EDGE PAGE
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _chart_me_funnel(funnel: dict, is_bull: bool) -> go.Figure:
+    """Filter funnel — how many stocks pass each gate, top to bottom."""
+    labels = ['Universe', 'Has Data',
+              'F1 Trend', 'F2 Price > SMA50', 'F3 MA Align',
+              'F4 vs 52W Low', 'F5 Dip Recovered', 'F6 Clean Chart',
+              'Vol + Breakout']
+    keys = ['total', 'sufficient_data', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'vol_bk']
+    values = [int(funnel.get(k, 0)) for k in keys]
+    colors = ['#3a4060'] * len(values)
+    colors[-1] = '#00c853' if is_bull else '#ff3d3d'
+    colors[-2] = '#7c9cff'
+
+    fig = go.Figure(go.Funnel(
+        y=labels, x=values,
+        textinfo='value+percent initial',
+        textfont=dict(color='#e0e0e0', size=11),
+        connector=dict(line=dict(color='#1e2235', width=1)),
+        marker=dict(color=colors, line=dict(color='#0e1117', width=1)),
+    ))
+    fig.update_layout(
+        height=360, margin=dict(l=10, r=10, t=10, b=10),
+        paper_bgcolor='#0e1117', plot_bgcolor='#0e1117',
+        font=dict(color='#e0e0e0', family='Inter'),
+    )
+    return fig
+
+
 def render_momentum(mo: dict):
     color  = THEME[S_MOMENTUM]['color']
     st.markdown(
@@ -3128,6 +3189,21 @@ def render_momentum(mo: dict):
             '📊 *Hist Win%* / *Hist Avg%* — historical performance of past trades '
             'with the same Entry Type + Recovery Speed combo. Based on closed backtest trades only.'
         )
+
+        # ── Filter funnel ──────────────────────────────────────────────────────
+        funnel = mo.get('funnel') or {}
+        if funnel.get('total', 0) > 0:
+            st.markdown('<br>', unsafe_allow_html=True)
+            st.markdown(f'<div class="sec-hdr" style="color:{color}">🔻 Filter Funnel — how the universe narrows to today\'s signals</div>',
+                        unsafe_allow_html=True)
+            st.caption('Each step is a filter the stock must pass. The drop from one bar to the next is how many failed that gate.')
+            is_bull = True
+            try:
+                snap = _regime_snapshot()
+                is_bull = (snap.get('status') == 'Bull')
+            except Exception:
+                pass
+            st.plotly_chart(_chart_me_funnel(funnel, is_bull), width='stretch')
 
         # ── Signal Detail Drawer (pick ticker → candle chart + overlays) ───────
         st.markdown('<br>', unsafe_allow_html=True)
