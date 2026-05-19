@@ -55,8 +55,8 @@ IPO_UNIVERSE = {
     'SEPC.NS':       'SEPC Limited',
 }
 
-PLOTLY_BASE = dict(paper_bgcolor='#0e1117', plot_bgcolor='#0e1117',
-                   font=dict(color='#c0c0c0', size=12))
+PLOTLY_BASE = dict(paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
+                   font=dict(color='#fafafa', size=12, family='Inter'))
 
 # Choppiness constants
 CHOPPINESS_P     = 14
@@ -93,51 +93,120 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-/* ── Design tokens (Corporate / Fintech dark) ─────────────────────────────
-   Generated from ui-ux-pro-max design system: Enterprise Gateway + Dark OLED.
-   Slate palette anchored on #020617 background with #0F172A surface and
-   #22C55E positive accent. IBM Plex Sans for body, IBM Plex Mono for figures.
+/* ── Design tokens — SuperDesign "Modern Dark" (Linear/Vercel inspired) ─────
+   Semantic token system with OKLCH colors, derived from SuperDesign theme spec
+   (superdesigndev/superdesign). Restrained grayscale base with semantic accents
+   for status (green / amber / red / blue). 0.625rem radius, subtle 1-3px shadows.
 */
 :root {
-    --bg-base:       #020617;   /* slate-950 — page background */
-    --bg-surface:    #0F172A;   /* slate-900 — cards */
-    --bg-surface-2:  #111B2F;   /* slightly raised surfaces */
-    --bg-muted:      #1A2236;   /* hover / quiet surfaces */
-    --border-soft:   #1E293B;   /* slate-800 — primary border */
-    --border-strong: #334155;   /* slate-700 — emphasis border */
-    --fg-primary:    #F1F5F9;   /* slate-100 — body text */
-    --fg-secondary:  #94A3B8;   /* slate-400 — supporting text */
-    --fg-muted:      #64748B;   /* slate-500 — captions / hints */
-    --fg-subtle:     #475569;   /* slate-600 — disabled / micro */
-    --accent:        #22C55E;   /* emerald-500 — positive / primary */
-    --accent-soft:   rgba(34,197,94,0.12);
-    --warn:          #F59E0B;   /* amber-500 — caution */
-    --warn-soft:     rgba(245,158,11,0.10);
-    --danger:        #EF4444;   /* red-500 — loss / negative */
-    --danger-soft:   rgba(239,68,68,0.10);
-    --info:          #60A5FA;   /* blue-400 — info / explainer */
-    --info-soft:     rgba(96,165,250,0.10);
+    /* Base surfaces — grayscale stack, low chroma */
+    --background:           oklch(0.145 0 0);    /* page bg — near black */
+    --foreground:           oklch(0.985 0 0);    /* primary text */
+    --card:                 oklch(0.205 0 0);    /* card surface */
+    --card-foreground:      oklch(0.985 0 0);
+    --popover:              oklch(0.205 0 0);
+    --popover-foreground:   oklch(0.985 0 0);
+    --primary:              oklch(0.985 0 0);    /* primary action — white */
+    --primary-foreground:   oklch(0.205 0 0);
+    --secondary:            oklch(0.269 0 0);    /* secondary surface */
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted:                oklch(0.269 0 0);
+    --muted-foreground:     oklch(0.708 0 0);    /* low-emphasis text */
+    --accent:               oklch(0.269 0 0);
+    --accent-foreground:    oklch(0.985 0 0);
+    --destructive:          oklch(0.625 0.245 27.325); /* red */
+    --destructive-foreground: oklch(0.985 0 0);
+    --border:               oklch(0.275 0 0);
+    --input:                oklch(0.275 0 0);
+    --ring:                 oklch(0.556 0 0);
+
+    /* Semantic status accents — chart-style chroma */
+    --success:              oklch(0.696 0.170 162.480); /* emerald */
+    --warning:              oklch(0.768 0.180 70.080);  /* amber */
+    --info:                 oklch(0.623 0.214 259.815); /* blue */
+
+    /* Chart palette */
+    --chart-1: oklch(0.696 0.170 162.480);  /* green */
+    --chart-2: oklch(0.623 0.214 259.815);  /* blue */
+    --chart-3: oklch(0.769 0.188 70.080);   /* amber */
+    --chart-4: oklch(0.627 0.265 303.900);  /* purple */
+    --chart-5: oklch(0.645 0.246 16.439);   /* rose */
+
+    /* Sidebar */
+    --sidebar:                    oklch(0.205 0 0);
+    --sidebar-foreground:         oklch(0.985 0 0);
+    --sidebar-primary:            oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent:             oklch(0.269 0 0);
+    --sidebar-accent-foreground:  oklch(0.985 0 0);
+    --sidebar-border:             oklch(0.275 0 0);
+    --sidebar-ring:               oklch(0.439 0 0);
+
+    /* Typography */
+    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    /* Geometry */
+    --radius:    0.625rem;
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+
+    /* Shadows — subtle, layered */
+    --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
+    --shadow-xs:  0 1px 3px 0px hsl(0 0% 0% / 0.05);
+    --shadow-sm:  0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+    --shadow:     0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 1px 2px -1px hsl(0 0% 0% / 0.10);
+    --shadow-md:  0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 2px 4px -1px hsl(0 0% 0% / 0.10);
+    --shadow-lg:  0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 4px 6px -1px hsl(0 0% 0% / 0.10);
+    --shadow-xl:  0 1px 3px 0px hsl(0 0% 0% / 0.10), 0 8px 10px -1px hsl(0 0% 0% / 0.10);
+
+    /* Legacy aliases (back-compat with existing helper functions) */
+    --bg-base:       var(--background);
+    --bg-surface:    var(--card);
+    --bg-surface-2:  oklch(0.235 0 0);
+    --bg-muted:      var(--muted);
+    --border-soft:   var(--border);
+    --border-strong: oklch(0.380 0 0);
+    --fg-primary:    var(--foreground);
+    --fg-secondary:  oklch(0.769 0 0);
+    --fg-muted:      var(--muted-foreground);
+    --fg-subtle:     oklch(0.520 0 0);
+    --accent-soft:   color-mix(in oklch, var(--success) 14%, transparent);
+    --warn:          var(--warning);
+    --warn-soft:     color-mix(in oklch, var(--warning) 12%, transparent);
+    --danger:        var(--destructive);
+    --danger-soft:   color-mix(in oklch, var(--destructive) 12%, transparent);
+    --info-soft:     color-mix(in oklch, var(--info) 12%, transparent);
 }
 
 /* ── Global ── */
 html, body, [data-testid="stApp"] {
-    background: var(--bg-base) !important;
-    color: var(--fg-primary) !important;
-    font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif !important;
-    font-feature-settings: "ss01", "cv11";
+    background: var(--background) !important;
+    color: var(--foreground) !important;
+    font-family: var(--font-sans) !important;
+    font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.005em;
 }
 [data-testid="stSidebar"] {
-    background: var(--bg-surface) !important;
-    border-right: 1px solid var(--border-soft) !important;
+    background: var(--sidebar) !important;
+    border-right: 1px solid var(--sidebar-border) !important;
 }
-[data-testid="stSidebar"] * { color: var(--fg-secondary) !important; }
-[data-testid="stSidebar"] .stRadio label { padding: 6px 0; }
-[data-testid="stAppViewContainer"] { background: var(--bg-base) !important; }
-.block-container { padding-top: 1.5rem !important; max-width: 1400px; }
-div[data-testid="column"] { padding: 4px 6px !important; }
+[data-testid="stSidebar"] * { color: var(--sidebar-foreground) !important; }
+[data-testid="stSidebar"] .stRadio label {
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    transition: background 120ms ease, color 120ms ease;
+}
+[data-testid="stSidebar"] .stRadio label:hover { background: var(--sidebar-accent); }
+[data-testid="stAppViewContainer"] { background: var(--background) !important; }
+.block-container { padding-top: 1.75rem !important; max-width: 1400px; }
+div[data-testid="column"] { padding: 6px 8px !important; }
 
 /* Tabular figures for numbers (prevents column jitter) */
 .metric-pill .value, .hub-card .big-num, .hub-card .kv-v,
@@ -146,70 +215,84 @@ div[data-testid="column"] { padding: 4px 6px !important; }
     font-feature-settings: "tnum";
 }
 
-/* ── Strategy hub cards ── */
+/* ── Strategy hub cards (Linear-style: flat, subtle hover, no gradient) ── */
 .hub-card {
-    background: var(--bg-surface);
-    border-radius: 12px;
-    padding: 24px;
-    border: 1px solid var(--border-soft);
+    background: var(--card);
+    color: var(--card-foreground);
+    border-radius: var(--radius-lg);
+    padding: 22px 24px;
+    border: 1px solid var(--border);
     position: relative;
     overflow: hidden;
     height: 100%;
-    transition: border-color .2s ease, transform .2s ease;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
 }
-.hub-card:hover { border-color: var(--border-strong); }
+.hub-card:hover {
+    border-color: var(--ring);
+    background: var(--bg-surface-2);
+    box-shadow: var(--shadow-md);
+}
 .hub-card::before {
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 2px;
-    border-radius: 12px 12px 0 0;
+    opacity: 0.85;
 }
 .hub-card .strategy-name {
-    font-size: 11px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: .14em; margin-bottom: 16px; color: var(--fg-secondary);
+    font-size: 11px; font-weight: 500; text-transform: uppercase;
+    letter-spacing: .12em; margin-bottom: 14px; color: var(--muted-foreground);
+    display: flex; align-items: center; gap: 8px;
 }
 .hub-card .big-num {
-    font-size: 34px; font-weight: 600; line-height: 1.05;
-    letter-spacing: -.025em;
+    font-size: 32px; font-weight: 600; line-height: 1.05;
+    letter-spacing: -.03em; color: var(--card-foreground);
 }
 .hub-card .plain-label {
-    font-size: 11px; color: var(--fg-muted); margin-top: 4px; margin-bottom: 16px;
+    font-size: 12px; color: var(--muted-foreground); margin-top: 4px; margin-bottom: 14px;
+    line-height: 1.5;
 }
-.hub-card .divider { border-top: 1px solid var(--border-soft); margin: 16px 0; }
-.hub-card .row { display: flex; justify-content: space-between; gap: 12px; }
+.hub-card .divider { border-top: 1px solid var(--border); margin: 16px 0; opacity: 0.6; }
+.hub-card .row { display: flex; justify-content: space-between; gap: 14px; }
 .hub-card .kv-block { flex: 1; }
-.hub-card .kv-l { color: var(--fg-muted); font-size: 10px; text-transform: uppercase; letter-spacing:.08em; margin-bottom: 4px; font-weight: 500; }
-.hub-card .kv-v { font-size: 15px; font-weight: 600; color: var(--fg-primary); }
+.hub-card .kv-l { color: var(--muted-foreground); font-size: 10px; text-transform: uppercase; letter-spacing:.10em; margin-bottom: 4px; font-weight: 500; }
+.hub-card .kv-v { font-size: 15px; font-weight: 600; color: var(--card-foreground); letter-spacing: -.01em; }
 .hub-card .kv-explain { font-size: 10px; color: var(--fg-subtle); margin-top: 2px; }
 .hub-card .desc-box {
-    background: var(--bg-muted); border-radius: 6px;
-    padding: 10px 12px; margin-top: 14px; font-size: 11.5px; color: var(--fg-secondary); line-height: 1.65;
-    border: 1px solid var(--border-soft);
+    background: var(--muted); border-radius: var(--radius-md);
+    padding: 10px 14px; margin-top: 14px; font-size: 12px; color: var(--muted-foreground); line-height: 1.65;
+    border: 1px solid var(--border);
 }
 
 /* ── Metric pill ── */
 .metric-pill {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-soft);
-    border-radius: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 16px 18px;
     text-align: left;
     height: 100%;
-    transition: border-color .2s ease;
+    box-shadow: var(--shadow-xs);
+    transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
 }
-.metric-pill:hover { border-color: var(--border-strong); }
+.metric-pill:hover {
+    border-color: var(--ring);
+    background: var(--bg-surface-2);
+    box-shadow: var(--shadow-sm);
+}
 .metric-pill .label {
-    color: var(--fg-muted); font-size: 10px; text-transform: uppercase;
+    color: var(--muted-foreground); font-size: 10px; text-transform: uppercase;
     letter-spacing: .10em; font-weight: 500;
 }
 .metric-pill .value {
-    font-size: 24px; font-weight: 600; margin: 8px 0 4px; letter-spacing: -.02em;
+    font-size: 24px; font-weight: 600; margin: 8px 0 4px; letter-spacing: -.025em;
+    color: var(--card-foreground);
 }
-.metric-pill .sub   { color: var(--fg-muted); font-size: 11px; line-height: 1.45; }
+.metric-pill .sub   { color: var(--muted-foreground); font-size: 11px; line-height: 1.5; }
 .metric-pill .explain {
-    font-size: 10.5px; color: var(--fg-subtle); margin-top: 8px;
-    padding-top: 8px; border-top: 1px solid var(--border-soft); line-height: 1.5;
+    font-size: 10.5px; color: var(--fg-subtle); margin-top: 10px;
+    padding-top: 8px; border-top: 1px solid var(--border); line-height: 1.55;
 }
 
 /* ── Section headers ── */
@@ -311,67 +394,121 @@ div[data-testid="column"] { padding: 4px 6px !important; }
 
 /* ── Streamlit overrides ── */
 [data-testid="stMetric"] {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-soft);
-    border-radius: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 14px 16px;
+    box-shadow: var(--shadow-xs);
 }
-[data-testid="stMetricValue"] { font-weight: 600 !important; letter-spacing: -.02em; }
-[data-testid="stMetricLabel"] { color: var(--fg-muted) !important; font-size: 11px !important; text-transform: uppercase; letter-spacing: .08em; }
-.stExpander { background: var(--bg-surface) !important; border: 1px solid var(--border-soft) !important; border-radius: 10px !important; }
-.stExpander summary { color: var(--fg-secondary) !important; font-size: 12.5px !important; font-weight: 500 !important; }
+[data-testid="stMetricValue"] { font-weight: 600 !important; letter-spacing: -.025em; color: var(--card-foreground) !important; }
+[data-testid="stMetricLabel"] { color: var(--muted-foreground) !important; font-size: 11px !important; text-transform: uppercase; letter-spacing: .10em; font-weight: 500; }
+.stExpander {
+    background: var(--card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-lg) !important;
+    box-shadow: var(--shadow-xs) !important;
+}
+.stExpander summary { color: var(--muted-foreground) !important; font-size: 13px !important; font-weight: 500 !important; }
+.stExpander summary:hover { color: var(--foreground) !important; }
 button[kind="primary"] {
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    background: var(--accent) !important;
-    border-color: var(--accent) !important;
-    color: #052e16 !important;
-}
-button[kind="primary"]:hover { background: #16a34a !important; border-color: #16a34a !important; }
-button[kind="secondary"] {
-    border-radius: 8px !important;
-    background: var(--bg-surface) !important;
-    border: 1px solid var(--border-soft) !important;
-    color: var(--fg-primary) !important;
+    border-radius: var(--radius-md) !important;
     font-weight: 500 !important;
+    background: var(--primary) !important;
+    border: 1px solid var(--primary) !important;
+    color: var(--primary-foreground) !important;
+    transition: opacity 150ms ease, transform 80ms ease;
 }
-button[kind="secondary"]:hover { border-color: var(--border-strong) !important; background: var(--bg-surface-2) !important; }
-.stAlert { border-radius: 8px !important; border: 1px solid var(--border-soft) !important; }
-hr { border-color: var(--border-soft) !important; }
+button[kind="primary"]:hover { opacity: 0.90 !important; }
+button[kind="primary"]:active { transform: scale(0.985); }
+button[kind="secondary"] {
+    border-radius: var(--radius-md) !important;
+    background: var(--secondary) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--secondary-foreground) !important;
+    font-weight: 500 !important;
+    transition: background 150ms ease, border-color 150ms ease;
+}
+button[kind="secondary"]:hover { background: var(--accent) !important; border-color: var(--ring) !important; }
+.stAlert { border-radius: var(--radius-lg) !important; border: 1px solid var(--border) !important; }
+hr { border-color: var(--border) !important; opacity: 0.6; }
 
-/* Focus rings — accessibility */
+/* Focus rings — accessibility (Linear-style ring) */
 button:focus-visible, a:focus-visible, [role="button"]:focus-visible,
 input:focus-visible, select:focus-visible, textarea:focus-visible {
-    outline: 2px solid var(--accent) !important;
+    outline: 2px solid var(--ring) !important;
     outline-offset: 2px !important;
+    border-radius: var(--radius-md);
 }
 
-/* Tab styling */
-.stTabs [data-baseweb="tab-list"] { gap: 4px; border-bottom: 1px solid var(--border-soft); }
+/* Tab styling (Linear-style: minimal underline) */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+}
 .stTabs [data-baseweb="tab"] {
     background: transparent !important;
-    color: var(--fg-secondary) !important;
+    color: var(--muted-foreground) !important;
     font-weight: 500 !important;
     font-size: 13px !important;
-    padding: 10px 16px !important;
-    border-radius: 6px 6px 0 0 !important;
+    padding: 10px 14px !important;
+    border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+    transition: color 150ms ease, background 150ms ease;
 }
+.stTabs [data-baseweb="tab"]:hover { color: var(--foreground) !important; background: var(--muted) !important; }
 .stTabs [aria-selected="true"] {
-    color: var(--fg-primary) !important;
-    background: var(--bg-surface) !important;
-    border-bottom: 2px solid var(--accent) !important;
+    color: var(--foreground) !important;
+    background: transparent !important;
+    border-bottom: 2px solid var(--foreground) !important;
 }
 
-/* Selectbox / inputs */
-.stSelectbox > div > div, .stTextInput input {
-    background: var(--bg-surface) !important;
-    border: 1px solid var(--border-soft) !important;
-    color: var(--fg-primary) !important;
-    border-radius: 8px !important;
+/* Selectbox / inputs / number inputs */
+.stSelectbox > div > div, .stTextInput input, .stNumberInput input {
+    background: var(--card) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--foreground) !important;
+    border-radius: var(--radius-md) !important;
+    font-size: 13px !important;
+}
+.stSelectbox > div > div:hover, .stTextInput input:hover, .stNumberInput input:hover {
+    border-color: var(--ring) !important;
 }
 
 /* Dataframes */
-.stDataFrame { border-radius: 10px; overflow: hidden; border: 1px solid var(--border-soft); }
+.stDataFrame {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-xs);
+}
+
+/* Plotly charts container — match card aesthetic */
+[data-testid="stPlotlyChart"] {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-xs);
+}
+
+/* Radio horizontal (period selector) */
+.stRadio > div[role="radiogroup"] {
+    gap: 4px !important;
+}
+.stRadio > div[role="radiogroup"] label {
+    background: var(--card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-md) !important;
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+    transition: background 150ms ease, border-color 150ms ease;
+}
+.stRadio > div[role="radiogroup"] label:hover { background: var(--accent) !important; border-color: var(--ring) !important; }
+
+/* Checkbox */
+.stCheckbox label {
+    font-size: 13px !important;
+    color: var(--foreground) !important;
+}
 
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
@@ -1222,8 +1359,8 @@ def _render_me_detail(ticker: str, trades: pd.DataFrame | None) -> None:
 
     fig.update_layout(
         height=180 + 380 * heights[0] + sum(180 * h for h in heights[1:]),
-        paper_bgcolor='#020617', plot_bgcolor='#020617',
-        font=dict(color='#F1F5F9', family='IBM Plex Sans'),
+        paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
+        font=dict(color='#F1F5F9', family='Inter'),
         legend=dict(orientation='h', y=1.04, x=0,
                     font=dict(size=11, color='#94A3B8'),
                     bgcolor='rgba(0,0,0,0)'),
@@ -3470,8 +3607,8 @@ def _chart_me_funnel(funnel: dict, is_bull: bool) -> go.Figure:
     ))
     fig.update_layout(
         height=360, margin=dict(l=10, r=10, t=10, b=10),
-        paper_bgcolor='#0e1117', plot_bgcolor='#0e1117',
-        font=dict(color='#e0e0e0', family='IBM Plex Sans'),
+        paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
+        font=dict(color='#e0e0e0', family='Inter'),
     )
     return fig
 
@@ -4019,8 +4156,8 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
         ))
         fig_h.update_layout(
             height=240, margin=dict(l=40, r=20, t=30, b=30),
-            paper_bgcolor='#020617', plot_bgcolor='#020617',
-            font=dict(color='#F1F5F9', family='IBM Plex Sans'),
+            paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
+            font=dict(color='#F1F5F9', family='Inter'),
             title=dict(text='Distribution — how long signals stayed loss-free',
                        font=dict(size=12, color='#94A3B8')),
             xaxis=dict(showgrid=False, tickfont=dict(size=11)),
