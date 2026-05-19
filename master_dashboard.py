@@ -822,6 +822,230 @@ def _render_me_detail(ticker: str, trades: pd.DataFrame | None) -> None:
     with c5: st.metric('Avg Vol (30d)', vol_str)
 
 
+def _load_parquet_indicators_parallel(folder: Path) -> dict[str, pd.DataFrame]:
+    """Read every *.parquet in folder via ThreadPool. 960 files ≈ 2-3s.
+
+    Each parquet was written by momentum_edge_backtest.py and contains all the
+    indicators master_dashboard needs (close, sma50, sma150, ema220, high52w,
+    low52w, vol_avg50, ath, choppiness, momentum_6m + their _s shifted twins).
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    if not folder.exists():
+        return {}
+    paths = list(folder.glob('*.parquet'))
+    if not paths:
+        return {}
+
+    def _read(path):
+        try:
+            return path.stem, pd.read_parquet(path)
+        except Exception:
+            return path.stem, None
+
+    out: dict[str, pd.DataFrame] = {}
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        for stem, df in pool.map(_read, paths):
+            if df is not None and not df.empty:
+                out[stem] = df
+    return out
+
+
+def _parquet_is_fresh(parquet_dir: Path, csv_folder: Path, tol_days: int = 7) -> bool:
+    """Cheap freshness check: parquet's latest index >= CSV's latest index minus tol_days.
+
+    Compares one widely-traded symbol (RELIANCE.NS preferred). Returns False if
+    either file is missing.
+    """
+    probe = 'RELIANCE.NS'
+    pq = parquet_dir / f'{probe}.parquet'
+    cs = csv_folder / f'{probe}.csv'
+    if not (pq.exists() and cs.exists()):
+        # Fall back to comparing any one file
+        pq_files = list(parquet_dir.glob('*.parquet'))
+        cs_files = list(csv_folder.glob('*.csv'))
+        if not pq_files or not cs_files:
+            return False
+        pq, cs = pq_files[0], cs_files[0]
+    try:
+        pq_last = pd.read_parquet(pq).index[-1]
+        cs_last = pd.read_csv(cs, index_col=0, parse_dates=True).index[-1]
+        return bool((cs_last - pq_last).days <= tol_days)
+    except Exception:
+        return False
+
+
+def _compute_momentum_signals_from_parquet(
+    cache_dir: Path,
+    universe: dict[str, str],
+    bench: pd.Series | None,
+) -> pd.DataFrame:
+    """Parquet fast-path. ~3-5s for 2000 tickers vs 30-60s via CSV+recompute."""
+    # ── Regime gate ─────────────────────────────────────────────────────────
+    is_bull_today = True
+    if bench is not None and len(bench) >= 200:
+        _sma50  = bench.rolling(50).mean()
+        _sma200 = bench.rolling(200).mean()
+        _high52 = bench.rolling(252).max()
+        _b = bench.iloc[-1]
+        is_bull_today = bool(
+            _b > _sma200.iloc[-1]
+            and _sma50.iloc[-1] > _sma200.iloc[-1]
+            and _b >= 0.90 * _high52.iloc[-1]
+        )
+
+    VOL_MULTIPLIER   = 1.5
+    MIN_PRICE_VS_LOW = 1.25
+    MIN_CLOSE_PRICE  = 50.0
+    MIN_AVG_VOL      = 100_000
+    NEAR_BK_PCT      = 0.02
+
+    parquet_map = _load_parquet_indicators_parallel(cache_dir)
+    if not parquet_map:
+        return pd.DataFrame()
+
+    rows = []
+    skip_stems = {'NIFTYBEES.NS', 'me_summary', '^NSEI'}
+
+    for ticker, ind in parquet_map.items():
+        if ticker in skip_stems:
+            continue
+        if len(ind) < 252:
+            continue
+
+        close  = ind['close']
+        volume = ind.get('volume', pd.Series(dtype=float))
+
+        if close.iloc[-1] < MIN_CLOSE_PRICE:
+            continue
+        if not volume.empty and volume.iloc[-30:].mean() < MIN_AVG_VOL:
+            continue
+
+        ema220 = ind['ema220']
+        # Resistance series = close.shift(1).rolling(252).max() == high52w shifted by 1.
+        # Parquet has high52w_s precomputed; build full series via .shift on high52w.
+        high52w = ind['high52w']
+        resistance = high52w.shift(1)
+
+        # 1-2-3 state machine
+        c_arr = close.values.astype(float)
+        e_arr = ema220.values.astype(float)
+        r_arr = resistance.values.astype(float)
+        n_arr = len(c_arr)
+        cycle_state = 'NORMAL'
+        if n_arr >= 2:
+            valid = ~(np.isnan(c_arr) | np.isnan(e_arr))
+            below_ema = valid & (c_arr < e_arr)
+            above_res = np.zeros(n_arr, dtype=bool)
+            above_res[1:] = (
+                ~np.isnan(r_arr[1:])
+                & (c_arr[1:] > r_arr[1:])
+                & (c_arr[:-1] <= r_arr[1:])
+            )
+            for i in range(1, n_arr):
+                if not valid[i]:
+                    continue
+                if below_ema[i]:
+                    cycle_state = 'FLUSHED'
+                elif cycle_state == 'FLUSHED' and above_res[i]:
+                    cycle_state = 'POST_BREAKOUT'
+        if cycle_state == 'POST_BREAKOUT':
+            continue
+
+        # Day-T and T-1 scalars — pull from precomputed _s columns
+        close_now  = float(close.iloc[-1])
+        ema220_now = float(ema220.iloc[-1])
+        sma50_now  = float(ind['sma50'].iloc[-1])
+        sma150_now = float(ind['sma150'].iloc[-1])
+        low52_now  = float(ind['low52w'].iloc[-1])
+        vol_today  = float(volume.iloc[-1]) if not volume.empty else 0.0
+
+        close_s    = float(ind['close_s'].iloc[-1])  if 'close_s'    in ind else float(close.iloc[-2])
+        vol50_s    = float(ind['vol_avg50_s'].iloc[-1]) if 'vol_avg50_s' in ind else float(volume.rolling(50).mean().iloc[-2])
+        had_dip_s  = bool(ind['had_ema_dip_s'].iloc[-1]) if 'had_ema_dip_s' in ind else False
+        chop_s     = float(ind['choppiness_s'].iloc[-1]) if 'choppiness_s' in ind else float('nan')
+        mom_s      = float(ind['momentum_6m_s'].iloc[-1]) if 'momentum_6m_s' in ind else 0.0
+        ath_prev   = float(ind['ath_prev'].iloc[-1])    if 'ath_prev' in ind else float(ind.get('ath', close).iloc[-2])
+
+        res_today  = float(resistance.iloc[-1]) if not pd.isna(resistance.iloc[-1]) else float('nan')
+
+        if any(pd.isna(v) for v in (close_now, ema220_now, sma50_now, sma150_now, low52_now)):
+            continue
+
+        # F1-F4 day-T, F5 had_dip_s, F6 choppiness_s
+        if not (sma150_now > ema220_now): continue
+        if not (close_now  > sma50_now):  continue
+        if not (sma50_now  > sma150_now): continue
+        if not (close_now  >= MIN_PRICE_VS_LOW * low52_now): continue
+        if not had_dip_s: continue
+        if not pd.isna(chop_s) and chop_s > CHOPPINESS_THRESH:
+            continue
+
+        vol_ok = (
+            not pd.isna(vol50_s) and vol50_s > 0
+            and vol_today >= VOL_MULTIPLIER * vol50_s
+        )
+        bk_ref = res_today if not pd.isna(res_today) else float(ind['high52w_s'].iloc[-1] if 'high52w_s' in ind else high52w.iloc[-2])
+        is_breakout = (
+            not pd.isna(res_today)
+            and close_now > res_today
+            and close_s <= res_today
+            and close_now > ema220_now
+        )
+        dist_to_res = (res_today - close_now) / res_today if (not pd.isna(res_today) and res_today > 0) else 1.0
+        is_near_bk = (
+            (not is_breakout) and (not pd.isna(res_today))
+            and 0 < dist_to_res <= NEAR_BK_PCT and vol_ok
+        )
+        if is_breakout and vol_ok:
+            signal = 'Breakout Today'
+        elif is_near_bk:
+            signal = 'Near Breakout'
+        else:
+            signal = 'Watch Zone'
+
+        entry_type = 'ATH' if (not pd.isna(ath_prev) and close_now > ath_prev) else '52W High'
+
+        # Recovery speed — needs full close/ema220 series (cheap, no extra IO)
+        rec_label, rec_days = _compute_recovery_speed(close, ema220, lookback=90)
+        rec_str = {'Fast': 'Fast 🟢', 'Normal': 'Normal 🟡', 'Slow': 'Slow 🟠'}.get(rec_label, '— ⚪')
+
+        vol_ratio = (vol_today / vol50_s) if (not pd.isna(vol50_s) and vol50_s > 0) else 0
+        ath_prox  = min((close_now / bk_ref), 1.0) if (bk_ref and bk_ref > 0) else 0
+        mom_pct   = mom_s if not pd.isna(mom_s) else 0
+        score = round(ath_prox * 30 + min(vol_ratio * 10, 20) + min(mom_pct * 100, 20), 1)
+        dist_ath = ((close_now / bk_ref) - 1) * 100 if bk_ref and bk_ref > 0 else 0
+
+        ath_now = float(ind['ath'].iloc[-1]) if 'ath' in ind else close_now
+
+        rows.append({
+            'Ticker':       ticker.replace('.NS', ''),
+            'Company':      universe.get(ticker, ticker.replace('.NS', '')),
+            'Signal':       signal,
+            'Close':        round(close_now, 2),
+            'ATH (₹)':      round(ath_now, 2),
+            'Dist ATH%':    round((close_now / ath_now - 1) * 100, 2),
+            'Entry Type':   entry_type,
+            'Chart Qual':   'Clean ✅' if (not pd.isna(chop_s) and chop_s < CHOPPINESS_THRESH) else 'Choppy ❌',
+            'Choppiness':   round(chop_s, 1) if not pd.isna(chop_s) else '—',
+            'Recovery':     rec_str,
+            '220 EMA':      round(ema220_now, 2),
+            '52W High':     round(bk_ref, 2) if bk_ref else None,
+            'vs High%':     round(dist_ath, 2),
+            'Vol Ratio':    round(vol_ratio, 2),
+            'Score':        score,
+            '_score':       score,
+            '_is_bull':     is_bull_today,
+        })
+
+    if not rows:
+        return pd.DataFrame()
+    df_out = pd.DataFrame(rows)
+    sig_rank = {'Breakout Today': 0, 'Near Breakout': 1, 'Watch Zone': 2}
+    df_out['_rank'] = df_out['Signal'].map(sig_rank).fillna(3)
+    df_out = df_out.sort_values(['_rank', '_score'], ascending=[True, False])
+    return df_out.drop(columns=['_rank', '_score', '_is_bull']).reset_index(drop=True)
+
+
 def _compute_momentum_signals() -> pd.DataFrame:
     """Detect Momentum Edge live signals — SPEC-ALIGNED with momentum_edge_dashboard.py.
 
@@ -829,6 +1053,10 @@ def _compute_momentum_signals() -> pd.DataFrame:
     yesterday's 252-day rolling max). Volume check uses 50-day average per spec.
     State machine excludes stocks whose current breakout already fired (POST_BREAKOUT).
     Regime gate (3-condition) is applied — entries in Bear regime get BEAR MARKET action.
+
+    PERF: tries `data/indicator_cache/*.parquet` first (written by
+    momentum_edge_backtest.py). If those exist and are fresh (latest index
+    within 7 days of CSV's latest), takes the fast path (~3s instead of ~30s).
     """
     full_folder   = Path(BASE_DIR) / 'data' / 'nse_bse'
     legacy_folder = Path(BASE_DIR) / 'momentum_edge_data'
@@ -847,6 +1075,14 @@ def _compute_momentum_signals() -> pd.DataFrame:
 
     # ── Regime gate (3-condition on Nifty) ─────────────────────────────────
     bench = _benchmark_first('data/nse_bse', 'data')
+
+    # ── Parquet fast path ──────────────────────────────────────────────────
+    cache_dir = Path(BASE_DIR) / 'data' / 'indicator_cache'
+    if cache_dir.exists() and _parquet_is_fresh(cache_dir, folder):
+        df_fast = _compute_momentum_signals_from_parquet(cache_dir, universe, bench)
+        if not df_fast.empty:
+            return df_fast
+        # parquet exists but yielded nothing → fall through to CSV
     is_bull_today = True
     if bench is not None and len(bench) >= 200:
         _sma50  = bench.rolling(50).mean()
