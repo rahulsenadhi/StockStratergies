@@ -1072,6 +1072,233 @@ def _suggest_stop(entry_price: float, atr: float | None,
     return {'stop_price': stop_price, 'stop_pct': pct, 'source': label}
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _bt_run_single_ticker(ticker: str, csv_path: str,
+                           start_str: str = '2017-01-01',
+                           end_str: str | None = None) -> dict:
+    """Walk-forward single-ticker backtest (Momentum Edge rules, no look-ahead).
+
+    Returns dict: trades (list of dicts), summary (dict with n_trades, win_rate,
+    avg_ret, cum_ret, profit_factor, max_dd_pct).
+    """
+    df = _load_ohlcv_csv(Path(csv_path))
+    if df is None or len(df) < 300:
+        return {'trades': [], 'summary': {}, 'error': 'Not enough data (need 300+ bars).'}
+
+    start = pd.Timestamp(start_str)
+    end   = pd.Timestamp(end_str) if end_str else df.index[-1]
+
+    close, open_, volume = df['Close'], df['Open'], df['Volume']
+    sma50   = close.rolling(ME_SMA50_P,  min_periods=ME_SMA50_P ).mean()
+    sma150  = close.rolling(ME_SMA150_P, min_periods=ME_SMA150_P).mean()
+    ema220  = close.ewm(span=ME_EMA220_P, adjust=False).mean()
+    high52  = close.rolling(ME_HIGH52_P, min_periods=ME_HIGH52_P).max()
+    low52   = close.rolling(ME_LOW52_P,  min_periods=ME_LOW52_P ).min()
+    vol20   = volume.rolling(ME_VOLAVG_P,    min_periods=ME_VOLAVG_P   ).mean()
+    vol50   = volume.rolling(ME_VOL_LOOKBACK,min_periods=ME_VOL_LOOKBACK).mean()
+    had_dip = (close < ema220).rolling(ME_DIP_LB, min_periods=1).max()
+
+    arr_c    = close.values.astype(float)
+    arr_o    = open_.values.astype(float)
+    arr_v    = volume.values.astype(float)
+    arr_e    = ema220.values.astype(float)
+    arr_s50  = sma50.values.astype(float)
+    arr_s150 = sma150.values.astype(float)
+    arr_h52  = high52.values.astype(float)
+    arr_l52  = low52.values.astype(float)
+    arr_v20  = vol20.values.astype(float)
+    arr_v50  = vol50.values.astype(float)
+    arr_dip  = had_dip.values.astype(float)
+    dates    = df.index
+    n        = len(dates)
+
+    start_i = next((k for k in range(n) if dates[k] >= start), 0)
+    end_i   = n - 1
+    for k in range(n - 1, -1, -1):
+        if dates[k] <= end:
+            end_i = k
+            break
+    start_i = max(start_i, ME_HIGH52_P + 1)
+
+    trades: list[dict] = []
+    in_trade, entry_price, entry_date = False, 0.0, None
+
+    i = start_i
+    while i <= end_i:
+        prev = i - 1
+        if in_trade:
+            c_p, e_p = arr_c[prev], arr_e[prev]
+            exit_ema = not np.isnan(c_p) and not np.isnan(e_p) and c_p < e_p
+            exit_stp = not np.isnan(c_p) and c_p < entry_price * 0.85
+            if exit_ema or exit_stp:
+                ex_px = arr_o[i]
+                if not np.isnan(ex_px) and ex_px > 0:
+                    trades.append({
+                        'EntryDate':  entry_date,
+                        'ExitDate':   dates[i],
+                        'EntryPrice': round(float(entry_price), 2),
+                        'ExitPrice':  round(float(ex_px), 2),
+                        'Return%':    round((ex_px / entry_price - 1) * 100, 2),
+                        'Days':       (dates[i] - entry_date).days,
+                        'ExitReason': '15% Stop' if exit_stp else 'EMA Break',
+                    })
+                in_trade = False
+        else:
+            s_c, s_e   = arr_c[prev], arr_e[prev]
+            s_s50, s_s150 = arr_s50[prev], arr_s150[prev]
+            s_h52  = arr_h52[prev - 1] if prev >= 1 else arr_h52[prev]
+            s_l52, s_v20, s_v50 = arr_l52[prev], arr_v20[prev], arr_v50[prev]
+            s_v, s_dip = arr_v[prev], arr_dip[prev]
+            if any(np.isnan(x) for x in [s_e, s_s50, s_s150, s_h52, s_l52, s_v50]):
+                i += 1; continue
+            f1 = s_s150 > s_e
+            f2 = s_c > s_s50
+            f3 = s_s50 > s_s150
+            f4 = s_c >= ME_MIN_PRICE_VS_LOW * s_l52
+            f5 = s_dip >= 0.5
+            bk = (s_c > s_h52) and (s_c > s_e)
+            vol_ok = (not np.isnan(s_v50)) and s_v50 > 0 and (s_v >= ME_VOL_MULT * s_v50)
+            if f1 and f2 and f3 and f4 and f5 and bk and vol_ok:
+                en_px = arr_o[i]
+                if not np.isnan(en_px) and en_px > 0:
+                    entry_price = en_px
+                    entry_date  = dates[i]
+                    in_trade    = True
+        i += 1
+
+    # Close any open position at period end
+    if in_trade:
+        last_px = arr_c[end_i]
+        if not np.isnan(last_px) and last_px > 0:
+            trades.append({
+                'EntryDate':  entry_date,
+                'ExitDate':   dates[end_i],
+                'EntryPrice': round(float(entry_price), 2),
+                'ExitPrice':  round(float(last_px), 2),
+                'Return%':    round((last_px / entry_price - 1) * 100, 2),
+                'Days':       (dates[end_i] - entry_date).days,
+                'ExitReason': 'Still Open',
+            })
+
+    # Summary
+    if not trades:
+        return {'trades': [], 'summary': {'n_trades': 0}, 'error': None}
+    closed = [t for t in trades if t['ExitReason'] != 'Still Open']
+    n_cl   = len(closed)
+    wins   = [t['Return%'] for t in closed if t['Return%'] > 0]
+    losses = [t['Return%'] for t in closed if t['Return%'] <= 0]
+    win_rate = (len(wins) / n_cl * 100) if n_cl else 0
+    avg_ret  = (sum(t['Return%'] for t in closed) / n_cl) if n_cl else 0
+    cum_eq = 1.0
+    peak   = 1.0
+    max_dd = 0.0
+    for t in closed:
+        cum_eq *= (1 + t['Return%'] / 100)
+        peak = max(peak, cum_eq)
+        max_dd = min(max_dd, (cum_eq / peak - 1) * 100)
+    cum_ret = (cum_eq - 1) * 100
+    g_profit = sum(wins) if wins else 0
+    g_loss   = abs(sum(losses)) if losses else 0
+    pf = (g_profit / g_loss) if g_loss > 0 else float('inf')
+    return {
+        'trades': trades,
+        'summary': {
+            'n_trades':  n_cl,
+            'win_rate':  round(win_rate, 1),
+            'avg_ret':   round(avg_ret, 2),
+            'cum_ret':   round(cum_ret, 1),
+            'max_dd':    round(max_dd, 1),
+            'profit_factor': round(pf, 2) if pf != float('inf') else 999.0,
+        },
+        'error': None,
+    }
+
+
+def _render_single_ticker_backtest(ticker: str) -> None:
+    """Run + render Momentum Edge backtest for a single ticker on demand."""
+    folders = [
+        Path(BASE_DIR) / 'data' / 'nse_bse',
+        Path(BASE_DIR) / 'data',
+        Path(BASE_DIR) / 'momentum_edge_data',
+    ]
+    stem = ticker if ticker.endswith('.NS') else f'{ticker}.NS'
+    path = None
+    for folder in folders:
+        for cand in (folder / f'{stem}.csv', folder / f'{ticker}.csv'):
+            if cand.exists():
+                path = cand
+                break
+        if path is not None:
+            break
+    if path is None:
+        st.warning(f'No OHLCV file for {ticker}.')
+        return
+
+    with st.spinner(f'Running walk-forward backtest on {ticker}…'):
+        result = _bt_run_single_ticker(ticker, str(path))
+
+    if result.get('error'):
+        st.warning(result['error'])
+        return
+
+    summary = result.get('summary', {})
+    trades  = result.get('trades', [])
+    if not summary or summary.get('n_trades', 0) == 0:
+        st.info(f'No qualifying trades for {ticker} in the backtest window.')
+        return
+
+    # Summary pills
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        _kpi_card('Trades', f'{summary["n_trades"]}', 'closed positions', '#94A3B8')
+    with c2:
+        wr_c = '#22C55E' if summary['win_rate'] >= 50 else '#EF4444'
+        _kpi_card('Win Rate', f'{summary["win_rate"]:.0f}%', '% profitable', wr_c)
+    with c3:
+        ar_c = '#22C55E' if summary['avg_ret'] > 0 else '#EF4444'
+        _kpi_card('Avg Return / Trade', f'{summary["avg_ret"]:+.2f}%', 'per trade', ar_c)
+    with c4:
+        cr_c = '#22C55E' if summary['cum_ret'] > 0 else '#EF4444'
+        _kpi_card('Cumulative Return', f'{summary["cum_ret"]:+.1f}%', 'compounded all trades', cr_c)
+    with c5:
+        _kpi_card('Max Drawdown', f'{summary["max_dd"]:.1f}%',
+                  f'PF {summary["profit_factor"]}×', '#EF4444')
+
+    # Equity curve
+    df_t = pd.DataFrame(trades)
+    df_t = df_t[df_t['ExitReason'] != 'Still Open'].sort_values('EntryDate')
+    if not df_t.empty:
+        eq = (1 + df_t['Return%'] / 100).cumprod()
+        cum_pct = (eq - 1) * 100
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df_t['EntryDate'], y=cum_pct, mode='lines', name='Cumulative Return',
+            line=dict(color='#22C55E', width=2),
+            fill='tozeroy', fillcolor='rgba(34,197,94,0.10)',
+            hovertemplate='%{x|%d %b %Y}  %{y:+.1f}%<extra></extra>',
+        ))
+        fig.add_hline(y=0, line_color='#334155', line_width=1)
+        fig.update_layout(
+            height=260, paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
+            font=dict(color='#fafafa', family='Inter', size=11),
+            margin=dict(l=60, r=30, t=30, b=30),
+            hovermode='x unified',
+            xaxis=dict(gridcolor='#1E293B', tickformat='%b %y'),
+            yaxis=dict(gridcolor='#1E293B', ticksuffix='%', tickformat='+.0f'),
+        )
+        st.plotly_chart(fig, width='stretch')
+
+    # Trade log table (newest first)
+    df_t_full = pd.DataFrame(trades)
+    df_t_full['EntryDate'] = pd.to_datetime(df_t_full['EntryDate']).dt.strftime('%Y-%m-%d')
+    df_t_full['ExitDate']  = pd.to_datetime(df_t_full['ExitDate']).dt.strftime('%Y-%m-%d')
+    df_t_full = df_t_full.sort_values('ExitDate', ascending=False).reset_index(drop=True)
+    df_t_full['Return%'] = df_t_full['Return%'].apply(lambda x: f'{x:+.2f}%')
+    df_t_full['EntryPrice'] = df_t_full['EntryPrice'].apply(lambda x: f'₹{x:,.2f}')
+    df_t_full['ExitPrice']  = df_t_full['ExitPrice'].apply(lambda x: f'₹{x:,.2f}')
+    st.dataframe(df_t_full, hide_index=True, width='stretch')
+
+
 def _action_from_signal(signal: str, is_bull: bool = True) -> str:
     """Map master's Signal label to standalone-style Action label."""
     if not is_bull:
@@ -4313,6 +4540,20 @@ def render_momentum(mo: dict):
             except Exception as e:
                 st.warning(f'Could not render criteria: {e}')
 
+            # ── Single-ticker backtest button ──────────────────────────────
+            st.markdown('<br>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="sec-hdr" style="color:{color}">'
+                f'Backtest This Ticker — every past trade the rules would have taken</div>',
+                unsafe_allow_html=True,
+            )
+            st.caption(
+                f'Walk-forward simulation on {sel}: applies the 8 filters bar-by-bar from 2017 to today, '
+                'entering on next-bar Open after signal, exiting on EMA break or 15% stop. Zero look-ahead.'
+            )
+            if st.button(f'▶ Run Backtest on {sel}', key=f'me_bt_btn_{sel}', type='secondary'):
+                _render_single_ticker_backtest(sel)
+
     # ── How to read the screener ───────────────────────────────────────────────
     with st.expander('📖 How to read this screener — what each column means'):
         st.markdown("""
@@ -4339,25 +4580,67 @@ def render_momentum(mo: dict):
             unsafe_allow_html=True,
         )
         st.markdown(
-            '<div style="font-size:12px;color:#5a6480;margin-bottom:10px;">'
+            '<div style="font-size:12px;color:var(--muted-foreground);margin-bottom:10px;">'
             'Green row = trade made a profit. Red = trade was a loss. '
             '<b>Exit Reason</b> tells you why we sold: '
             '"15% Hard Stop" = cut loss before it got worse · '
             '"220 EMA break" = stock fell below its long-term average · '
-            '"Target" = hit profit target.'
+            '"Target" = hit profit target. Default view: newest first.'
             '</div>', unsafe_allow_html=True,
         )
+
+        trades_sorted = trades.copy()
+        trades_sorted['Exit_Date'] = pd.to_datetime(trades_sorted['Exit_Date'], errors='coerce')
+        trades_sorted = trades_sorted.sort_values('Exit_Date', ascending=False)
+
+        # ── Period filter ──────────────────────────────────────────────────
+        exit_min = trades_sorted['Exit_Date'].min()
+        exit_max = trades_sorted['Exit_Date'].max()
+        all_years = sorted({d.year for d in trades_sorted['Exit_Date'].dropna()}, reverse=True)
+
+        fc1, fc2 = st.columns([1, 2])
+        with fc1:
+            period_choice = st.radio(
+                'Show', ['Last 1Y', 'Last 3Y', 'All', 'Pick year'],
+                index=0, horizontal=True, key='me_trades_period',
+                label_visibility='collapsed',
+            )
+        with fc2:
+            year_pick = None
+            if period_choice == 'Pick year' and all_years:
+                year_pick = st.selectbox('Year', all_years, key='me_trades_year',
+                                         label_visibility='collapsed')
+
+        if period_choice == 'Last 1Y':
+            cutoff = exit_max - pd.Timedelta(days=365)
+            view = trades_sorted[trades_sorted['Exit_Date'] >= cutoff]
+        elif period_choice == 'Last 3Y':
+            cutoff = exit_max - pd.Timedelta(days=365 * 3)
+            view = trades_sorted[trades_sorted['Exit_Date'] >= cutoff]
+        elif period_choice == 'Pick year' and year_pick is not None:
+            view = trades_sorted[trades_sorted['Exit_Date'].dt.year == year_pick]
+        else:
+            view = trades_sorted
+
+        st.caption(
+            f'Showing **{len(view)}** trades of {len(trades_sorted)} total. '
+            f'Range: {view["Exit_Date"].min().strftime("%b %Y") if not view.empty else "—"} → '
+            f'{view["Exit_Date"].max().strftime("%b %Y") if not view.empty else "—"}.'
+        )
+
         base_cols = ['Ticker', 'Entry_Date', 'Entry_Price', 'Exit_Date',
                      'Exit_Price', 'PnL_Pct', 'Holding_Days', 'Exit_Reason', 'Result']
         extra = [c for c in ('Entry_Type', 'Recovery_Speed', 'Recovery_Days')
-                 if c in trades.columns]
-        t = trades[base_cols + extra].copy()
+                 if c in view.columns]
+        t = view[base_cols + extra].copy()
         t['Ticker']      = t['Ticker'].str.replace('.NS', '')
         t['Entry_Price'] = t['Entry_Price'].apply(lambda x: f'₹{x:,.2f}')
         t['Exit_Price']  = t['Exit_Price'].apply(lambda x: f'₹{x:,.2f}')
+        t['Entry_Date']  = pd.to_datetime(t['Entry_Date']).dt.strftime('%Y-%m-%d')
+        t['Exit_Date']   = pd.to_datetime(t['Exit_Date']).dt.strftime('%Y-%m-%d')
         t['PnL_Pct']     = t['PnL_Pct'].apply(lambda x: f'{x:+.2f}%')
-        row_colors = ['rgba(0,200,83,0.08)' if r == 'Win' else 'rgba(255,61,61,0.06)'
-                      for r in trades['Result']]
+        row_colors = ['rgba(34,197,94,0.10)' if r == 'Win' else 'rgba(239,68,68,0.08)'
+                      for r in view['Result']]
         st.plotly_chart(chart_plotly_table(t, row_colors=row_colors, score_col=None),
                         width='stretch')
 
