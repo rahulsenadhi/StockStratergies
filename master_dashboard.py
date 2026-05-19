@@ -1436,6 +1436,36 @@ Every month, sell stocks that fell in rank and buy the new top 5.
 Forces you to always hold the strongest stocks.
 </div>
 
+<div>
+<b style="color:#7c9cff">MAE</b> — <i>Maximum Adverse Excursion</i><br>
+The deepest dip a trade saw before it closed. If you bought at ₹100 and the price
+fell to ₹88 before bouncing back, the MAE is -12% — even if the trade later closed positive.
+</div>
+
+<div>
+<b style="color:#7c9cff">MFE</b> — <i>Maximum Favourable Excursion</i><br>
+The biggest gain a trade touched before it closed. If a trade went +25% then closed at +8%,
+the MFE is +25%. Useful for picking profit-taking levels.
+</div>
+
+<div>
+<b style="color:#7c9cff">p95 (95th percentile)</b> — <i>Worst-case bound that ignores outliers</i><br>
+"p95 = -10%" means 95% of cases stayed inside -10%. Only 5% were worse.
+Used to set stops loose enough for normal pullbacks but tight enough for real losers.
+</div>
+
+<div>
+<b style="color:#7c9cff">Quintile</b> — <i>Top 5 buckets, each 20% of the data</i><br>
+Sort all trades by Score, slice into 5 equal-size groups (Q1 weakest → Q5 strongest).
+If win rate climbs steadily Q1 → Q5, the score is predictive.
+</div>
+
+<div>
+<b style="color:#7c9cff">Fade Rate</b> — <i>How often a gain is given back</i><br>
+At a +15% level, fade rate = % of trades that touched +15% then closed below it.
+Low fade rate = book partial profits there, the gain rarely escapes.
+</div>
+
 </div>
 """, unsafe_allow_html=True)
 
@@ -3382,16 +3412,25 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
     df = report.get('by_score_bucket', pd.DataFrame())
     if not df.empty:
         st.markdown('**By Setup Score (quintiles)**')
-        st.caption('Higher buckets = stronger setups at entry. Look for a monotonic win-rate ladder.')
+        st.caption(
+            'All past trades are sorted by their entry Score (0–10) and split into 5 equal-size groups '
+            '(quintiles, Q1 = weakest to Q5 = strongest). Ideal pattern: win rate climbs steadily from Q1 → Q5 '
+            '("monotonic ladder"). If it does, the score is genuinely predictive.'
+        )
         st.dataframe(df, hide_index=True, width='stretch')
 
     st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
 
     # ── Optimal Sell — partial booking sensitivity ─────────────────────────
     st.markdown('### 💰 Optimal Sell — when to take profits?')
-    st.caption(
-        'For each candidate partial-booking level, how many trades touched it, '
-        'how many faded back below it, and what trades finally averaged.'
+    st.markdown(
+        '<div style="font-size:12px;color:#8892a4;margin-bottom:6px;">'
+        'Pretend you sold a chunk of the position at +10%, +15%, +20% etc. For each level: '
+        '<b>Touched</b> = how many trades reached it, '
+        '<b>Fade_Rate</b> = % of those that then gave the gain back (closed lower than the level), '
+        '<b>Avg_Final</b> = where trades actually ended up. Low fade rate + high avg final = sweet spot for partial booking.'
+        '</div>',
+        unsafe_allow_html=True,
     )
     df = report.get('partial_levels', pd.DataFrame())
     if not df.empty:
@@ -3413,30 +3452,39 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
 
     # ── Loss Avoidance — stop loss recommendation ──────────────────────────
     st.markdown('### 🛡️ Loss Avoidance — where to set the stop?')
+    st.markdown(
+        '<div style="font-size:12px;color:#8892a4;margin:-4px 0 10px 0;">'
+        '<b>MAE</b> (Maximum Adverse Excursion) = the deepest dip a trade saw before it closed. '
+        'Even winning trades dip — the question is how deep. '
+        '<b>p95</b> = "95% of trades stayed inside this number" (worst case, ignoring rare outliers). '
+        '<b>mean</b> = the typical/average dip.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
     rec = report.get('stop_recommendation', {})
     if rec:
         cc = st.columns(4)
         with cc[0]:
             _kpi_card('Winner MAE p95',
                       f'{rec.get("winner_mae_p95", "—")}%',
-                      'most winners survive', '#00c853')
+                      '95% of winners survived this dip', '#00c853')
         with cc[1]:
             _kpi_card('Winner MAE mean',
                       f'{rec.get("winner_mae_mean", "—")}%',
-                      'avg deepest dip', '#00c853')
+                      'typical winner dip', '#00c853')
         with cc[2]:
             _kpi_card('Loser MAE p95',
                       f'{rec.get("loser_mae_p95", "—")}%',
-                      'typical loser depth', '#e85a8c')
+                      '95% of losers stayed inside', '#e85a8c')
         with cc[3]:
             _kpi_card('Loser MAE mean',
                       f'{rec.get("loser_mae_mean", "—")}%',
-                      'avg loser depth', '#e85a8c')
+                      'typical loser dip', '#e85a8c')
 
         st.caption(
-            'Read: set the stop *just above* the Winner MAE p95 line — '
-            'tight enough to cut losses, loose enough that most eventual '
-            'winners do not get stopped out on a normal pullback.'
+            'How to read: set the stop *just looser* than Winner MAE p95 — '
+            'tight enough to cut losers fast, loose enough that 95% of eventual '
+            'winners survive their normal pullback without getting stopped out.'
         )
 
     cl = report.get('loss_clusters', {})
@@ -3652,6 +3700,18 @@ def render_insights(m: dict, i: dict, mo: dict) -> None:
     )
     st.caption('Post-hoc analytics on closed trades — entry quality, exit timing, stop placement.')
 
+    st.markdown(_explain_box(
+        '🧠 <b>What this page shows (Plain English)</b><br>'
+        'Every past trade is replayed to answer four questions: '
+        '<b>(1)</b> which entry setups turned into winners, '
+        '<b>(2)</b> when to take profits, '
+        '<b>(3)</b> where to place the stop-loss so winners survive but losers get cut early, '
+        '<b>(4)</b> how long to stay in a trade. '
+        'You will see terms like <b>MAE</b> (the deepest dip a trade saw before it closed) and '
+        '<b>MFE</b> (the biggest gain it touched). '
+        '<b>p95</b> means "95% of cases stayed inside this number" — a worst-case bound that ignores rare outliers.'
+    ), unsafe_allow_html=True)
+
     tab_me, tab_ipo, tab_rot = st.tabs(
         ['📈 Momentum Edge', '🚀 IPO Edge', '🔄 Monthly Rotation']
     )
@@ -3675,6 +3735,9 @@ def render_insights(m: dict, i: dict, mo: dict) -> None:
         with st.spinner('Building Rotation report…'):
             report = _build_report(S_MONTHLY)
         _render_strategy_insights(S_MONTHLY, report)
+
+    st.markdown('<br>', unsafe_allow_html=True)
+    _glossary_expander()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
