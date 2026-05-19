@@ -851,6 +851,7 @@ def load_momentum():
     sig_df, funnel = _compute_momentum_signals()
     out['signals'] = sig_df
     out['funnel']  = funnel
+    out['recent_breakouts'] = _scan_recent_breakouts()
     return out
 
 
@@ -2409,6 +2410,87 @@ def _compute_momentum_signals_from_parquet(
     df_out = df_out.drop(columns=['_rank', '_score', '_is_bull']).reset_index(drop=True)
     funnel['final'] = len(df_out)
     return df_out, funnel
+
+
+RECENT_BREAKOUT_DAYS = 7
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _scan_recent_breakouts() -> pd.DataFrame:
+    """Scan every ticker for a 52W close-high cross in the last RECENT_BREAKOUT_DAYS.
+
+    A "recent breakout" = on some bar within the last 7 trading days, close
+    crossed above the prior 252-bar close max (close[t-1] <= res[t] AND close[t] > res[t]).
+    Today's close must still be > 92% of the breakout close AND > EMA220.
+    Returns a DataFrame with Ticker, Days Ago, Close, Bk Price, % Off Bk High, 220 EMA, Vol Ratio.
+    """
+    folders = [Path(BASE_DIR) / 'data' / 'nse_bse']
+    csv_paths = []
+    for folder in folders:
+        if folder.exists():
+            csv_paths.extend(folder.glob('*.NS.csv'))
+    if not csv_paths:
+        return pd.DataFrame()
+
+    rows = []
+    skip_stems = {'NIFTYBEES.NS', '^NSEI'}
+    for path in csv_paths:
+        ticker = path.stem
+        if ticker in skip_stems:
+            continue
+        try:
+            df = pd.read_csv(path, index_col=0, parse_dates=True)
+        except Exception:
+            continue
+        if len(df) < 260 or 'Close' not in df.columns:
+            continue
+
+        close  = df['Close']
+        volume = df.get('Volume', pd.Series(dtype=float))
+        ema220 = close.ewm(span=ME_EMA220_P, adjust=False).mean()
+        resistance = close.shift(1).rolling(ME_HIGH52_P).max()
+
+        c_arr = close.values.astype(float)
+        r_arr = resistance.values.astype(float)
+        n     = len(c_arr)
+        close_now  = float(c_arr[-1])
+        ema220_now = float(ema220.iloc[-1])
+        if np.isnan(close_now) or np.isnan(ema220_now) or close_now < ema220_now:
+            continue
+
+        # Walk back day by day, find the first cross
+        for k in range(0, RECENT_BREAKOUT_DAYS + 1):
+            idx = n - 1 - k
+            if idx <= 0:
+                break
+            r, c, cp = r_arr[idx], c_arr[idx], c_arr[idx - 1]
+            if np.isnan(r) or np.isnan(c) or np.isnan(cp):
+                continue
+            # Cross-up: today's close > res, prior close <= res
+            if c > r and cp <= r:
+                bk_close = c
+                if close_now < 0.92 * bk_close:
+                    break  # pulled back too far, drop
+                vol_avg50 = float(volume.rolling(50).mean().iloc[-1]) if not volume.empty else 0
+                vol_today = float(volume.iloc[-1]) if not volume.empty else 0
+                vol_ratio = (vol_today / vol_avg50) if vol_avg50 > 0 else 0
+                off_pct = (close_now / bk_close - 1) * 100
+                rows.append({
+                    'Ticker':       ticker.replace('.NS', ''),
+                    'Days Ago':     k,
+                    'Bk Date':      df.index[idx].strftime('%Y-%m-%d'),
+                    'Bk Price (₹)': round(bk_close, 2),
+                    'Close (₹)':    round(close_now, 2),
+                    '% Off Bk':     round(off_pct, 2),
+                    '220 EMA (₹)':  round(ema220_now, 2),
+                    'Vol Ratio':    round(vol_ratio, 2),
+                    'Stop (₹)':     round(close_now * 0.85, 2),
+                })
+                break  # take only first (most recent) cross
+    if not rows:
+        return pd.DataFrame()
+    out = pd.DataFrame(rows).sort_values('Days Ago').reset_index(drop=True)
+    return out
 
 
 def _compute_momentum_signals() -> tuple[pd.DataFrame, dict]:
@@ -4593,13 +4675,15 @@ def render_momentum(mo: dict):
             sigs['Stop (₹)'] = stop_rows.apply(lambda d: d.get('stop_price'))
             sigs['Stop %']   = stop_rows.apply(lambda d: -abs(d.get('stop_pct') or 0))
 
-        # ── Action filter tabs (BUY / WATCH / FORMING) ──────────────────────
+        # ── Action filter tabs (BUY / WATCH / FORMING / RECENT) ─────────────
         sigs['Action'] = sigs['Signal'].map(lambda s: _action_from_signal(s, True))
-        tab_all, tab_buy, tab_watch, tab_form = st.tabs([
+        recent_bk = mo.get('recent_breakouts', pd.DataFrame())
+        tab_all, tab_buy, tab_watch, tab_form, tab_recent = st.tabs([
             f'🔍 All ({len(sigs)})',
             f'🟢 BUY NOW ({(sigs["Action"]=="BUY NOW").sum()})',
             f'🟡 WATCH ({(sigs["Action"]=="WATCH").sum()})',
             f'🔵 FORMING ({(sigs["Action"]=="FORMING").sum()})',
+            f'🔄 Recent 7d ({len(recent_bk)})',
         ])
         # Active subset selection via session state
         action_key = 'me_screener_action'
@@ -4653,6 +4737,25 @@ def render_momentum(mo: dict):
         with tab_buy:   _render_subset(sigs[sigs['Action'] == 'BUY NOW'],  'buy')
         with tab_watch: _render_subset(sigs[sigs['Action'] == 'WATCH'],    'watch')
         with tab_form:  _render_subset(sigs[sigs['Action'] == 'FORMING'],  'forming')
+        with tab_recent:
+            st.markdown(_explain_box(
+                '🔄 <b>Recent Breakouts (last 7 trading days)</b> — Stocks that crossed their '
+                'prior 52-week close high in the past week. They may have pulled back today (so they '
+                'do not appear as BUY NOW) but are still trading above their EMA220 and above 92% of '
+                'the breakout price — i.e. <b>still buyable on a pullback</b>. Examples: DIACABS broke '
+                'out 15 May at ₹196.45 and is now ₹190.23 (-3.2% off the high).',
+                color,
+            ), unsafe_allow_html=True)
+            if recent_bk.empty:
+                st.caption('No recent breakouts in the last 7 days.')
+            else:
+                st.dataframe(recent_bk, hide_index=True, width='stretch',
+                             height=min(600, 38 * len(recent_bk) + 40))
+                st.caption(
+                    f'**{len(recent_bk)}** stocks crossed their 52-week close high in the last 7 trading days '
+                    'and still hold above their EMA220. **% Off Bk** = how far today\'s close is from the '
+                    'breakout-day close (negative = pulled back).'
+                )
 
         st.caption(
             '📊 *Hist Win%* / *Hist Avg%* — historical performance of past trades '
