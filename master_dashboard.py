@@ -1075,8 +1075,13 @@ def _suggest_stop(entry_price: float, atr: float | None,
 @st.cache_data(ttl=3600, show_spinner=False)
 def _bt_run_single_ticker(ticker: str, csv_path: str,
                            start_str: str = '2017-01-01',
-                           end_str: str | None = None) -> dict:
+                           end_str: str | None = None,
+                           ath_only: bool = False) -> dict:
     """Walk-forward single-ticker backtest (Momentum Edge rules, no look-ahead).
+
+    ath_only=True restricts the breakout filter to all-time closing highs
+    (the cumulative max up to but not including the signal bar). Default is
+    52-week close max, matching the canonical strategy.
 
     Returns dict: trades (list of dicts), summary (dict with n_trades, win_rate,
     avg_ret, cum_ret, profit_factor, max_dd_pct).
@@ -1092,7 +1097,11 @@ def _bt_run_single_ticker(ticker: str, csv_path: str,
     sma50   = close.rolling(ME_SMA50_P,  min_periods=ME_SMA50_P ).mean()
     sma150  = close.rolling(ME_SMA150_P, min_periods=ME_SMA150_P).mean()
     ema220  = close.ewm(span=ME_EMA220_P, adjust=False).mean()
-    high52  = close.rolling(ME_HIGH52_P, min_periods=ME_HIGH52_P).max()
+    # Breakout reference: 252-bar high (default) OR all-time close max (ath_only)
+    if ath_only:
+        high52 = close.expanding().max()
+    else:
+        high52 = close.rolling(ME_HIGH52_P, min_periods=ME_HIGH52_P).max()
     low52   = close.rolling(ME_LOW52_P,  min_periods=ME_LOW52_P ).min()
     vol20   = volume.rolling(ME_VOLAVG_P,    min_periods=ME_VOLAVG_P   ).mean()
     vol50   = volume.rolling(ME_VOL_LOOKBACK,min_periods=ME_VOL_LOOKBACK).mean()
@@ -1214,7 +1223,7 @@ def _bt_run_single_ticker(ticker: str, csv_path: str,
     }
 
 
-def _render_single_ticker_backtest(ticker: str) -> None:
+def _render_single_ticker_backtest(ticker: str, ath_only: bool = False) -> None:
     """Run + render Momentum Edge backtest for a single ticker on demand."""
     folders = [
         Path(BASE_DIR) / 'data' / 'nse_bse',
@@ -1234,8 +1243,10 @@ def _render_single_ticker_backtest(ticker: str) -> None:
         st.warning(f'No OHLCV file for {ticker}.')
         return
 
-    with st.spinner(f'Running walk-forward backtest on {ticker}…'):
-        result = _bt_run_single_ticker(ticker, str(path))
+    mode_lbl = 'ATH-only' if ath_only else '52W high'
+    with st.spinner(f'Running walk-forward backtest on {ticker} ({mode_lbl} mode)…'):
+        result = _bt_run_single_ticker(ticker, str(path), ath_only=ath_only)
+    st.caption(f'Mode: **{mode_lbl}** breakout · Entry on next-day open · 15% hard stop OR 220 EMA break exit')
 
     if result.get('error'):
         st.warning(result['error'])
@@ -4259,6 +4270,28 @@ def render_momentum(mo: dict):
     trades = mo.get('trades')
     sigs   = mo.get('signals', pd.DataFrame())
 
+    # ── ATH-only toggle (applies to screener, past trades, backtest) ───────────
+    tcol1, tcol2 = st.columns([1, 4])
+    with tcol1:
+        ath_only = st.toggle(
+            '🎯 ATH-only mode', value=False, key='me_ath_only',
+            help='When ON, only stocks breaking their all-time closing high qualify. '
+                 'Drops 52W-only fallback entries (more selective, fewer signals, higher quality).',
+        )
+    with tcol2:
+        st.caption(
+            ('🎯 **ATH-only ACTIVE** — showing/keeping only true all-time-high breakouts. '
+             '52W_HIGH_FALLBACK entries hidden.' if ath_only else
+             '52W-high breakouts included by default (strategy spec). Toggle ON to restrict to ATH-only.')
+        )
+
+    # Filter trades + signals by ATH if toggle on
+    if ath_only:
+        if trades is not None and not trades.empty and 'Entry_Type' in trades.columns:
+            trades = trades[trades['Entry_Type'] == 'ATH'].copy()
+        if sigs is not None and not sigs.empty and 'Entry Type' in sigs.columns:
+            sigs = sigs[sigs['Entry Type'] == 'ATH'].copy()
+
     # ── Strategy Health hero — answers "is it working? how many stocks? hold?" ──
     _render_health_hero(S_MOMENTUM, trades, sigs)
 
@@ -4551,8 +4584,17 @@ def render_momentum(mo: dict):
                 f'Walk-forward simulation on {sel}: applies the 8 filters bar-by-bar from 2017 to today, '
                 'entering on next-bar Open after signal, exiting on EMA break or 15% stop. Zero look-ahead.'
             )
-            if st.button(f'▶ Run Backtest on {sel}', key=f'me_bt_btn_{sel}', type='secondary'):
-                _render_single_ticker_backtest(sel)
+            bcol1, bcol2 = st.columns([1, 4])
+            with bcol1:
+                run_bt = st.button(f'▶ Run Backtest on {sel}',
+                                    key=f'me_bt_btn_{sel}', type='secondary')
+            with bcol2:
+                st.caption(
+                    f'Will use **{("ATH-only" if ath_only else "52W high")}** breakout rule '
+                    f'(controlled by the toggle at the top of this page).'
+                )
+            if run_bt:
+                _render_single_ticker_backtest(sel, ath_only=ath_only)
 
     # ── How to read the screener ───────────────────────────────────────────────
     with st.expander('📖 How to read this screener — what each column means'):
