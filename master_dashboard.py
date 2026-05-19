@@ -708,6 +708,120 @@ def _compute_ipo_signals() -> pd.DataFrame:
     return df_out.drop(columns=['_stage_rank', '_score']).reset_index(drop=True)
 
 
+def _render_me_detail(ticker: str, trades: pd.DataFrame | None) -> None:
+    """Candlestick + SMA50/EMA220 + 52W lines + trade markers for one ticker.
+
+    Looks up OHLCV from data/nse_bse/<ticker>.csv first, falls back to
+    momentum_edge_data/. Renders 252-bar window inline.
+    """
+    full = Path(BASE_DIR) / 'data' / 'nse_bse' / f'{ticker}.NS.csv'
+    legacy = Path(BASE_DIR) / 'momentum_edge_data' / f'{ticker}.NS.csv'
+    raw = Path(BASE_DIR) / 'data' / 'nse_bse' / f'{ticker}.csv'  # may already include .NS suffix
+    path = next((p for p in (full, legacy, raw) if p.exists()), None)
+    if path is None:
+        st.info(f'No OHLCV file found for {ticker}.')
+        return
+
+    df = _load_ohlcv_csv(path)
+    if df is None or len(df) < 60:
+        st.info('Not enough bars to chart this ticker.')
+        return
+
+    close = df['Close']
+    sma50  = close.rolling(50).mean()
+    sma150 = close.rolling(150).mean()
+    ema220 = close.ewm(span=220, adjust=False).mean()
+    high52 = float(close.rolling(252).max().iloc[-1])
+    low52  = float(close.rolling(252).min().iloc[-1])
+
+    df_w = df.tail(252).copy()
+    idx = df_w.index
+
+    fig = go.Figure()
+    fig.add_trace(go.Candlestick(
+        x=idx,
+        open=df_w['Open'], high=df_w['High'],
+        low=df_w['Low'],   close=df_w['Close'],
+        name='Price',
+        increasing_line_color='#00c853',
+        increasing_fillcolor='rgba(0,200,83,0.35)',
+        decreasing_line_color='#ff3d3d',
+        decreasing_fillcolor='rgba(255,61,61,0.35)',
+    ))
+    fig.add_trace(go.Scatter(x=idx, y=sma50.loc[idx], name='SMA 50',
+                             line=dict(color='#4c9fff', width=1.5)))
+    fig.add_trace(go.Scatter(x=idx, y=sma150.loc[idx], name='SMA 150',
+                             line=dict(color='#ff9800', width=1.5)))
+    fig.add_trace(go.Scatter(x=idx, y=ema220.loc[idx], name='EMA 220',
+                             line=dict(color='#ff5252', width=2, dash='dot')))
+    fig.add_hline(y=high52, line_color='rgba(0,200,83,0.6)', line_dash='dash',
+                  annotation_text=f'52W High ₹{high52:,.0f}',
+                  annotation_position='bottom right',
+                  annotation_font=dict(color='#00c853', size=10))
+    fig.add_hline(y=low52, line_color='rgba(255,61,61,0.6)', line_dash='dash',
+                  annotation_text=f'52W Low ₹{low52:,.0f}',
+                  annotation_position='top right',
+                  annotation_font=dict(color='#ff5252', size=10))
+
+    # Past trade markers
+    if trades is not None and not trades.empty and 'Ticker' in trades.columns:
+        ticker_full = ticker if ticker.endswith('.NS') else f'{ticker}.NS'
+        t = trades[trades['Ticker'].astype(str).str.replace('.NS', '', regex=False) == ticker].copy()
+        if not t.empty:
+            ed = pd.to_datetime(t.get('Entry_Date'), errors='coerce')
+            xd = pd.to_datetime(t.get('Exit_Date'),  errors='coerce')
+            ep = pd.to_numeric(t.get('Entry_Price'), errors='coerce')
+            xp = pd.to_numeric(t.get('Exit_Price'),  errors='coerce')
+            window_start = pd.Timestamp(idx[0])
+            em = (ed >= window_start)
+            xm = (xd >= window_start)
+            if em.any():
+                fig.add_trace(go.Scatter(
+                    x=ed[em], y=ep[em], mode='markers', name='BUY',
+                    marker=dict(symbol='triangle-up', size=14, color='#00e676',
+                                line=dict(color='#fff', width=1)),
+                    hovertemplate='BUY  ₹%{y:,.2f}<br>%{x}<extra></extra>',
+                ))
+            if xm.any():
+                fig.add_trace(go.Scatter(
+                    x=xd[xm], y=xp[xm], mode='markers', name='EXIT',
+                    marker=dict(symbol='triangle-down', size=14, color='#ff1744',
+                                line=dict(color='#fff', width=1)),
+                    hovertemplate='EXIT  ₹%{y:,.2f}<br>%{x}<extra></extra>',
+                ))
+
+    fig.update_layout(
+        height=480,
+        paper_bgcolor='#0e1117', plot_bgcolor='#12172a',
+        xaxis=dict(gridcolor='#1e2235', rangeslider=dict(visible=False),
+                   tickformat='%d %b %y', tickfont=dict(size=10)),
+        yaxis=dict(gridcolor='#1e2235', tickprefix='₹', tickformat=',.0f',
+                   tickfont=dict(size=10)),
+        legend=dict(orientation='h', y=1.02, x=0,
+                    font=dict(size=11, color='#8892a4'),
+                    bgcolor='rgba(0,0,0,0)'),
+        font=dict(color='#e0e0e0', family='Inter'),
+        margin=dict(l=70, r=30, t=50, b=30),
+        hovermode='x unified',
+    )
+    st.plotly_chart(fig, width='stretch')
+
+    # Mini stats bar
+    close_now  = float(close.iloc[-1])
+    close_prev = float(close.iloc[-2]) if len(close) >= 2 else close_now
+    pct_chg    = (close_now / close_prev - 1) * 100
+    vol_avg30  = float(df['Volume'].iloc[-30:].mean())
+    vol_str    = (f'{vol_avg30 / 1_000_000:.1f}M' if vol_avg30 >= 1_000_000
+                  else f'{vol_avg30 / 1_000:.0f}K')
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1: st.metric('Current Price', f'₹{close_now:,.2f}')
+    with c2: st.metric("Today's Change", f'{pct_chg:+.2f}%', delta=f'{pct_chg:+.2f}%')
+    with c3: st.metric('52W High', f'₹{high52:,.2f}')
+    with c4: st.metric('52W Low',  f'₹{low52:,.2f}')
+    with c5: st.metric('Avg Vol (30d)', vol_str)
+
+
 def _compute_momentum_signals() -> pd.DataFrame:
     """Detect Momentum Edge live signals — SPEC-ALIGNED with momentum_edge_dashboard.py.
 
@@ -2778,6 +2892,21 @@ def render_momentum(mo: dict):
             '📊 *Hist Win%* / *Hist Avg%* — historical performance of past trades '
             'with the same Entry Type + Recovery Speed combo. Based on closed backtest trades only.'
         )
+
+        # ── Signal Detail Drawer (pick ticker → candle chart + overlays) ───────
+        st.markdown('<br>', unsafe_allow_html=True)
+        st.markdown(f'<div class="sec-hdr" style="color:{color}">🔍 Drill Into Any Signal</div>',
+                    unsafe_allow_html=True)
+        st.caption('Pick a stock to see the price chart with SMA50, EMA220, 52W high/low and past trades overlaid.')
+
+        ticker_choices = sigs['Ticker'].tolist()
+        if ticker_choices:
+            sel = st.selectbox('Ticker', ticker_choices, key='me_detail_picker',
+                               label_visibility='collapsed')
+            try:
+                _render_me_detail(sel, trades)
+            except Exception as e:
+                st.warning(f'Could not render chart: {e}')
 
     # ── How to read the screener ───────────────────────────────────────────────
     with st.expander('📖 How to read this screener — what each column means'):
