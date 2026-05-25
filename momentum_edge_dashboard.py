@@ -615,7 +615,7 @@ def compute_signals(filters_active: dict, min_score: int,
             close_arr = close.values.astype(float)
             res_arr   = resistance.values.astype(float)
             n_arr     = len(close_arr)
-            for k in range(1, min(RECENT_DAYS + 4, n_arr - 1)):
+            for k in range(0, min(RECENT_DAYS + 4, n_arr - 1)):
                 idx      = n_arr - 1 - k
                 idx_prev = idx - 1
                 if idx_prev < 0:
@@ -917,7 +917,7 @@ def _render_signal_table(signals: pd.DataFrame, table_key: str) -> str | None:
     try:
         event = st.dataframe(
             disp,
-            use_container_width=True,
+            width='stretch',
             height=min(620, max(160, 35 * len(disp) + 40)),
             on_select='rerun',
             selection_mode='single-row',
@@ -929,7 +929,7 @@ def _render_signal_table(signals: pd.DataFrame, table_key: str) -> str | None:
                 return str(signals_reset.iloc[idx]['Ticker'])
     except TypeError:
         # Fallback for older Streamlit: display without selection
-        st.dataframe(disp, use_container_width=True, key=table_key)
+        st.dataframe(disp, width='stretch', key=table_key)
 
     return None
 
@@ -1340,7 +1340,7 @@ def _render_stock_detail(ticker: str, signals_df: pd.DataFrame,
         unsafe_allow_html=True,
     )
     fig = _build_detail_chart(ticker, df, trades_df)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # ── Criteria panel ─────────────────────────────────────────────────────────
     st.markdown('<div class="sec-hdr">Strategy Conditions</div>', unsafe_allow_html=True)
@@ -1799,7 +1799,7 @@ def _bt_render_results(results: dict) -> None:
         '</div>',
         unsafe_allow_html=True,
     )
-    st.plotly_chart(_bt_equity_chart(closed), use_container_width=True)
+    st.plotly_chart(_bt_equity_chart(closed), width='stretch')
 
     # ── Monthly heatmap ────────────────────────────────────────────────────────
     st.markdown('<div class="sec-hdr">Monthly Returns Heatmap</div>', unsafe_allow_html=True)
@@ -1810,7 +1810,7 @@ def _bt_render_results(results: dict) -> None:
         '</div>',
         unsafe_allow_html=True,
     )
-    st.plotly_chart(_bt_monthly_heatmap(closed), use_container_width=True)
+    st.plotly_chart(_bt_monthly_heatmap(closed), width='stretch')
 
     # ── Trade log ──────────────────────────────────────────────────────────────
     st.markdown('<div class="sec-hdr">Trade Log</div>', unsafe_allow_html=True)
@@ -1829,7 +1829,7 @@ def _bt_render_results(results: dict) -> None:
             show[c] = show[c].apply(lambda x: f'₹{x:,.2f}')
         show['Return%'] = show['Return%'].apply(lambda x: f'{x:+.2f}%')
         show = show.sort_values('EntryDate', ascending=False)
-        st.dataframe(show, use_container_width=True, height=400)
+        st.dataframe(show, width='stretch', height=400)
 
 
 def _render_backtest_report() -> None:
@@ -1879,7 +1879,7 @@ def _render_backtest_report() -> None:
     rb_col, _ = st.columns([1, 5])
     with rb_col:
         run_btn = st.button('▶  Run Backtest', type='primary',
-                            use_container_width=True, key='bt_run')
+                            width='stretch', key='bt_run')
 
     st.markdown("""
     <div style="font-size:11px;color:#5a6480;margin:6px 0 16px 0;">
@@ -1942,7 +1942,7 @@ def render_sidebar() -> dict:
 
         st.markdown('<hr style="margin:12px 0;border-color:#1e2235;">', unsafe_allow_html=True)
 
-        if st.button('🔄 Refresh Signals', use_container_width=True):
+        if st.button('🔄 Refresh Signals', width='stretch'):
             st.cache_data.clear()
             st.session_state.pop('selected_ticker', None)
             st.rerun()
@@ -2152,7 +2152,7 @@ def main():
                     show_cols = [c for c in display_cols if c in recent_sigs.columns]
                     st.dataframe(
                         recent_sigs[show_cols].reset_index(drop=True),
-                        use_container_width=True,
+                        width='stretch',
                         hide_index=True,
                     )
 
@@ -2162,7 +2162,7 @@ def main():
             <div style="font-size:11px;color:#5a6480;margin-bottom:8px;">
               Each step shows how many stocks survive. A big drop = that filter is very selective.
             </div>""", unsafe_allow_html=True)
-            st.plotly_chart(_chart_funnel(funnel, is_bull), use_container_width=True)
+            st.plotly_chart(_chart_funnel(funnel, is_bull), width='stretch')
 
             funnel_labels = [
                 ('Universe',      funnel['total']),
@@ -2225,7 +2225,7 @@ def main():
                     unsafe_allow_html=True,
                 )
             with btn_col:
-                if st.button('✕ Close', key='close_detail', use_container_width=True):
+                if st.button('✕ Close', key='close_detail', width='stretch'):
                     st.session_state['selected_ticker'] = None
                     st.rerun()
 
@@ -2263,7 +2263,7 @@ def main():
                 with bt_c5:
                     st.metric('Trades', len(trades_df))
 
-        st.plotly_chart(_chart_equity(equity_df), use_container_width=True)
+        st.plotly_chart(_chart_equity(equity_df), width='stretch')
 
         # ── Glossary ───────────────────────────────────────────────────────────
         st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)

@@ -606,7 +606,7 @@ with hc2:
         unsafe_allow_html=True,
     )
 with hc3:
-    do_refresh = st.button('🔄 Refresh', use_container_width=True)
+    do_refresh = st.button('🔄 Refresh', width='stretch')
 
 if do_refresh:
     with st.spinner('Fetching live IPO data from Yahoo Finance…'):
