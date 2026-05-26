@@ -13,10 +13,13 @@ from core.fundamentals import (
 )
 
 
-def _make_quarterly_df():
+def _make_earnings_dates_df():
+    """Mirrors yfinance Ticker.earnings_dates: index = announce ts, col = Reported EPS."""
     return pd.DataFrame(
         {
-            "Earnings": [100, 110, 95, 120, 130, 140, 125, 150],
+            "EPS Estimate": [None] * 8,
+            "Reported EPS": [100, 110, 95, 120, 130, 140, 125, 150],
+            "Surprise(%)": [None] * 8,
         },
         index=pd.to_datetime(
             ["2024-03-31", "2024-06-30", "2024-09-30", "2024-12-31",
@@ -28,7 +31,7 @@ def _make_quarterly_df():
 @patch("core.fundamentals.yf.Ticker")
 def test_get_quarterly_eps_history_returns_last_4(mock_ticker):
     mock_t = MagicMock()
-    mock_t.quarterly_earnings = _make_quarterly_df()
+    mock_t.earnings_dates = _make_earnings_dates_df()
     mock_ticker.return_value = mock_t
 
     hist = get_quarterly_eps_history("RELIANCE.NS", as_of=date(2026, 1, 15))
@@ -38,7 +41,7 @@ def test_get_quarterly_eps_history_returns_last_4(mock_ticker):
 @patch("core.fundamentals.yf.Ticker")
 def test_get_quarterly_eps_history_filters_post_asof(mock_ticker):
     mock_t = MagicMock()
-    mock_t.quarterly_earnings = _make_quarterly_df()
+    mock_t.earnings_dates = _make_earnings_dates_df()
     mock_ticker.return_value = mock_t
 
     hist = get_quarterly_eps_history("RELIANCE.NS", as_of=date(2025, 4, 1))
@@ -50,7 +53,7 @@ def test_get_quarterly_eps_history_filters_post_asof(mock_ticker):
 @patch("core.fundamentals.yf.Ticker")
 def test_get_quarterly_eps_history_empty(mock_ticker):
     mock_t = MagicMock()
-    mock_t.quarterly_earnings = pd.DataFrame()
+    mock_t.earnings_dates = pd.DataFrame()
     mock_ticker.return_value = mock_t
 
     hist = get_quarterly_eps_history("ZZZ.NS", as_of=date(2026, 1, 1))

@@ -53,7 +53,8 @@ def run_backtest(
 
     p = Portfolio(cash=initial_cash)
 
-    trading_days = idx[(pd.Series(idx.date) >= start) & (pd.Series(idx.date) <= end)]
+    _mask = ((pd.Series(idx.date) >= start) & (pd.Series(idx.date) <= end)).values
+    trading_days = idx[_mask]
 
     for ts in trading_days:
         today = ts.date()
@@ -122,7 +123,7 @@ def run_backtest(
     }
 
 
-def _load_price_panels(folder: str = "data") -> tuple[pd.DataFrame, pd.DataFrame]:
+def _load_price_panels(folder: str = "momentum_edge_data") -> tuple[pd.DataFrame, pd.DataFrame]:
     ohlcv, _ = load_ohlcv(folder)
     closes = pd.DataFrame({tk: df["Close"] for tk, df in ohlcv.items()}).sort_index()
     opens = pd.DataFrame({tk: df["Open"] for tk, df in ohlcv.items()}).sort_index()
@@ -138,13 +139,15 @@ def main() -> None:
     ap.add_argument("--cash", type=float, default=1_000_000)
     ap.add_argument("--trades-out", default="pead_trades.csv")
     ap.add_argument("--equity-out", default="pead_equity.csv")
+    ap.add_argument("--price-folder", default="momentum_edge_data",
+                    help="OHLCV folder (momentum_edge_data has OHLCV; data/ is close-only)")
     args = ap.parse_args()
 
     events = pd.read_parquet(args.events)
     if args.flavor != "both":
         events = events[events["period_type"] == args.flavor]
 
-    closes, opens = _load_price_panels()
+    closes, opens = _load_price_panels(folder=args.price_folder)
     result = run_backtest(
         events=events, closes=closes, opens=opens,
         start=args.start, end=args.end, initial_cash=args.cash,

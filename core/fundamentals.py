@@ -24,33 +24,72 @@ def _safe_float(v: Any) -> float:
         return math.nan
 
 
+def _eps_col_name(df: pd.DataFrame) -> str | None:
+    """Pick the EPS column from yfinance df. Tolerates schema drift."""
+    if df is None or df.empty:
+        return None
+    for c in ("Earnings", "Reported EPS"):
+        if c in df.columns:
+            return c
+    return None
+
+
 def get_quarterly_eps_history(ticker: str, as_of: date, n: int = 4) -> list[float]:
     """Return last n quarterly EPS strictly before as_of, most-recent-first.
 
+    Uses yfinance `earnings_dates` (Reported EPS column) — the legacy
+    `quarterly_earnings` attribute was deprecated and now returns None.
     Returns [] if yfinance has nothing or fewer than n usable quarters.
     """
     t = yf.Ticker(ticker)
-    df = t.quarterly_earnings
-    if df is None or len(df) == 0 or "Earnings" not in df.columns:
+    df = None
+    try:
+        df = t.earnings_dates
+    except Exception:
         return []
-    df = df.sort_index(ascending=False)
-    df = df[df.index.date < as_of]
-    if len(df) < n:
+    col = _eps_col_name(df)
+    if col is None:
         return []
-    return [_safe_float(v) for v in df["Earnings"].head(n).tolist()]
+    s = df[col].dropna()
+    if s.empty:
+        return []
+    s = s.sort_index(ascending=False)
+    # earnings_dates index is tz-aware Timestamp; convert to date.
+    s = s[s.index.tz_localize(None).date < as_of if s.index.tz is not None else s.index.date < as_of]
+    if len(s) < n:
+        return []
+    return [_safe_float(v) for v in s.head(n).tolist()]
 
 
 def get_annual_eps_history(ticker: str, as_of: date, n: int = 4) -> list[float]:
-    """Return last n annual EPS strictly before as_of, most-recent-first."""
+    """Return last n annual EPS strictly before as_of, most-recent-first.
+
+    Derives EPS from income_stmt's `Diluted EPS` (fallback `Basic EPS`).
+    Returns [] if yfinance has nothing or fewer than n usable years.
+    """
     t = yf.Ticker(ticker)
-    df = getattr(t, "earnings", None)
-    if df is None or len(df) == 0 or "Earnings" not in df.columns:
+    try:
+        inc = t.income_stmt
+    except Exception:
         return []
-    df = df.sort_index(ascending=False)
-    df = df[df.index.date < as_of]
-    if len(df) < n:
+    if inc is None or inc.empty:
         return []
-    return [_safe_float(v) for v in df["Earnings"].head(n).tolist()]
+    eps_row = None
+    for key in ("Diluted EPS", "Basic EPS"):
+        if key in inc.index:
+            eps_row = inc.loc[key]
+            break
+    if eps_row is None:
+        return []
+    eps_row = eps_row.dropna()
+    if eps_row.empty:
+        return []
+    # Columns are fiscal-year-end Timestamps, typically descending. Filter then sort.
+    eps_row = eps_row[eps_row.index.date < as_of]
+    eps_row = eps_row.sort_index(ascending=False)
+    if len(eps_row) < n:
+        return []
+    return [_safe_float(v) for v in eps_row.head(n).tolist()]
 
 
 def get_piotroski_inputs(ticker: str, as_of: date) -> PiotroskiInputs | None:
