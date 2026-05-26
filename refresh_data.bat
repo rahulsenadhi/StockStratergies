@@ -32,12 +32,20 @@ if errorlevel 1 (
     echo  ok NSE/BSE done >> "%LOG%"
 )
 
-echo [3/3] Rebuilding Momentum Edge parquet cache + backtest ... >> "%LOG%"
+echo [3/4] Rebuilding Momentum Edge parquet cache + backtest ... >> "%LOG%"
 "%PY%" momentum_edge_backtest.py >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo  !! momentum_edge_backtest.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
 ) else (
     echo  ok parquet cache + backtest done >> "%LOG%"
+)
+
+echo [4/4] PEAD daily incremental refresh ... >> "%LOG%"
+"%PY%" pead_downloader.py >> "%LOG%" 2>&1
+if errorlevel 1 (
+    echo  !! pead_downloader.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
+) else (
+    echo  ok PEAD downloader done >> "%LOG%"
 )
 
 echo Refresh finished: %DATE% %TIME% >> "%LOG%"

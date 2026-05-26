@@ -39,6 +39,8 @@ DASHBOARDS = {
     'Momentum Edge':      'momentum_edge_dashboard.py',
 }
 
+# PEAD page is embedded in master_dashboard, so no separate port. Downloader still runs.
+
 # Download scripts stream live output so the user can see progress.
 # Backtest scripts capture output and print a summary on completion.
 STREAMING_SCRIPTS = {
@@ -63,6 +65,9 @@ PIPELINES = {
         [PY, 'build_universe.py'],
         [PY, 'nse_bse_downloader.py'],
         [PY, 'momentum_edge_backtest.py'],
+    ],
+    'PEAD': [
+        [PY, 'pead_downloader.py'],
     ],
 }
 
