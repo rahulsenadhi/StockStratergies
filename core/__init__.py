@@ -11,4 +11,8 @@ __all__ = [
     'cache',
     'regime',
     'glossary',
+    'sue',
+    'piotroski',
+    'nse_announce',
+    'fundamentals',
 ]
