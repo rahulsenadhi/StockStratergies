@@ -173,7 +173,10 @@ def main() -> None:
     result["trades"].to_csv(args.trades_out, index=False)
     result["equity_curve"].to_csv(args.equity_out, index=False)
     print(f"Wrote {len(result['trades'])} trades to {args.trades_out}")
-    print(f"Final equity: {result['equity_curve']['equity'].iloc[-1]:,.0f}")
+    if not result["equity_curve"].empty:
+        print(f"Final equity: {result['equity_curve']['equity'].iloc[-1]:,.0f}")
+    else:
+        print("Final equity: (no trading days in range)")
 
     from pead_diagnostics import compute_kpis, compute_decile_spread, attach_fwd_60d
     kpis = compute_kpis(result["equity_curve"], result["trades"])

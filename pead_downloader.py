@@ -112,7 +112,7 @@ def run_incremental(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
     if rows:
         df = pd.DataFrame(rows)
         df = attach_sector_median(df)
-        df = compute_cohort_deciles(df, window_td=5)
+        df = compute_cohort_deciles(df, window_td=5, allow_future=False)
         df = mark_qualifies(df)
         append_events(cfg["events_path"], df.to_dict("records"))
 

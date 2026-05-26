@@ -43,6 +43,10 @@ def piotroski_score(inp: PiotroskiInputs) -> float:
     """Return integer score 0..9. Returns nan if any input is nan/missing."""
     if _has_nan(inp):
         return math.nan
+    if (inp.total_assets == 0 or inp.total_assets_prev == 0
+            or inp.current_liab == 0 or inp.current_liab_prev == 0
+            or inp.revenue == 0 or inp.revenue_prev == 0):
+        return math.nan
 
     roa = inp.net_income / inp.total_assets
     roa_prev = inp.net_income_prev / inp.total_assets_prev

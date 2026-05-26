@@ -42,8 +42,9 @@ def test_get_quarterly_eps_history_filters_post_asof(mock_ticker):
     mock_ticker.return_value = mock_t
 
     hist = get_quarterly_eps_history("RELIANCE.NS", as_of=date(2025, 4, 1))
-    # Only 2024 quarters before 2025-04-01 -> [2024-12-31, ..., 2024-03-31]
-    assert hist == [120, 95, 110, 100]
+    # Quarters strictly before 2025-04-01: includes 2025-03-31 (130) + all 2024.
+    # Most-recent-first: [2025-03-31, 2024-12-31, 2024-09-30, 2024-06-30]
+    assert hist == [130, 120, 95, 110]
 
 
 @patch("core.fundamentals.yf.Ticker")

@@ -14,21 +14,25 @@ import pandas as pd
 from core.sue import assign_deciles
 
 
-def compute_cohort_deciles(events: pd.DataFrame, window_td: int = 5) -> pd.DataFrame:
-    """Assign SUE decile per event using a ±window_td trading-day cohort.
+def compute_cohort_deciles(events: pd.DataFrame, window_td: int = 5,
+                           allow_future: bool = True) -> pd.DataFrame:
+    """Assign SUE decile per event using a rolling cohort window.
 
     NOTE: window_td is approximated as calendar days here (5 td ≈ 7 cal days).
-    For backtest accuracy we use trading-day arithmetic; for live live_signals
-    the look-ahead window collapses naturally to [d-window, d].
+
+    allow_future=True: cohort = [rd-window, rd+window]. Use for HISTORICAL
+        backtest where all events are already known.
+    allow_future=False: cohort = [rd-window, rd]. Use for LIVE signal
+        generation to avoid look-ahead bias.
     """
     events = events.copy()
     events["sue_decile"] = float("nan")
     cal_window = timedelta(days=window_td + 2)  # 5 td ≈ 7 cal days
     for idx, row in events.iterrows():
         rd = row["result_date"]
-        mask = (events["result_date"] >= rd - cal_window) & (
-            events["result_date"] <= rd + cal_window
-        )
+        lower = rd - cal_window
+        upper = rd + cal_window if allow_future else rd
+        mask = (events["result_date"] >= lower) & (events["result_date"] <= upper)
         cohort = events.loc[mask, "sue"].tolist()
         deciles = assign_deciles(cohort)
         cohort_idx = events.loc[mask].index.tolist()

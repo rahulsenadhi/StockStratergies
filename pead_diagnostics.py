@@ -14,12 +14,20 @@ def _max_drawdown(equity: pd.Series) -> float:
 
 
 def compute_kpis(equity_curve: pd.DataFrame, trades: pd.DataFrame) -> dict[str, float]:
+    if equity_curve.empty:
+        return {"cagr": 0.0, "sharpe": 0.0, "sortino": 0.0, "max_dd": 0.0,
+                "win_rate": 0.0, "avg_win": 0.0, "avg_loss": 0.0,
+                "best_trade": 0.0, "worst_trade": 0.0, "avg_hold_days": 0.0,
+                "num_trades": 0}
     eq = equity_curve["equity"].astype(float)
     days = (equity_curve["date"].iloc[-1] - equity_curve["date"].iloc[0]).days
     years = max(days / 365.25, 1e-6)
     final = eq.iloc[-1]
     initial = eq.iloc[0]
-    cagr = (final / initial) ** (1 / years) - 1
+    if initial <= 0:
+        cagr = 0.0
+    else:
+        cagr = (final / initial) ** (1 / years) - 1
     returns = eq.pct_change().dropna()
     sharpe = (returns.mean() / returns.std()) * np.sqrt(252) if returns.std() > 0 else 0
     downside = returns[returns < 0]

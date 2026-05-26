@@ -34,7 +34,7 @@ def get_quarterly_eps_history(ticker: str, as_of: date, n: int = 4) -> list[floa
     if df is None or len(df) == 0 or "Earnings" not in df.columns:
         return []
     df = df.sort_index(ascending=False)
-    df = df[df.index.year < as_of.year]
+    df = df[df.index.date < as_of]
     if len(df) < n:
         return []
     return [_safe_float(v) for v in df["Earnings"].head(n).tolist()]
@@ -47,7 +47,7 @@ def get_annual_eps_history(ticker: str, as_of: date, n: int = 4) -> list[float]:
     if df is None or len(df) == 0 or "Earnings" not in df.columns:
         return []
     df = df.sort_index(ascending=False)
-    df = df[df.index.year < as_of.year]
+    df = df[df.index.date < as_of]
     if len(df) < n:
         return []
     return [_safe_float(v) for v in df["Earnings"].head(n).tolist()]
