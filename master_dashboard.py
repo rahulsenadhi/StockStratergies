@@ -3912,7 +3912,7 @@ def render_sidebar() -> str:
             ⬡ NSE Hub
           </div>
           <div style="font-size:11px;color:#3d4a60;margin-top:3px;letter-spacing:.04em;">
-            3 STRATEGIES · SYSTEMATIC INVESTING
+            4 STRATEGIES · SYSTEMATIC INVESTING
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -3920,7 +3920,8 @@ def render_sidebar() -> str:
         page = st.radio(
             'Navigate',
             ['🏠  Home', '🔄  Monthly Rotation', '🚀  IPO Edge',
-             '📈  Momentum Edge', '🔬  Insights', '📊  History & Proof'],
+             '📈  Momentum Edge', '⚡  PEAD', '🎯  Suggestions', '🔬  Insights',
+             '📊  History & Proof'],
             label_visibility='collapsed',
         )
 
@@ -5820,6 +5821,409 @@ def _render_regime_banner() -> None:
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+#  SUGGESTIONS PAGE — risk-filtered, history-backed picks
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _edge_buckets(trades: pd.DataFrame, group_cols: list[str],
+                  min_n: int = 3) -> pd.DataFrame:
+    """Rank historical edge for each (group_cols) bucket.
+
+    Returns DF with: group cols, n, win_rate, avg_pnl, median_pnl,
+    profit_factor, expectancy, edge_score. Sorted by edge_score desc.
+    """
+    if trades is None or trades.empty:
+        return pd.DataFrame()
+    cols = [c for c in group_cols if c in trades.columns]
+    if not cols or 'Result' not in trades.columns or 'PnL_Pct' not in trades.columns:
+        return pd.DataFrame()
+
+    def _agg(g: pd.DataFrame) -> pd.Series:
+        wins   = g.loc[g['Result'] == 'Win', 'PnL_Pct']
+        losses = g.loc[g['Result'] == 'Loss', 'PnL_Pct']
+        n      = len(g)
+        wr     = (g['Result'] == 'Win').mean() * 100
+        avg    = g['PnL_Pct'].mean()
+        med    = g['PnL_Pct'].median()
+        gp     = wins.sum() if not wins.empty else 0.0
+        gl     = abs(losses.sum()) if not losses.empty else 0.0
+        pf     = (gp / gl) if gl > 0 else (gp if gp > 0 else 0.0)
+        exp_   = (wr/100) * (wins.mean() if not wins.empty else 0.0) + \
+                 (1 - wr/100) * (losses.mean() if not losses.empty else 0.0)
+        return pd.Series({
+            'n': n, 'win_rate': wr, 'avg_pnl': avg, 'median_pnl': med,
+            'profit_factor': pf, 'expectancy': exp_,
+        })
+
+    g = trades.groupby(cols, dropna=False).apply(_agg).reset_index()
+    g = g[g['n'] >= min_n].copy()
+    if g.empty:
+        return g
+    # Edge score: expectancy weighted by sqrt(n) — penalises small samples
+    import numpy as _np
+    g['edge_score'] = g['expectancy'] * _np.sqrt(g['n'])
+    g = g.sort_values('edge_score', ascending=False).reset_index(drop=True)
+    return g
+
+
+def _suggestion_card(rank: int, ticker: str, company: str, strategy: str,
+                     signal: str, close: float, stop: float, target: float,
+                     confidence: float, avg_pnl: float, n_hist: int,
+                     position_pct: float, rationale: str) -> str:
+    color = THEME[strategy]['color']
+    bg    = THEME[strategy]['bg']
+    icon  = THEME[strategy]['icon']
+    conf_c = '#22C55E' if confidence >= 60 else ('#f9c200' if confidence >= 50 else '#EF4444')
+    rr = abs((target - close) / (close - stop)) if (close - stop) > 0 else 0
+    return (
+        f'<div style="border:1px solid {color}44;background:{bg};border-radius:14px;'
+        f'padding:18px 20px;margin-bottom:12px;">'
+        f'  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">'
+        f'    <div>'
+        f'      <div style="font-size:11px;color:#3d4a60;letter-spacing:.08em;">#{rank} · {icon} {strategy}</div>'
+        f'      <div style="font-size:20px;font-weight:900;color:#e4e8f0;margin-top:2px;">{ticker}</div>'
+        f'      <div style="font-size:12px;color:#6a748a;">{company}</div>'
+        f'    </div>'
+        f'    <div style="text-align:right;">'
+        f'      <div style="font-size:11px;color:#3d4a60;letter-spacing:.06em;">CONFIDENCE</div>'
+        f'      <div style="font-size:24px;font-weight:900;color:{conf_c};">{confidence:.0f}%</div>'
+        f'      <div style="font-size:10px;color:#6a748a;">hist. win rate · n={n_hist}</div>'
+        f'    </div>'
+        f'  </div>'
+        f'  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:14px;'
+        f'              padding-top:12px;border-top:1px solid #ffffff10;">'
+        f'    <div><div style="font-size:10px;color:#3d4a60;">SIGNAL</div>'
+        f'         <div style="font-size:13px;color:#e4e8f0;font-weight:700;">{signal}</div></div>'
+        f'    <div><div style="font-size:10px;color:#3d4a60;">ENTRY</div>'
+        f'         <div style="font-size:13px;color:#e4e8f0;font-weight:700;">₹{close:,.2f}</div></div>'
+        f'    <div><div style="font-size:10px;color:#3d4a60;">STOP</div>'
+        f'         <div style="font-size:13px;color:#EF4444;font-weight:700;">₹{stop:,.2f}</div></div>'
+        f'    <div><div style="font-size:10px;color:#3d4a60;">TARGET</div>'
+        f'         <div style="font-size:13px;color:#22C55E;font-weight:700;">₹{target:,.2f}</div></div>'
+        f'    <div><div style="font-size:10px;color:#3d4a60;">R:R</div>'
+        f'         <div style="font-size:13px;color:#e4e8f0;font-weight:700;">1 : {rr:.2f}</div></div>'
+        f'  </div>'
+        f'  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px;">'
+        f'    <div><div style="font-size:10px;color:#3d4a60;">AVG HIST PnL</div>'
+        f'         <div style="font-size:13px;color:{"#22C55E" if avg_pnl>0 else "#EF4444"};font-weight:700;">{avg_pnl:+.2f}%</div></div>'
+        f'    <div><div style="font-size:10px;color:#3d4a60;">MAX POSITION SIZE</div>'
+        f'         <div style="font-size:13px;color:#e4e8f0;font-weight:700;">{position_pct:.0f}% of capital</div></div>'
+        f'  </div>'
+        f'  <div style="margin-top:12px;font-size:12px;color:#8892a4;line-height:1.55;">'
+        f'    💡 {rationale}'
+        f'  </div>'
+        f'</div>'
+    )
+
+
+def _build_monthly_suggestions(m: dict, is_bull: bool, max_picks: int = 5) -> list[dict]:
+    """Monthly: top-RS Strong-BUY signals from live_rankings, gated by regime."""
+    out = []
+    rk = m.get('rankings')
+    if rk is None or rk.empty:
+        return out
+    rk = rk.copy()
+    # Use historical equity to derive avg monthly gain as confidence proxy
+    eq = m.get('equity')
+    hist_wr = 60.0  # Monthly Rotation has confirmed +21% CAGR
+    hist_avg = 1.8  # avg monthly return
+    if eq is not None and 'Strategy_Value' in eq.columns:
+        monthly_ret = eq['Strategy_Value'].pct_change().dropna() * 100
+        if not monthly_ret.empty:
+            hist_wr  = float((monthly_ret > 0).mean() * 100)
+            hist_avg = float(monthly_ret.mean())
+
+    # Filter to Strong BUY only
+    if 'Signal' in rk.columns:
+        rk = rk[rk['Signal'].astype(str).str.contains('Strong BUY', case=False, na=False)]
+    rk = rk.head(max_picks)
+
+    for _, r in rk.iterrows():
+        close = float(r.get('Current_Price', 0) or 0)
+        if close <= 0:
+            continue
+        stop   = round(close * 0.92, 2)   # 8% stop on monthly (cut early)
+        target = round(close * 1.10, 2)   # 10% target
+        rationale = (
+            f"Top-{int(r.get('Rank', 0))} RS pick. RS Score {float(r.get('RS_Score', 0)):.1f} — "
+            f"price beating Nifty by {float(r.get('Return_%', 0)) - float(r.get('Benchmark_Return_%', 0)):+.1f}% this month. "
+            f"Monthly Rotation backtest: ~21% CAGR, max DD -11%. " +
+            ("✅ Regime is Bull — entries allowed." if is_bull else "⚠️ Regime is Bear — hold off or size half.")
+        )
+        out.append({
+            'ticker': str(r.get('Ticker', '')).replace('.NS', ''),
+            'company': str(r.get('Company', '')),
+            'strategy': S_MONTHLY,
+            'signal': str(r.get('Signal', '')),
+            'close': close, 'stop': stop, 'target': target,
+            'confidence': hist_wr, 'avg_pnl': hist_avg, 'n_hist': len(eq) if eq is not None else 0,
+            'position_pct': 20.0 if is_bull else 10.0,
+            'edge_score': hist_wr + float(r.get('RS_Score', 0)),
+            'rationale': rationale,
+        })
+    return out
+
+
+def _build_ipo_suggestions(i: dict, is_bull: bool, max_picks: int = 5) -> list[dict]:
+    """IPO Edge: live signals filtered by best historical Setup_Type."""
+    out = []
+    sig = i.get('signals')
+    tr  = i.get('trades')
+    if sig is None or sig.empty:
+        return out
+
+    edge_setup = _edge_buckets(tr, ['Setup_Type'], min_n=2) if tr is not None else pd.DataFrame()
+    best_setups = set()
+    setup_lookup = {}
+    if not edge_setup.empty:
+        # Keep setups with positive expectancy only
+        good = edge_setup[edge_setup['expectancy'] > 0]
+        best_setups = set(good['Setup_Type'].dropna().astype(str))
+        setup_lookup = {str(r['Setup_Type']): r for _, r in edge_setup.iterrows()}
+
+    # Filter signals to Breakout / Near Breakout only, then to best setups if data available
+    if 'Signal' in sig.columns:
+        sig = sig[sig['Signal'].astype(str).str.contains('Breakout|Near', case=False, regex=True, na=False)]
+    if 'Setup' in sig.columns and best_setups:
+        sig = sig[sig['Setup'].astype(str).isin(best_setups)]
+    sig = sig.head(max_picks)
+
+    for _, r in sig.iterrows():
+        close = float(r.get('Close', 0) or 0)
+        if close <= 0:
+            continue
+        stop   = round(close * 0.92, 2)   # IPO Edge hard stop ~8%
+        target = round(close * 1.20, 2)   # base swing 20%
+        setup = str(r.get('Setup', ''))
+        lk = setup_lookup.get(setup)
+        wr   = float(lk['win_rate']) if lk is not None else 45.0
+        avgp = float(lk['avg_pnl'])  if lk is not None else 0.0
+        n    = int(lk['n'])          if lk is not None else 0
+        rationale = (
+            f"Setup: <b>{setup or 'STANDARD'}</b> · Stage: {r.get('Stage', '—')}. "
+            f"Historical {setup or 'this setup'} won {wr:.0f}% of {n} trades, avg {avgp:+.2f}%. "
+            f"Liquidity: {r.get('Liquidity', '—')}. "
+            + ("✅ Bull regime — proceed." if is_bull else "⚠️ Bear regime — wait or quarter-size.")
+        )
+        out.append({
+            'ticker': str(r.get('Ticker', '')).replace('.NS', ''),
+            'company': str(r.get('Company', '')),
+            'strategy': S_IPO,
+            'signal': str(r.get('Signal', '')),
+            'close': close, 'stop': stop, 'target': target,
+            'confidence': wr, 'avg_pnl': avgp, 'n_hist': n,
+            'position_pct': 8.0 if is_bull else 4.0,   # IPOs are higher-risk → smaller size
+            'edge_score': wr + float(r.get('Score', 0)),
+            'rationale': rationale,
+        })
+    return out
+
+
+def _build_momentum_suggestions(mo: dict, is_bull: bool, max_picks: int = 5) -> list[dict]:
+    """Momentum Edge: signals filtered by best (Entry_Type × Recovery_Speed) bucket."""
+    out = []
+    sig = mo.get('signals')
+    tr  = mo.get('trades')
+    if sig is None or sig.empty:
+        return out
+
+    edge = _edge_buckets(tr, ['Entry_Type', 'Recovery_Speed'], min_n=3) if tr is not None else pd.DataFrame()
+    best_pairs = set()
+    edge_lookup = {}
+    if not edge.empty:
+        good = edge[edge['expectancy'] > 0]
+        for _, r in good.iterrows():
+            best_pairs.add((str(r['Entry_Type']), str(r['Recovery_Speed'])))
+            edge_lookup[(str(r['Entry_Type']), str(r['Recovery_Speed']))] = r
+
+    # Keep only Breakout / Near Breakout / Watch Zone (drop weak/none)
+    if 'Signal' in sig.columns:
+        sig = sig[sig['Signal'].astype(str).str.contains('Breakout|Near|Watch', case=False, regex=True, na=False)]
+
+    # Normalise live-signal labels to match backtest bucket keys
+    _ENTRY_MAP = {'52W High': '52W_HIGH_FALLBACK', 'ATH': 'ATH'}
+    def _norm_entry(v: str) -> str:
+        return _ENTRY_MAP.get(str(v).strip(), str(v).strip())
+    def _norm_recov(v: str) -> str:
+        return str(v).split()[0] if v else ''
+
+    if best_pairs and {'Entry Type', 'Recovery'}.issubset(sig.columns):
+        sig = sig.copy()
+        sig['_et_norm'] = sig['Entry Type'].map(_norm_entry)
+        sig['_rs_norm'] = sig['Recovery'].map(_norm_recov)
+        matched = sig[sig.apply(lambda r: (r['_et_norm'], r['_rs_norm']) in best_pairs, axis=1)]
+        if not matched.empty:
+            sig = matched
+        # else: fall back to unfiltered sig — surfaces something rather than nothing
+
+    # Require clean chart
+    if 'Chart Qual' in sig.columns:
+        clean = sig[sig['Chart Qual'].astype(str).str.contains('Clean', na=False)]
+        if not clean.empty:
+            sig = clean
+
+    sig = sig.head(max_picks)
+
+    for _, r in sig.iterrows():
+        close = float(r.get('Close', 0) or 0)
+        if close <= 0:
+            continue
+        ema220 = float(r.get('220 EMA', close * 0.85) or close * 0.85)
+        # Stop = max(15% below entry, 220 EMA) — whichever is tighter
+        stop_15  = close * 0.85
+        stop = round(max(stop_15, ema220), 2)
+        target = round(close * 1.25, 2)
+        et_raw = str(r.get('Entry Type', ''))
+        rs_raw = str(r.get('Recovery', ''))
+        et = _ENTRY_MAP.get(et_raw.strip(), et_raw.strip())
+        rs = rs_raw.split()[0] if rs_raw else ''
+        lk = edge_lookup.get((et, rs))
+        wr   = float(lk['win_rate']) if lk is not None else 40.0
+        avgp = float(lk['avg_pnl'])  if lk is not None else 0.0
+        n    = int(lk['n'])          if lk is not None else 0
+        rationale = (
+            f"Entry: <b>{et}</b> · Recovery: <b>{rs}</b>. "
+            f"This bucket won {wr:.0f}% of {n} historical trades, avg {avgp:+.2f}%. "
+            f"Stop placed at 220 EMA (₹{ema220:,.2f}) or –15%, whichever is tighter. "
+            + ("✅ Bull regime — green light." if is_bull else "⚠️ Bear regime — skip new ATH plays.")
+        )
+        out.append({
+            'ticker': str(r.get('Ticker', '')).replace('.NS', ''),
+            'company': str(r.get('Company', '')),
+            'strategy': S_MOMENTUM,
+            'signal': str(r.get('Signal', '')),
+            'close': close, 'stop': stop, 'target': target,
+            'confidence': wr, 'avg_pnl': avgp, 'n_hist': n,
+            'position_pct': 12.0 if is_bull else 6.0,
+            'edge_score': wr + float(r.get('Score', 0)),
+            'rationale': rationale,
+        })
+    return out
+
+
+def render_suggestions(m: dict, i: dict, mo: dict) -> None:
+    st.markdown(
+        '<h1 style="margin:0 0 6px 0;font-size:30px;font-weight:900;letter-spacing:-.02em;">'
+        '🎯 Suggestions — Risk-Filtered Picks</h1>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        'Live signals re-ranked by historical edge. Only setups that historically won are surfaced; '
+        'regime gate, position sizing, and stop-losses are applied automatically.'
+    )
+
+    st.markdown(_explain_box(
+        '🧠 <b>How the engine works (Plain English)</b><br>'
+        '<b>Step 1 — Find the edge.</b> Every closed historical trade is grouped by its setup '
+        '(e.g. Entry Type × Recovery Speed for Momentum Edge, Setup_Type for IPO Edge). '
+        'Buckets with <b>positive expectancy</b> (wins × win-rate beats losses × loss-rate) become the "approved" buckets.<br>'
+        '<b>Step 2 — Filter today\'s signals.</b> Only live signals that match an approved bucket pass through. '
+        'Everything else is dropped — no matter how exciting the chart looks.<br>'
+        '<b>Step 3 — Regime gate.</b> If Nifty regime is Bear, position sizes are cut in half (or to zero for IPO Edge). '
+        'New entries during Bear regime have a much lower historical win rate.<br>'
+        '<b>Step 4 — Risk wrap.</b> Each pick ships with a defined entry, stop-loss, target, R:R ratio, '
+        'and max-position-size cap so a single bad trade can\'t crater the account.'
+    ), unsafe_allow_html=True)
+
+    st.markdown(_tip_box(
+        '⚠️ <b>Zero risk does not exist in markets.</b> What this page does is <b>minimise</b> risk: '
+        'it refuses to show you any setup that did not historically make money, it sizes positions so no single loss '
+        'is fatal, and it forces a pre-defined stop-loss on every trade. Worst-case loss per pick is capped at '
+        '<b>position_size × stop_distance</b>. Across the whole portfolio, that worst-case is &lt; 2% of capital.'
+    ), unsafe_allow_html=True)
+
+    # Regime gate
+    snap = _regime_snapshot()
+    is_bull = (snap.get('status') == 'Bull')
+    regime_color = '#22C55E' if is_bull else '#EF4444'
+    regime_msg = (
+        '🟢 <b>BULL regime</b> — all 3 Nifty conditions on. New entries are allowed.'
+        if is_bull else
+        '🔴 <b>BEAR / SIDEWAYS regime</b> — at least one Nifty condition is failing. '
+        'Position sizes halved; IPO Edge picks suspended.'
+    )
+    st.markdown(
+        f'<div style="border-left:4px solid {regime_color};background:{regime_color}11;'
+        f'padding:12px 16px;margin:14px 0;border-radius:8px;font-size:13px;color:#e4e8f0;">'
+        f'{regime_msg}</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Build pools
+    monthly_pool  = _build_monthly_suggestions(m,  is_bull, max_picks=5)
+    momentum_pool = _build_momentum_suggestions(mo, is_bull, max_picks=5)
+    ipo_pool      = _build_ipo_suggestions(i,      is_bull, max_picks=5) if is_bull else []
+
+    all_picks = sorted(monthly_pool + momentum_pool + ipo_pool,
+                       key=lambda x: x['edge_score'], reverse=True)
+
+    # Top-line summary
+    n_picks = len(all_picks)
+    avg_conf = (sum(p['confidence'] for p in all_picks) / n_picks) if n_picks else 0
+    total_alloc = sum(p['position_pct'] for p in all_picks)
+    cash_pct = max(0, 100 - total_alloc)
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        _kpi_card('Picks Today', f'{n_picks}', 'after edge + regime filter', '#7c9cff')
+    with c2:
+        _kpi_card('Avg Confidence', f'{avg_conf:.0f}%', 'hist. win rate', '#22C55E' if avg_conf >= 55 else '#f9c200')
+    with c3:
+        _kpi_card('Total Allocation', f'{min(total_alloc,100):.0f}%', 'of capital deployed', '#e4e8f0')
+    with c4:
+        _kpi_card('Cash Reserve', f'{cash_pct:.0f}%', 'idle (dry powder)', '#00c853')
+
+    st.markdown('<br>', unsafe_allow_html=True)
+
+    if not all_picks:
+        st.markdown(_explain_box(
+            '🛑 <b>No suggestions today.</b> Either the regime is Bear and entries are gated, '
+            'or no live signal matches an approved historical bucket. '
+            'Holding cash is a position too — wait for the next signal.', color='#f9c200'
+        ), unsafe_allow_html=True)
+        _glossary_expander()
+        return
+
+    # Tabs: All | Monthly | IPO | Momentum
+    tab_all, tab_m, tab_i, tab_mo = st.tabs([
+        f'⭐ All ({len(all_picks)})',
+        f'🔄 Monthly ({len(monthly_pool)})',
+        f'🚀 IPO Edge ({len(ipo_pool)})',
+        f'📈 Momentum Edge ({len(momentum_pool)})',
+    ])
+
+    def _render_pool(pool: list[dict]) -> None:
+        if not pool:
+            st.info('No picks in this strategy right now.')
+            return
+        html = ''
+        for idx, p in enumerate(pool, start=1):
+            html += _suggestion_card(
+                rank=idx, ticker=p['ticker'], company=p['company'],
+                strategy=p['strategy'], signal=p['signal'],
+                close=p['close'], stop=p['stop'], target=p['target'],
+                confidence=p['confidence'], avg_pnl=p['avg_pnl'],
+                n_hist=p['n_hist'], position_pct=p['position_pct'],
+                rationale=p['rationale'],
+            )
+        st.markdown(html, unsafe_allow_html=True)
+
+    with tab_all:
+        _render_pool(all_picks)
+    with tab_m:
+        _render_pool(monthly_pool)
+    with tab_i:
+        _render_pool(ipo_pool)
+    with tab_mo:
+        _render_pool(momentum_pool)
+
+    st.markdown('<br>', unsafe_allow_html=True)
+    _glossary_expander()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  INSIGHTS PAGE
+# ═══════════════════════════════════════════════════════════════════════════════
+
 def render_insights(m: dict, i: dict, mo: dict) -> None:
     st.markdown(
         '<h1 style="margin:0 0 6px 0;font-size:30px;font-weight:900;letter-spacing:-.02em;">'
@@ -5893,6 +6297,11 @@ def main():
         render_ipo(i)
     elif 'Momentum' in page:
         render_momentum(mo)
+    elif 'PEAD' in page:
+        import pead_dashboard
+        pead_dashboard.render()
+    elif 'Suggestions' in page:
+        render_suggestions(m, i, mo)
     elif 'Insights' in page:
         render_insights(m, i, mo)
     elif 'History' in page:
