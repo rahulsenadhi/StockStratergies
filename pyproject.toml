@@ -1,0 +1,15 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning:yfinance",
+    "ignore::FutureWarning:pandas",
+]
+
+[tool.coverage.run]
+source = ["core", "pead_downloader", "pead_backtest"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+fail_under = 80
