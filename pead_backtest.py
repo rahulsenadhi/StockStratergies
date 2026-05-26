@@ -149,6 +149,27 @@ def main() -> None:
         events=events, closes=closes, opens=opens,
         start=args.start, end=args.end, initial_cash=args.cash,
     )
+
+    # Attach result_date to each trade for the look-ahead audit:
+    # per (ticker, entry_date), use the most recent events.result_date < entry_date.
+    from pead_lookahead_audit import audit_trades
+
+    if not result["trades"].empty:
+        rd_per_ticker = {
+            tk: events[events["ticker"] == tk].sort_values("result_date")
+            for tk in result["trades"]["ticker"].unique()
+        }
+        result_dates = []
+        for _, t in result["trades"].iterrows():
+            tk_events = rd_per_ticker[t["ticker"]]
+            prior = tk_events[tk_events["result_date"] < t["entry_date"]]
+            result_dates.append(
+                prior["result_date"].iloc[-1] if not prior.empty else t["entry_date"]
+            )
+        result["trades"]["result_date"] = result_dates
+
+    audit_trades(result["trades"])
+
     result["trades"].to_csv(args.trades_out, index=False)
     result["equity_curve"].to_csv(args.equity_out, index=False)
     print(f"Wrote {len(result['trades'])} trades to {args.trades_out}")
