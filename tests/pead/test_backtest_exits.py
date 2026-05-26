@@ -44,9 +44,10 @@ def test_run_backtest_basic_60d_exit():
     assert t["ticker"] == "INFY.NS"
     # Entry day = result_date + 1 trading day = 2026-01-21
     assert t["entry_date"] == pd.Timestamp("2026-01-21").date()
-    # Exit day = min(entry+60td, next_result_date-1td) = next_result-1td
-    # next_result = 2026-04-20 → exit = 2026-04-17 (last bday before)
-    assert t["exit_reason"] == "NEXT_EARNINGS"
+    # Exit day = min(entry+60td, next_result_date-1td).
+    # entry=2026-01-21, 60td after ≈ 2026-04-15. next_result=2026-04-20, prev_td=2026-04-17.
+    # min(Apr 15, Apr 17) = Apr 15 → reason "60D".
+    assert t["exit_reason"] == "60D"
 
 
 def test_run_backtest_no_qualifying_skip():
