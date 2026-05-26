@@ -175,6 +175,14 @@ def main() -> None:
     print(f"Wrote {len(result['trades'])} trades to {args.trades_out}")
     print(f"Final equity: {result['equity_curve']['equity'].iloc[-1]:,.0f}")
 
+    from pead_diagnostics import compute_kpis, compute_decile_spread, attach_fwd_60d
+    kpis = compute_kpis(result["equity_curve"], result["trades"])
+    print("KPIs:", kpis)
+    events_with_fwd = attach_fwd_60d(events, closes)
+    spread = compute_decile_spread(events_with_fwd)
+    spread.to_csv("pead_decile_spread.csv")
+    pd.Series(kpis).to_csv("pead_kpis.csv")
+
 
 if __name__ == "__main__":
     main()
