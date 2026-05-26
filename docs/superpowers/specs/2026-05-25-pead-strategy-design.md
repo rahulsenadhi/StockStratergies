@@ -199,7 +199,7 @@ At each event date, compute P/B for every ticker in same sector within the activ
    d) compute pb = price / bookValue.
    e) write event row to events.parquet (dedup key: ticker+result_date+period_type).
 4. Recompute sector P/B medians → pb_sector_medians.parquet.
-5. Recompute deciles over ±5td cohort. Set qualifies_long / qualifies_short.
+5. Recompute deciles. Cohort = all events with `result_date` in `[today-5td, today+5td]` (look-ahead-safe for live because future events not yet known — cohort effectively `[today-5td, today]` until next runs catch up). Set qualifies_long / qualifies_short. Re-mark prior 5 days as new events arrive (decile membership may shift slightly post-hoc; live_signals.csv is regenerated from current cohort each run).
 6. Filter today's qualifies_long → live_signals.csv.
 7. Refresh forward calendar (next 30d) → result_dates.parquet.
 8. Write last_run_status.json with summary.
