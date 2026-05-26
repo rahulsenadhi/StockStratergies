@@ -5,6 +5,8 @@ import math
 import statistics
 from typing import Sequence
 
+import pandas as pd
+
 
 def _clean(prior: Sequence[float]) -> list[float] | None:
     """Return list of 4 finite floats, or None if any nan/missing."""
@@ -37,3 +39,23 @@ def quarterly_sue(actual: float, prior: Sequence[float]) -> float:
 def annual_sue(actual: float, prior: Sequence[float]) -> float:
     """SUE for annual EPS. Same formula, prior = last 4 fiscal years."""
     return quarterly_sue(actual, prior)
+
+
+def assign_deciles(sues: Sequence[float]) -> list[float]:
+    """Rank-based decile assignment (1..10). NaN inputs return NaN.
+
+    Uses pandas.qcut with duplicates='drop' so collisions don't crash.
+    If fewer than 10 unique non-nan values, decile labels span 1..k where k<10.
+    """
+    s = pd.Series(sues, dtype="float64")
+    mask = s.notna()
+    if mask.sum() == 0:
+        return [math.nan] * len(sues)
+    ranked = s[mask].rank(method="average")
+    n_unique = ranked.nunique()
+    bins = min(10, max(1, n_unique))
+    labels = list(range(1, bins + 1))
+    deciles = pd.qcut(ranked, q=bins, labels=labels, duplicates="drop")
+    out = pd.Series([math.nan] * len(sues), dtype="float64")
+    out.loc[mask] = deciles.astype("float64").values
+    return out.tolist()
