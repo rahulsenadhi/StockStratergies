@@ -1,0 +1,25 @@
+[
+  {
+    "symbol": "RELIANCE",
+    "broadcastDate": "21-Apr-2026 18:30:00",
+    "fromDate": "01-Jan-2026",
+    "toDate": "31-Mar-2026",
+    "filingDate": "21-Apr-2026",
+    "audited": "Un-Audited"
+  },
+  {
+    "symbol": "TCS",
+    "broadcastDate": "15-Apr-2026 14:00:00",
+    "fromDate": "01-Apr-2025",
+    "toDate": "31-Mar-2026",
+    "filingDate": "15-Apr-2026",
+    "audited": "Audited"
+  },
+  {
+    "symbol": "INFY",
+    "broadcastDate": "20-Apr-2026 17:00:00",
+    "fromDate": "",
+    "toDate": "",
+    "filingDate": "20-Apr-2026"
+  }
+]
