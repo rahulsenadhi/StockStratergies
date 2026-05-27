@@ -110,25 +110,28 @@ def get_piotroski_inputs(ticker: str, as_of: date) -> PiotroskiInputs | None:
     if inc.empty or bal.empty or cf.empty:
         return None
 
-    # yfinance frames have columns = fiscal-year-end dates, descending.
-    def _col(df: pd.DataFrame, i: int) -> pd.Series | None:
-        if df.shape[1] <= i:
-            return None
-        col = df.columns[i]
-        if col.date() >= as_of:
-            return None
-        return df[col]
+    # yfinance frames have columns = fiscal-year-end dates, typically descending.
+    # For look-ahead safety we want the two MOST RECENT columns whose period_end < as_of.
+    def _valid_cols(df: pd.DataFrame) -> list[pd.Series]:
+        cols = list(df.columns)
+        # Sort descending by date so [0]=most recent.
+        cols_sorted = sorted(cols, key=lambda c: c, reverse=True)
+        out: list[pd.Series] = []
+        for c in cols_sorted:
+            if hasattr(c, "date") and c.date() < as_of:
+                out.append(df[c])
+                if len(out) == 2:
+                    break
+        return out
 
-    cur = _col(inc, 0)
-    prev = _col(inc, 1)
-    if cur is None or prev is None:
+    inc_cols = _valid_cols(inc)
+    bal_cols = _valid_cols(bal)
+    cf_cols = _valid_cols(cf)
+    if len(inc_cols) < 2 or len(bal_cols) < 2 or len(cf_cols) < 2:
         return None
-    bal_cur = _col(bal, 0)
-    bal_prev = _col(bal, 1)
-    cf_cur = _col(cf, 0)
-    cf_prev = _col(cf, 1)
-    if bal_cur is None or bal_prev is None or cf_cur is None or cf_prev is None:
-        return None
+    cur, prev = inc_cols[0], inc_cols[1]
+    bal_cur, bal_prev = bal_cols[0], bal_cols[1]
+    cf_cur, cf_prev = cf_cols[0], cf_cols[1]
 
     def _g(s: pd.Series, *keys: str) -> float:
         for k in keys:
