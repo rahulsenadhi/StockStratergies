@@ -28,49 +28,42 @@ def _make_earnings_dates_df():
     )
 
 
-@patch("core.fundamentals.yf.Ticker")
-def test_get_quarterly_eps_history_returns_last_4(mock_ticker):
-    mock_t = MagicMock()
-    mock_t.earnings_dates = _make_earnings_dates_df()
-    mock_ticker.return_value = mock_t
+def _snap(**kw):
+    base = {"earnings_dates": None, "income_stmt": None, "balance_sheet": None,
+            "cashflow": None, "info": {}, "fetched_at": date.today()}
+    base.update(kw)
+    return base
 
+
+@patch("core.fundamentals.get_snapshot")
+def test_get_quarterly_eps_history_returns_last_4(mock_get):
+    mock_get.return_value = _snap(earnings_dates=_make_earnings_dates_df())
     hist = get_quarterly_eps_history("RELIANCE.NS", as_of=date(2026, 1, 15))
-    assert hist == [150, 125, 140, 130]   # most-recent-first
+    assert hist == [150, 125, 140, 130]
 
 
-@patch("core.fundamentals.yf.Ticker")
-def test_get_quarterly_eps_history_filters_post_asof(mock_ticker):
-    mock_t = MagicMock()
-    mock_t.earnings_dates = _make_earnings_dates_df()
-    mock_ticker.return_value = mock_t
-
+@patch("core.fundamentals.get_snapshot")
+def test_get_quarterly_eps_history_filters_post_asof(mock_get):
+    mock_get.return_value = _snap(earnings_dates=_make_earnings_dates_df())
     hist = get_quarterly_eps_history("RELIANCE.NS", as_of=date(2025, 4, 1))
-    # Quarters strictly before 2025-04-01: includes 2025-03-31 (130) + all 2024.
-    # Most-recent-first: [2025-03-31, 2024-12-31, 2024-09-30, 2024-06-30]
     assert hist == [130, 120, 95, 110]
 
 
-@patch("core.fundamentals.yf.Ticker")
-def test_get_quarterly_eps_history_empty(mock_ticker):
-    mock_t = MagicMock()
-    mock_t.earnings_dates = pd.DataFrame()
-    mock_ticker.return_value = mock_t
-
+@patch("core.fundamentals.get_snapshot")
+def test_get_quarterly_eps_history_empty(mock_get):
+    mock_get.return_value = _snap(earnings_dates=pd.DataFrame())
     hist = get_quarterly_eps_history("ZZZ.NS", as_of=date(2026, 1, 1))
     assert hist == []
 
 
-@patch("core.fundamentals.yf.Ticker")
-def test_get_price_and_book_value(mock_ticker):
-    mock_t = MagicMock()
-    mock_t.info = {"sector": "Energy", "bookValue": 500.0}
-    mock_t.history.return_value = pd.DataFrame(
-        {"Close": [2500.0]},
-        index=pd.to_datetime(["2026-04-20"]),
-    )
-    mock_ticker.return_value = mock_t
-
-    info = get_price_and_book_value("RELIANCE.NS", as_of=date(2026, 4, 21))
+@patch("core.fundamentals.get_snapshot")
+def test_get_price_and_book_value(mock_get):
+    mock_get.return_value = _snap(info={
+        "sector": "Energy",
+        "bookValue": 500.0,
+        "regularMarketPrice": 2500.0,
+    })
+    info = get_price_and_book_value("ZZZ_NOLOCAL.NS", as_of=date(2026, 4, 21))
     assert info["sector"] == "Energy"
     assert info["price"] == 2500.0
     assert info["book_value"] == 500.0

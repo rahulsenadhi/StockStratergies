@@ -14,6 +14,7 @@ import pandas as pd
 import yfinance as yf
 
 from core.piotroski import PiotroskiInputs
+from core.yf_cache import get_snapshot
 
 
 def _safe_float(v: Any) -> float:
@@ -37,16 +38,12 @@ def _eps_col_name(df: pd.DataFrame) -> str | None:
 def get_quarterly_eps_history(ticker: str, as_of: date, n: int = 4) -> list[float]:
     """Return last n quarterly EPS strictly before as_of, most-recent-first.
 
-    Uses yfinance `earnings_dates` (Reported EPS column) — the legacy
+    Uses cached yfinance `earnings_dates` (Reported EPS column) — the legacy
     `quarterly_earnings` attribute was deprecated and now returns None.
     Returns [] if yfinance has nothing or fewer than n usable quarters.
     """
-    t = yf.Ticker(ticker)
-    df = None
-    try:
-        df = t.earnings_dates
-    except Exception:
-        return []
+    snap = get_snapshot(ticker)
+    df = snap.get("earnings_dates")
     col = _eps_col_name(df)
     if col is None:
         return []
@@ -64,14 +61,11 @@ def get_quarterly_eps_history(ticker: str, as_of: date, n: int = 4) -> list[floa
 def get_annual_eps_history(ticker: str, as_of: date, n: int = 4) -> list[float]:
     """Return last n annual EPS strictly before as_of, most-recent-first.
 
-    Derives EPS from income_stmt's `Diluted EPS` (fallback `Basic EPS`).
+    Derives EPS from cached income_stmt's `Diluted EPS` (fallback `Basic EPS`).
     Returns [] if yfinance has nothing or fewer than n usable years.
     """
-    t = yf.Ticker(ticker)
-    try:
-        inc = t.income_stmt
-    except Exception:
-        return []
+    snap = get_snapshot(ticker)
+    inc = snap.get("income_stmt")
     if inc is None or inc.empty:
         return []
     eps_row = None
@@ -98,13 +92,10 @@ def get_piotroski_inputs(ticker: str, as_of: date) -> PiotroskiInputs | None:
     Uses last 2 fiscal years (current vs prior). Returns None if any
     required line item is missing.
     """
-    t = yf.Ticker(ticker)
-    try:
-        inc = t.income_stmt
-        bal = t.balance_sheet
-        cf = t.cashflow
-    except Exception:
-        return None
+    snap = get_snapshot(ticker)
+    inc = snap.get("income_stmt")
+    bal = snap.get("balance_sheet")
+    cf = snap.get("cashflow")
     if inc is None or bal is None or cf is None:
         return None
     if inc.empty or bal.empty or cf.empty:
@@ -163,15 +154,32 @@ def get_piotroski_inputs(ticker: str, as_of: date) -> PiotroskiInputs | None:
 
 
 def get_price_and_book_value(ticker: str, as_of: date) -> dict[str, Any]:
-    """Return {sector, price, book_value, pb} as of last close before as_of."""
-    t = yf.Ticker(ticker)
-    info = t.info or {}
+    """Return {sector, price, book_value, pb} as of last close before as_of.
+
+    Price is sourced from existing OHLCV CSVs in `momentum_edge_data/<ticker>.csv`
+    when available (no extra network call); otherwise falls back to cached info.
+    """
+    snap = get_snapshot(ticker)
+    info = snap.get("info") or {}
     sector = info.get("sector") or "Unknown"
     book = _safe_float(info.get("bookValue"))
-    # Pull last close strictly before as_of
-    hist = t.history(start=str(as_of.replace(day=1)), end=str(as_of))
-    if hist is None or hist.empty:
-        return {"sector": sector, "price": math.nan, "book_value": book, "pb": math.nan}
-    price = _safe_float(hist["Close"].iloc[-1])
+
+    # Try local OHLCV first (no network), fallback to info.regularMarketPrice
+    price = math.nan
+    try:
+        from pathlib import Path
+        csv_path = Path("momentum_edge_data") / f"{ticker}.csv"
+        if csv_path.exists():
+            px_df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
+            px_df = px_df.sort_index()
+            px_df = px_df[px_df.index.date < as_of]
+            if not px_df.empty and "Close" in px_df.columns:
+                price = _safe_float(px_df["Close"].iloc[-1])
+    except Exception:
+        pass
+
+    if math.isnan(price):
+        price = _safe_float(info.get("regularMarketPrice") or info.get("previousClose"))
+
     pb = price / book if (book and book > 0 and not math.isnan(price)) else math.nan
     return {"sector": sector, "price": price, "book_value": book, "pb": pb}
