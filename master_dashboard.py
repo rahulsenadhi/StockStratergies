@@ -197,6 +197,78 @@ st.markdown("""
     --info-soft:     color-mix(in oklch, var(--info) 12%, transparent);
 }
 
+/* ── Light theme override —————————————————————————————————————————————
+   Activates when Streamlit theme is "light" OR when host OS prefers light.
+   Streamlit sets data-theme="light" on the root when theme.base=light is
+   chosen in Settings or .streamlit/config.toml. */
+[data-theme="light"], html[data-theme="light"] :root, body[data-theme="light"] {
+    --background:           oklch(0.985 0 0);    /* near-white page bg */
+    --foreground:           oklch(0.205 0 0);    /* near-black text */
+    --card:                 oklch(1.000 0 0);    /* white card */
+    --card-foreground:      oklch(0.205 0 0);
+    --popover:              oklch(1.000 0 0);
+    --popover-foreground:   oklch(0.205 0 0);
+    --primary:              oklch(0.205 0 0);
+    --primary-foreground:   oklch(0.985 0 0);
+    --secondary:            oklch(0.940 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted:                oklch(0.940 0 0);
+    --muted-foreground:     oklch(0.450 0 0);
+    --accent:               oklch(0.940 0 0);
+    --accent-foreground:    oklch(0.205 0 0);
+    --border:               oklch(0.900 0 0);
+    --input:                oklch(0.900 0 0);
+    --ring:                 oklch(0.708 0 0);
+
+    --sidebar:                    oklch(0.965 0 0);
+    --sidebar-foreground:         oklch(0.205 0 0);
+    --sidebar-accent:             oklch(0.900 0 0);
+    --sidebar-accent-foreground:  oklch(0.205 0 0);
+    --sidebar-border:             oklch(0.880 0 0);
+    --sidebar-ring:               oklch(0.708 0 0);
+
+    --bg-surface:    var(--card);
+    --bg-surface-2:  oklch(0.955 0 0);
+    --bg-muted:      var(--muted);
+    --border-soft:   var(--border);
+    --border-strong: oklch(0.820 0 0);
+    --fg-primary:    var(--foreground);
+    --fg-secondary:  oklch(0.330 0 0);
+    --fg-muted:      var(--muted-foreground);
+    --fg-subtle:     oklch(0.520 0 0);
+}
+
+/* OS-level light preference when Streamlit theme not explicitly set */
+@media (prefers-color-scheme: light) {
+    html:not([data-theme="dark"]) {
+        --background:           oklch(0.985 0 0);
+        --foreground:           oklch(0.205 0 0);
+        --card:                 oklch(1.000 0 0);
+        --card-foreground:      oklch(0.205 0 0);
+        --popover:              oklch(1.000 0 0);
+        --popover-foreground:   oklch(0.205 0 0);
+        --primary:              oklch(0.205 0 0);
+        --primary-foreground:   oklch(0.985 0 0);
+        --secondary:            oklch(0.940 0 0);
+        --secondary-foreground: oklch(0.205 0 0);
+        --muted:                oklch(0.940 0 0);
+        --muted-foreground:     oklch(0.450 0 0);
+        --accent:               oklch(0.940 0 0);
+        --accent-foreground:    oklch(0.205 0 0);
+        --border:               oklch(0.900 0 0);
+        --input:                oklch(0.900 0 0);
+        --ring:                 oklch(0.708 0 0);
+        --sidebar:                    oklch(0.965 0 0);
+        --sidebar-foreground:         oklch(0.205 0 0);
+        --sidebar-accent:             oklch(0.900 0 0);
+        --sidebar-accent-foreground:  oklch(0.205 0 0);
+        --sidebar-border:             oklch(0.880 0 0);
+        --bg-surface-2:  oklch(0.955 0 0);
+        --border-strong: oklch(0.820 0 0);
+        --fg-secondary:  oklch(0.330 0 0);
+    }
+}
+
 /* ── Global ── */
 html, body, [data-testid="stApp"] {
     background: var(--background) !important;
@@ -3923,6 +3995,31 @@ def render_sidebar() -> str:
              '📈  Momentum Edge', '⚡  PEAD', '🎯  Suggestions', '🔬  Insights',
              '📊  History & Proof'],
             label_visibility='collapsed',
+        )
+
+        st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
+        theme_choice = st.radio(
+            'Theme',
+            ['🌙 Dark', '☀️ Light', '🖥️ Auto (OS)'],
+            horizontal=True,
+            label_visibility='collapsed',
+            key='_theme_choice',
+        )
+        _theme_map = {'🌙 Dark': 'dark', '☀️ Light': 'light', '🖥️ Auto (OS)': 'auto'}
+        _theme_val = _theme_map.get(theme_choice, 'dark')
+        st.markdown(
+            f"""<script>
+            (function() {{
+                const v = "{_theme_val}";
+                const root = window.parent.document.documentElement;
+                if (v === 'auto') {{
+                    root.removeAttribute('data-theme');
+                }} else {{
+                    root.setAttribute('data-theme', v);
+                }}
+            }})();
+            </script>""",
+            unsafe_allow_html=True,
         )
 
         st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
