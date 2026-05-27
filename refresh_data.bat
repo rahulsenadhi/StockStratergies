@@ -40,7 +40,15 @@ if errorlevel 1 (
     echo  ok parquet cache + backtest done >> "%LOG%"
 )
 
-echo [4/4] PEAD daily incremental refresh ... >> "%LOG%"
+echo [4/5] Pre-warming PEAD yfinance cache ... >> "%LOG%"
+"%PY%" -c "from concurrent.futures import ThreadPoolExecutor; import pandas as pd; from core.yf_cache import get_snapshot; u = pd.read_csv('data/universe/universe.csv')['yf_ticker'].dropna().tolist(); print(f'Warming {len(u)} tickers'); ex = ThreadPoolExecutor(max_workers=12); list(ex.map(get_snapshot, u)); print('Cache warm')" >> "%LOG%" 2>&1
+if errorlevel 1 (
+    echo  !! yfinance cache warm FAILED >> "%LOG%"
+) else (
+    echo  ok cache warm done >> "%LOG%"
+)
+
+echo [5/5] PEAD daily incremental refresh ... >> "%LOG%"
 "%PY%" pead_downloader.py >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo  !! pead_downloader.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
