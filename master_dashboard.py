@@ -1173,9 +1173,35 @@ hr {
     margin: 16px 0 !important;
 }
 
-/* ── Sidebar: tighter & more shadcn-like ─────────────────────────────── */
+/* ── Sidebar: 256px + shadcn nav styling ─────────────────────────────── */
 [data-testid="stSidebar"] {
-    width: 248px !important;
+    width: 256px !important;
+    min-width: 256px !important;
+}
+.brand-block {
+    padding: 16px 6px 22px 6px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--sidebar-border);
+}
+.brand-row { display: flex; align-items: center; gap: 12px; }
+.brand-logo {
+    width: 38px; height: 38px;
+    background: oklch(0.696 0.170 162.480);
+    color: oklch(0.145 0 0);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+.brand-l1 {
+    font-size: 16px; font-weight: 700;
+    color: var(--sidebar-foreground);
+    letter-spacing: -0.015em;
+}
+.brand-l2 {
+    font-size: 12px; color: var(--muted-foreground);
+    letter-spacing: 0.02em;
+    margin-top: 2px;
 }
 [data-testid="stSidebar"] .stRadio label {
     padding: 8px 12px !important;
@@ -4523,26 +4549,35 @@ def render_history(m: dict, i: dict, mo: dict):
 
 def render_sidebar() -> str:
     with st.sidebar:
+        # Brand: logo icon + 2-line title (shadcn-style)
         st.markdown("""
-        <div style="padding:12px 4px 24px 4px;">
-          <div style="font-size:22px;font-weight:900;color:#e4e8f0;letter-spacing:-.02em;">
-            ⬡ NSE Hub
-          </div>
-          <div style="font-size:11px;color:#3d4a60;margin-top:3px;letter-spacing:.04em;">
-            4 STRATEGIES · SYSTEMATIC INVESTING
-          </div>
+        <div class="brand-block">
+            <div class="brand-row">
+                <div class="brand-logo">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                         xmlns="http://www.w3.org/2000/svg" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 17L9 11L13 15L21 7" stroke="currentColor"/>
+                        <path d="M14 7H21V14" stroke="currentColor"/>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <div class="brand-l1">Strategy</div>
+                    <div class="brand-l2">Backtester</div>
+                </div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
         page = st.radio(
             'Navigate',
-            ['🏠  Home',
+            ['📊  Dashboard',
              '📚  Strategy Library',
-             '➕  Add Strategy',
+             '🛠  Builder',
              '🔄  Monthly Rotation', '🚀  IPO Edge',
              '📈  Momentum Edge', '⚡  PEAD',
              '🎯  Suggestions', '🔬  Insights',
-             '📊  History & Proof'],
+             '📑  History & Proof'],
             label_visibility='collapsed',
         )
 
@@ -4641,9 +4676,57 @@ def render_sidebar() -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def render_home(m: dict, i: dict, mo: dict):
+    # SaaS Dashboard header
+    st.markdown("""
+    <div class="lib-header">
+        <div>
+            <h1>Dashboard</h1>
+            <p class="lib-subtitle">Overview of your strategy library and recent backtests</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Aggregate KPI tiles from strategies_index
+    _strats = _load_strategies_index()
+    n_strats = len(_strats)
+    n_live = sum(1 for s in _strats if s.get('status') == 'Live')
+    cagrs = [s.get('kpis_inline', {}).get('cagr', 0) for s in _strats]
+    avg_cagr = (sum(cagrs) / len(cagrs)) if cagrs else 0
+    win_rates = [s.get('kpis_inline', {}).get('win_rate', 0) for s in _strats
+                  if s.get('kpis_inline', {}).get('win_rate', 0) > 0]
+    avg_win = (sum(win_rates) / len(win_rates)) if win_rates else 0
+    n_trades = sum(s.get('kpis_inline', {}).get('num_trades', 0) for s in _strats)
+
+    k1, k2, k3, k4 = st.columns(4)
+    with k1: st.metric('Total Strategies', f'{n_strats}', f'{n_live} live')
+    with k2: st.metric('Avg Win Rate', f'{avg_win*100:.1f}%')
+    with k3: st.metric('Avg CAGR', f'{avg_cagr*100:+.2f}%')
+    with k4: st.metric('Total Trades', f'{n_trades:,}')
+
+    # Recent backtests row
+    st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+    st.subheader('Recent Backtests')
+    recent = sorted(_strats, key=lambda s: s.get('last_run', ''), reverse=True)[:4]
+    rec_rows = []
+    for s in recent:
+        k = s.get('kpis_inline', {})
+        rec_rows.append({
+            'Strategy': s['name'],
+            'Type': s.get('type', '—'),
+            'Status': s.get('status', '—'),
+            'CAGR': f"{k.get('cagr', 0)*100:+.2f}%",
+            'Sharpe': f"{k.get('sharpe', 0):.2f}",
+            'Max DD': f"{k.get('max_dd', 0)*100:+.2f}%",
+            'Trades': k.get('num_trades', 0),
+            'Last run': _human_time_ago(s.get('last_run', '')),
+        })
+    if rec_rows:
+        st.dataframe(pd.DataFrame(rec_rows), use_container_width=True, hide_index=True)
+
+    st.markdown('<div style="height:14px"></div>', unsafe_allow_html=True)
     st.markdown("""
     <div style="padding:4px 0 20px 0;">
-      <div class="page-title" style="color:#e4e8f0;">⬡ NSE Strategy Hub</div>
+      <div class="page-title" style="color:var(--foreground);">Strategy Overview</div>
       <div class="page-sub">Three rules-based strategies that remove emotion from investing</div>
     </div>
     """, unsafe_allow_html=True)
@@ -7057,8 +7140,8 @@ def _render_strategy_card(strat: dict) -> None:
         b1, b2 = st.columns([4, 1])
         with b1:
             if st.button('Open', key=f"open_{strat['id']}", use_container_width=True):
-                page_key = strat.get('page_key', 'Home')
-                st.session_state['_jump_to'] = page_key
+                st.session_state['_view_strategy'] = strat['id']
+                st.session_state['_page_override'] = 'backtest_results'
                 st.rerun()
         with b2:
             if st.button('⋯', key=f"menu_{strat['id']}", use_container_width=True,
@@ -7161,7 +7244,7 @@ def render_strategy_library(m: dict, i: dict, mo: dict) -> None:
 #  ADD STRATEGY  (5-step wizard)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-_WIZARD_STEPS = ['Basics', 'Universe', 'Entry rules', 'Exit rules', 'Sizing & Save']
+_WIZARD_STEPS = ['Basics', 'Universe', 'Indicators', 'Entry', 'Exit', 'Risk', 'Save']
 
 
 def _wizard_init() -> None:
@@ -7249,6 +7332,59 @@ def _step_universe(data: dict) -> None:
         data['custom_csv_path'] = st.text_input('CSV path',
             value=data.get('custom_csv_path', 'data/universe/custom.csv'),
             help='CSV with a column named "ticker" or "yf_ticker"')
+
+
+def _step_indicators(data: dict) -> None:
+    st.markdown('<div class="wizard-step-body"><h3>Technical indicators</h3>'
+                '<p class="caption">Select indicators to include in your DSL columns</p></div>',
+                unsafe_allow_html=True)
+    data.setdefault('indicators', {})
+
+    available = [
+        ('rsi_14',   'RSI (14)',     'Momentum oscillator 0-100'),
+        ('atr_14',   'ATR (14)',     'Average True Range — volatility'),
+        ('sma_50',   'SMA 50',       '50-day simple moving average'),
+        ('sma_200',  'SMA 200',      '200-day simple moving average'),
+        ('volume_z', 'Volume Z',     'Volume std deviations vs 50d mean'),
+    ]
+    c1, c2 = st.columns(2)
+    for idx, (key, label, desc) in enumerate(available):
+        col = c1 if idx % 2 == 0 else c2
+        with col:
+            data['indicators'][key] = st.checkbox(
+                f'{label} — {desc}',
+                value=data['indicators'].get(key, True),
+                key=f'ind_{key}')
+
+    st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
+    st.caption('Selected indicators become DSL columns usable in the Entry step.')
+
+
+def _step_risk(data: dict) -> None:
+    st.markdown('<div class="wizard-step-body"><h3>Risk management</h3>'
+                '<p class="caption">Portfolio-level caps to protect capital</p></div>',
+                unsafe_allow_html=True)
+    data.setdefault('risk', {})
+
+    r1, r2 = st.columns(2)
+    with r1:
+        data['risk']['max_portfolio_dd'] = st.number_input(
+            'Max portfolio drawdown % (halt new entries)',
+            value=data['risk'].get('max_portfolio_dd', 25.0),
+            min_value=5.0, max_value=80.0, step=1.0)
+        data['risk']['max_daily_loss'] = st.number_input(
+            'Max daily loss % (halt for the day)',
+            value=data['risk'].get('max_daily_loss', 3.0),
+            min_value=0.5, max_value=15.0, step=0.1)
+    with r2:
+        data['risk']['max_position_pct'] = st.number_input(
+            'Max single-position % of portfolio',
+            value=data['risk'].get('max_position_pct', 15.0),
+            min_value=1.0, max_value=100.0, step=1.0)
+        data['risk']['min_holding_days'] = st.number_input(
+            'Min holding days (anti-whip)',
+            value=data['risk'].get('min_holding_days', 5),
+            min_value=0, max_value=60, step=1)
 
 
 def _step_entry(data: dict) -> None:
@@ -7365,7 +7501,7 @@ def _validate_step(step: int, data: dict) -> tuple[bool, str]:
         if sid in existing:
             return False, f"Name already exists ({sid}). Pick another."
         return True, ''
-    if step == 3:
+    if step == 4:  # Entry
         if data.get('entry_mode') == 'Formula DSL':
             if not data.get('entry_formula', '').strip():
                 return False, 'Entry formula required'
@@ -7373,7 +7509,7 @@ def _validate_step(step: int, data: dict) -> tuple[bool, str]:
             if not valid:
                 return False, msg
         return True, ''
-    if step == 4:
+    if step == 5:  # Exit
         ex = data.get('exits', {})
         any_enabled = any([ex.get('time_enabled'), ex.get('next_earnings'),
                             ex.get('hard_stop_enabled'), ex.get('trail_enabled')])
@@ -7452,9 +7588,11 @@ def render_add_strategy() -> None:
     with st.container(border=True):
         if step == 1:   _step_basics(data)
         elif step == 2: _step_universe(data)
-        elif step == 3: _step_entry(data)
-        elif step == 4: _step_exit(data)
-        elif step == 5: _step_sizing_save(data)
+        elif step == 3: _step_indicators(data)
+        elif step == 4: _step_entry(data)
+        elif step == 5: _step_exit(data)
+        elif step == 6: _step_risk(data)
+        elif step == 7: _step_sizing_save(data)
 
     # Footer nav
     st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
@@ -7464,8 +7602,9 @@ def render_add_strategy() -> None:
             if st.button('← Back', key='wiz_prev'):
                 st.session_state['_wizard_step'] -= 1; st.rerun()
     with fb3:
-        next_label = ['Next: Universe →', 'Next: Entry rules →', 'Next: Exit rules →',
-                       'Next: Sizing →', 'Save strategy'][step - 1]
+        next_label = ['Next: Universe →', 'Next: Indicators →', 'Next: Entry rules →',
+                       'Next: Exit rules →', 'Next: Risk →', 'Next: Save →',
+                       'Save & Run Backtest'][step - 1]
         if st.button(next_label, key='wiz_next', type='primary', use_container_width=True):
             ok, msg = _validate_step(step, data)
             if not ok:
@@ -7497,6 +7636,203 @@ def render_add_strategy() -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  BACKTEST RESULTS  (per-strategy comprehensive view)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _equity_curve_chart(equity: pd.DataFrame) -> 'go.Figure':
+    """Line chart of strategy equity."""
+    import plotly.graph_objects as go
+    if equity.empty:
+        fig = go.Figure(); fig.update_layout(height=320); return fig
+    eq = equity.copy()
+    date_col = 'date' if 'date' in eq.columns else eq.columns[0]
+    val_col = next((c for c in ('equity', 'Portfolio_Value', 'Portfolio Value', 'value')
+                    if c in eq.columns), eq.select_dtypes(include='number').columns[-1])
+    eq[date_col] = pd.to_datetime(eq[date_col])
+    fig = go.Figure(go.Scatter(
+        x=eq[date_col], y=eq[val_col],
+        mode='lines', line=dict(color='oklch(0.696 0.170 162.480)', width=2),
+        fill='tozeroy', fillcolor='rgba(34,197,94,0.08)',
+        name='Equity', hovertemplate='%{x|%Y-%m-%d}<br>₹%{y:,.0f}<extra></extra>',
+    ))
+    fig.update_layout(
+        height=340, margin=dict(l=8, r=8, t=10, b=8),
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(showgrid=False, color='#888', linecolor='#444'),
+        yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.12)',
+                   color='#888', tickformat=',d'),
+        showlegend=False,
+    )
+    return fig
+
+
+def _drawdown_chart(equity: pd.DataFrame) -> 'go.Figure':
+    import plotly.graph_objects as go
+    if equity.empty:
+        fig = go.Figure(); fig.update_layout(height=240); return fig
+    eq = equity.copy()
+    date_col = 'date' if 'date' in eq.columns else eq.columns[0]
+    val_col = next((c for c in ('equity', 'Portfolio_Value', 'Portfolio Value', 'value')
+                    if c in eq.columns), eq.select_dtypes(include='number').columns[-1])
+    eq[date_col] = pd.to_datetime(eq[date_col])
+    s = eq[val_col].astype(float)
+    peak = s.cummax()
+    dd = ((s - peak) / peak) * 100
+    fig = go.Figure(go.Scatter(
+        x=eq[date_col], y=dd,
+        mode='lines', line=dict(color='oklch(0.625 0.245 27.325)', width=1.5),
+        fill='tozeroy', fillcolor='rgba(220,38,38,0.18)',
+        hovertemplate='%{x|%Y-%m-%d}<br>%{y:.2f}%<extra></extra>',
+    ))
+    fig.update_layout(
+        height=240, margin=dict(l=8, r=8, t=10, b=8),
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(showgrid=False, color='#888'),
+        yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.12)',
+                   color='#888', ticksuffix='%'),
+        showlegend=False,
+    )
+    return fig
+
+
+def _monthly_returns_heatmap(equity: pd.DataFrame) -> 'go.Figure':
+    """Year x Month heatmap of % returns."""
+    import plotly.graph_objects as go
+    if equity.empty:
+        fig = go.Figure(); fig.update_layout(height=280); return fig
+    eq = equity.copy()
+    date_col = 'date' if 'date' in eq.columns else eq.columns[0]
+    val_col = next((c for c in ('equity', 'Portfolio_Value', 'Portfolio Value', 'value')
+                    if c in eq.columns), eq.select_dtypes(include='number').columns[-1])
+    eq[date_col] = pd.to_datetime(eq[date_col])
+    eq = eq.set_index(date_col)[val_col].astype(float)
+    monthly = eq.resample('ME').last()
+    rets = monthly.pct_change().dropna() * 100
+    if rets.empty:
+        fig = go.Figure(); fig.update_layout(height=280); return fig
+    df = pd.DataFrame({'ret': rets})
+    df['year'] = df.index.year
+    df['month'] = df.index.month
+    pivot = df.pivot_table(index='year', columns='month', values='ret', aggfunc='last')
+    months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    pivot = pivot.reindex(columns=range(1, 13))
+    z = pivot.values
+    text = [[f'{v:+.1f}%' if pd.notna(v) else '' for v in row] for row in z]
+    fig = go.Figure(go.Heatmap(
+        z=z, x=months, y=[str(y) for y in pivot.index],
+        colorscale=[[0, 'rgba(220,38,38,0.7)'],
+                    [0.5, 'rgba(40,40,40,0.15)'],
+                    [1, 'rgba(34,197,94,0.7)']],
+        zmid=0, zmin=-15, zmax=15,
+        text=text, texttemplate='%{text}',
+        textfont={'size': 11, 'color': 'white'},
+        hovertemplate='%{y} %{x}<br>%{z:+.2f}%<extra></extra>',
+        showscale=False,
+    ))
+    fig.update_layout(
+        height=max(220, 40 * len(pivot.index) + 80),
+        margin=dict(l=8, r=8, t=10, b=8),
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(color='#aaa', side='top'),
+        yaxis=dict(color='#aaa', autorange='reversed'),
+    )
+    return fig
+
+
+def _read_strategy_results(strat: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Return (equity_df, trades_df) for any strategy in the index."""
+    equity = pd.DataFrame(); trades = pd.DataFrame()
+    eq_path = strat.get('equity_csv', '')
+    tr_path = strat.get('trades_csv', '')
+    if eq_path and Path(eq_path).exists():
+        try: equity = pd.read_csv(eq_path)
+        except Exception: pass
+    if tr_path and Path(tr_path).exists():
+        try: trades = pd.read_csv(tr_path)
+        except Exception: pass
+    return equity, trades
+
+
+def render_backtest_results(strat_id: str) -> None:
+    """Comprehensive backtest analysis page for one strategy."""
+    strats = _load_strategies_index()
+    strat = next((s for s in strats if s['id'] == strat_id), None)
+    if strat is None:
+        st.error(f"Strategy '{strat_id}' not found"); return
+
+    k = strat.get('kpis_inline', {})
+    cagr_str = f"{k.get('cagr', 0)*100:+.2f}%"
+    sharpe_str = f"{k.get('sharpe', 0):.2f}"
+    mdd_str = f"{k.get('max_dd', 0)*100:+.2f}%"
+    win_str = f"{k.get('win_rate', 0)*100:.1f}%"
+    trades_str = str(k.get('num_trades', 0))
+
+    # Header
+    h1, h2 = st.columns([3, 1])
+    with h1:
+        if st.button('← Back to Library', key='br_back'):
+            st.session_state['_page_override'] = 'library'
+            st.session_state.pop('_view_strategy', None)
+            st.rerun()
+    st.markdown(f"""
+        <div class="lib-header">
+            <div>
+                <h1>{strat['name']}</h1>
+                <p class="lib-subtitle">{strat.get('description', '—')}</p>
+            </div>
+            <div>{_status_chip_html(strat.get('status', 'Research'))}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # KPI row
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1: st.metric('CAGR', cagr_str)
+    with c2: st.metric('Sharpe', sharpe_str)
+    with c3: st.metric('Max DD', mdd_str)
+    with c4: st.metric('Win Rate', win_str)
+    with c5: st.metric('Trades', trades_str)
+
+    equity, trades = _read_strategy_results(strat)
+
+    # Equity curve
+    st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+    st.subheader('Equity Curve')
+    st.plotly_chart(_equity_curve_chart(equity), use_container_width=True,
+                    config={'displayModeBar': False})
+
+    # Drawdown
+    st.subheader('Drawdown')
+    st.plotly_chart(_drawdown_chart(equity), use_container_width=True,
+                    config={'displayModeBar': False})
+
+    # Monthly returns heatmap
+    st.subheader('Monthly Returns')
+    st.plotly_chart(_monthly_returns_heatmap(equity), use_container_width=True,
+                    config={'displayModeBar': False})
+
+    # Trade history
+    st.subheader(f'Trade History ({len(trades)})')
+    if trades.empty:
+        st.info('No trade history available for this strategy.')
+    else:
+        # Show clean subset
+        cols_show = [c for c in ('ticker', 'entry_date', 'exit_date',
+                                  'entry_price', 'exit_price',
+                                  'return_pct', 'hold_days', 'exit_reason')
+                     if c in trades.columns]
+        if not cols_show:
+            cols_show = trades.columns.tolist()[:8]
+        df = trades[cols_show].copy()
+        # Format numerics
+        for c in ('entry_price', 'exit_price'):
+            if c in df.columns:
+                df[c] = df[c].astype(float).map(lambda v: f'₹{v:,.2f}')
+        if 'return_pct' in df.columns:
+            df['return_pct'] = df['return_pct'].astype(float).map(lambda v: f'{v:+.2f}%')
+        st.dataframe(df, use_container_width=True, hide_index=True, height=420)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -7523,12 +7859,18 @@ def main():
         st.session_state['_page_override'] = None
         render_add_strategy()
         return
+    elif override == 'backtest_results':
+        st.session_state['_page_override'] = None
+        sid = st.session_state.get('_view_strategy')
+        if sid:
+            render_backtest_results(sid)
+            return
 
-    if 'Home' in page:
+    if 'Dashboard' in page or 'Home' in page:
         render_home(m, i, mo)
     elif 'Strategy Library' in page:
         render_strategy_library(m, i, mo)
-    elif 'Add Strategy' in page:
+    elif 'Builder' in page or 'Add Strategy' in page:
         render_add_strategy()
     elif 'Monthly' in page:
         render_monthly(m)
