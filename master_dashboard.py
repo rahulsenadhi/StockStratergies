@@ -1238,6 +1238,357 @@ hr {
     color: var(--foreground) !important;
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   2026 MODERN OVERLAY — Liquid Glass + Ambient Indigo
+   Override layer to make UI feel current (Vercel/Linear/Notion 2026)
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Modernize the base palette: deeper ambient blue-grey + indigo accent */
+:root {
+    --bg-grad-from:   oklch(0.155 0.012 264);
+    --bg-grad-mid:    oklch(0.135 0.015 270);
+    --bg-grad-to:     oklch(0.115 0.018 280);
+    --glass-bg:       rgba(255, 255, 255, 0.025);
+    --glass-border:   rgba(255, 255, 255, 0.06);
+    --glass-hover:    rgba(255, 255, 255, 0.045);
+    --indigo:         oklch(0.623 0.214 264);
+    --indigo-soft:    oklch(0.623 0.214 264 / 0.16);
+    --emerald:        oklch(0.696 0.170 162.480);
+    --emerald-soft:   oklch(0.696 0.170 162.480 / 0.14);
+    --rose:           oklch(0.625 0.245 27.325);
+    --noise-opacity:  0.025;
+}
+
+[data-theme="light"], html[data-theme="light"] :root {
+    --bg-grad-from:   oklch(0.985 0.003 264);
+    --bg-grad-mid:    oklch(0.972 0.006 264);
+    --bg-grad-to:     oklch(0.955 0.008 270);
+    --glass-bg:       rgba(255, 255, 255, 0.62);
+    --glass-border:   rgba(15, 23, 42, 0.06);
+    --glass-hover:    rgba(255, 255, 255, 0.85);
+}
+
+/* Ambient gradient + soft spotlight on page background */
+html, body, [data-testid="stApp"] {
+    background:
+        radial-gradient(1200px 800px at 100% 0%,
+            oklch(0.623 0.214 264 / 0.10) 0%,
+            transparent 50%),
+        radial-gradient(900px 600px at 0% 100%,
+            oklch(0.696 0.170 162.480 / 0.06) 0%,
+            transparent 50%),
+        linear-gradient(160deg,
+            var(--bg-grad-from) 0%,
+            var(--bg-grad-mid) 55%,
+            var(--bg-grad-to) 100%) !important;
+    background-attachment: fixed !important;
+}
+[data-testid="stAppViewContainer"] {
+    background: transparent !important;
+}
+
+/* Block-container gets airier padding */
+.block-container {
+    padding-top: 2rem !important;
+    padding-bottom: 4rem !important;
+    max-width: 1440px !important;
+}
+
+/* ── Glassmorphism cards ────────────────────────────────────────────── */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    background: var(--glass-bg) !important;
+    backdrop-filter: blur(14px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 14px !important;
+    box-shadow:
+        0 1px 0 rgba(255,255,255,0.04) inset,
+        0 10px 32px -12px rgba(0,0,0,0.45),
+        0 4px 12px -4px rgba(0,0,0,0.25) !important;
+    padding: 22px 22px 18px 22px !important;
+    transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 240ms ease,
+                box-shadow 240ms ease,
+                background 240ms ease !important;
+}
+[data-testid="stVerticalBlockBorderWrapper"]:hover {
+    background: var(--glass-hover) !important;
+    border-color: rgba(255,255,255,0.12) !important;
+    transform: translateY(-2px);
+    box-shadow:
+        0 1px 0 rgba(255,255,255,0.05) inset,
+        0 20px 48px -12px rgba(0,0,0,0.55),
+        0 8px 16px -6px rgba(0,0,0,0.35),
+        0 0 0 1px var(--indigo-soft) !important;
+}
+
+/* ── Modern KPI / Metric ─────────────────────────────────────────────── */
+[data-testid="stMetric"] {
+    background: var(--glass-bg) !important;
+    backdrop-filter: blur(14px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 14px !important;
+    padding: 18px 20px !important;
+    position: relative;
+    overflow: hidden;
+    transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 240ms ease,
+                box-shadow 240ms ease !important;
+    box-shadow:
+        0 1px 0 rgba(255,255,255,0.04) inset,
+        0 8px 24px -10px rgba(0,0,0,0.4) !important;
+}
+[data-testid="stMetric"]::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--indigo) 30%, var(--emerald) 70%, transparent);
+    opacity: 0.5;
+}
+[data-testid="stMetric"]:hover {
+    transform: translateY(-2px);
+    border-color: var(--indigo-soft) !important;
+    box-shadow:
+        0 1px 0 rgba(255,255,255,0.05) inset,
+        0 20px 40px -12px rgba(0,0,0,0.55),
+        0 0 0 1px var(--indigo-soft) !important;
+}
+[data-testid="stMetricValue"] {
+    font-size: 28px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.03em !important;
+    background: linear-gradient(180deg, var(--foreground) 0%,
+                                          oklch(from var(--foreground) calc(l - 0.15) c h) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+[data-testid="stMetricLabel"] {
+    font-size: 11px !important;
+    color: var(--muted-foreground) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.08em !important;
+    font-weight: 500 !important;
+    margin-bottom: 6px !important;
+}
+
+/* ── Modern Typography hierarchy ─────────────────────────────────────── */
+.block-container h1, .lib-header h1 {
+    font-size: 36px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.035em !important;
+    line-height: 1.1 !important;
+    background: linear-gradient(180deg, var(--foreground), oklch(from var(--foreground) calc(l - 0.18) c h));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.lib-subtitle {
+    font-size: 15px !important;
+    color: var(--muted-foreground) !important;
+}
+.block-container h2 { font-size: 24px !important; font-weight: 600 !important; letter-spacing: -0.025em !important; }
+.block-container h3 { font-size: 18px !important; font-weight: 600 !important; letter-spacing: -0.015em !important; }
+
+/* ── Primary button — indigo→emerald gradient with glow ──────────────── */
+.stButton button[kind="primary"] {
+    background: linear-gradient(135deg, var(--indigo) 0%, var(--emerald) 100%) !important;
+    color: oklch(0.135 0 0) !important;
+    border: 1px solid transparent !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
+    box-shadow:
+        0 1px 0 rgba(255,255,255,0.18) inset,
+        0 6px 20px -4px var(--indigo-soft),
+        0 0 0 1px rgba(255,255,255,0.04) !important;
+    transition: transform 180ms cubic-bezier(0.22,1,0.36,1),
+                box-shadow 180ms ease, filter 180ms ease !important;
+}
+.stButton button[kind="primary"]:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.06);
+    box-shadow:
+        0 1px 0 rgba(255,255,255,0.22) inset,
+        0 12px 28px -6px var(--indigo-soft),
+        0 4px 12px -2px var(--emerald-soft),
+        0 0 0 1px rgba(255,255,255,0.06) !important;
+}
+
+/* ── Secondary buttons — glassy ──────────────────────────────────────── */
+.stButton button:not([kind="primary"]) {
+    background: var(--glass-bg) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    border: 1px solid var(--glass-border) !important;
+    color: var(--foreground) !important;
+    transition: background 180ms ease, border-color 180ms ease, transform 120ms ease !important;
+}
+.stButton button:not([kind="primary"]):hover {
+    background: var(--glass-hover) !important;
+    border-color: rgba(255,255,255,0.14) !important;
+    transform: translateY(-1px);
+}
+
+/* ── Sidebar — floating-pill dock style ──────────────────────────────── */
+[data-testid="stSidebar"] {
+    background: transparent !important;
+    border-right: none !important;
+    padding-top: 14px !important;
+}
+[data-testid="stSidebar"] > div:first-child {
+    background: var(--glass-bg) !important;
+    backdrop-filter: blur(18px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(180%) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 16px !important;
+    margin: 12px 6px 12px 12px !important;
+    box-shadow:
+        0 1px 0 rgba(255,255,255,0.04) inset,
+        0 18px 36px -10px rgba(0,0,0,0.5) !important;
+}
+[data-testid="stSidebar"] .stRadio label {
+    padding: 9px 14px !important;
+    border-radius: 10px !important;
+    font-size: 13.5px !important;
+    font-weight: 500 !important;
+    color: var(--muted-foreground) !important;
+    transition: background 160ms ease, color 160ms ease,
+                box-shadow 160ms ease !important;
+    border: 1px solid transparent !important;
+}
+[data-testid="stSidebar"] .stRadio label:hover {
+    background: var(--glass-hover) !important;
+    color: var(--foreground) !important;
+}
+[data-testid="stSidebar"] .stRadio label:has(input:checked) {
+    background: linear-gradient(135deg,
+                                 var(--indigo-soft) 0%,
+                                 var(--emerald-soft) 100%) !important;
+    color: var(--foreground) !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    box-shadow:
+        0 1px 0 rgba(255,255,255,0.06) inset,
+        0 4px 12px -4px var(--indigo-soft) !important;
+}
+
+/* Brand block modernization */
+.brand-logo {
+    background: linear-gradient(135deg, var(--indigo), var(--emerald)) !important;
+    box-shadow:
+        0 4px 12px -2px var(--indigo-soft),
+        0 1px 0 rgba(255,255,255,0.18) inset !important;
+    border-radius: 10px !important;
+}
+.brand-l1 {
+    font-size: 17px !important;
+    font-weight: 700 !important;
+    background: linear-gradient(135deg, var(--foreground), oklch(from var(--foreground) calc(l - 0.2) c h));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.brand-l2 {
+    font-size: 11px !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+}
+
+/* ── Status chips — modernize ────────────────────────────────────────── */
+.chip {
+    padding: 4px 10px !important;
+    font-size: 10.5px !important;
+    border-radius: 999px !important;
+    backdrop-filter: blur(6px) !important;
+}
+.chip-live {
+    background: linear-gradient(135deg,
+                                 oklch(0.696 0.170 162.480 / 0.18),
+                                 oklch(0.696 0.170 162.480 / 0.06)) !important;
+    border-color: oklch(0.696 0.170 162.480 / 0.4) !important;
+    color: oklch(0.78 0.13 162) !important;
+}
+.chip-paper {
+    background: linear-gradient(135deg,
+                                 oklch(0.623 0.214 259.815 / 0.18),
+                                 oklch(0.623 0.214 259.815 / 0.06)) !important;
+    border-color: oklch(0.623 0.214 259.815 / 0.4) !important;
+    color: oklch(0.78 0.18 259) !important;
+}
+
+/* ── Inputs — glassy ─────────────────────────────────────────────────── */
+.stTextInput input, .stTextArea textarea,
+.stNumberInput input, .stSelectbox > div > div {
+    background: rgba(255,255,255,0.025) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 10px !important;
+}
+.stTextInput input:focus, .stTextArea textarea:focus,
+.stNumberInput input:focus {
+    border-color: var(--indigo) !important;
+    box-shadow: 0 0 0 4px var(--indigo-soft) !important;
+}
+
+/* ── Dataframe — glassy + softer ─────────────────────────────────────── */
+.stDataFrame {
+    background: var(--glass-bg) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 14px !important;
+}
+
+/* ── Tabs — pill-style modern ────────────────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+    background: var(--glass-bg) !important;
+    backdrop-filter: blur(10px) !important;
+    border-radius: 12px !important;
+    padding: 4px !important;
+    border: 1px solid var(--glass-border) !important;
+    gap: 2px !important;
+}
+.stTabs [data-baseweb="tab"] {
+    border-radius: 8px !important;
+    border-bottom: none !important;
+    transition: background 180ms ease, color 180ms ease !important;
+    height: 34px !important;
+    padding: 0 14px !important;
+}
+.stTabs [data-baseweb="tab"]:hover {
+    background: var(--glass-hover) !important;
+}
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(135deg, var(--indigo-soft), var(--emerald-soft)) !important;
+    color: var(--foreground) !important;
+    border-bottom: none !important;
+}
+
+/* ── Page-entrance fade-up animation ─────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+    .block-container > div {
+        animation: pageFadeUp 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    @keyframes pageFadeUp {
+        from { opacity: 0; transform: translateY(8px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+}
+
+/* ── Subtle grain overlay (optional, very subtle) ────────────────────── */
+[data-testid="stApp"]::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: var(--noise-opacity);
+    z-index: 1;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
