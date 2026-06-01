@@ -1,0 +1,22 @@
+{
+  "name": "Test RSI Breakout",
+  "description": "Buy when RSI(14) crosses 70 and price > SMA200 (smoke test)",
+  "type": "Momentum",
+  "universe": "Nifty 50",
+  "entry_mode": "Formula DSL",
+  "entry_formula": "rsi_14 > 70 AND close > sma_200 AND volume_z > 1",
+  "exits": {
+    "time_enabled": true,
+    "time_days": 30,
+    "next_earnings": false,
+    "hard_stop_enabled": true,
+    "hard_stop_pct": 8.0,
+    "trail_enabled": true,
+    "trail_pct": 12.0
+  },
+  "sizing": {
+    "method": "Equal weight (capped)",
+    "max_positions": 5,
+    "initial_cash": 1000000
+  }
+}

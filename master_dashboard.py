@@ -7158,7 +7158,20 @@ def render_add_strategy() -> None:
             else:
                 if step == len(_WIZARD_STEPS):
                     sid = _save_user_strategy(data)
-                    st.success(f'Saved strategy "{data["name"]}" (id: {sid}). Status: Research')
+                    st.success(f'Saved strategy "{data["name"]}" (id: {sid}).')
+                    # Trigger generic_backtest.py subprocess
+                    with st.spinner('Running backtest — this may take 1-3 minutes…'):
+                        proc = subprocess.run(
+                            [sys.executable, 'generic_backtest.py',
+                             '--spec', f'strategies/{sid}.json'],
+                            capture_output=True, text=True, timeout=600,
+                        )
+                    if proc.returncode == 0:
+                        st.success('Backtest complete ✓ — check the Library card for KPIs')
+                        st.code(proc.stdout[-800:])
+                    else:
+                        st.warning('Backtest had issues — strategy saved as Research')
+                        st.code((proc.stderr or proc.stdout)[-1500:])
                     st.session_state['_wizard_step'] = 1
                     st.session_state['_wizard_data'] = {}
                     st.session_state['_page_override'] = 'library'
