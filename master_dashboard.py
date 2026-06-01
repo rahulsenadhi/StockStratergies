@@ -897,6 +897,321 @@ button[kind="primary"]:hover, .stButton button[kind="primary"]:hover {
     border-color: oklch(0.696 0.170 162.480 / 0.9) !important;
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   SHADCN POLISH LAYER  (shadcn/ui-inspired component refinements)
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Global type scale (shadcn defaults) ─────────────────────────────── */
+.block-container h1 {
+    font-size: 30px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.025em !important;
+    line-height: 1.2 !important;
+    color: var(--foreground) !important;
+}
+.block-container h2 {
+    font-size: 22px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.3 !important;
+    color: var(--foreground) !important;
+}
+.block-container h3 {
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.015em !important;
+    line-height: 1.35 !important;
+    color: var(--foreground) !important;
+}
+.block-container h4 {
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
+    color: var(--foreground) !important;
+}
+.block-container p, .block-container li {
+    line-height: 1.6;
+    color: var(--foreground);
+}
+.block-container small, .stCaption {
+    font-size: 12.5px !important;
+    color: var(--muted-foreground) !important;
+}
+
+/* ── Containers (st.container with border) — shadcn Card ─────────────── */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    border: 1px solid var(--border) !important;
+    background: var(--card) !important;
+    border-radius: 0.5rem !important;
+    box-shadow: 0 1px 2px 0 rgba(0,0,0,0.04) !important;
+    padding: 18px 18px 14px 18px !important;
+    transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+[data-testid="stVerticalBlockBorderWrapper"]:hover {
+    border-color: oklch(0.456 0 0) !important;
+    box-shadow: 0 2px 8px 0 rgba(0,0,0,0.08) !important;
+}
+
+/* ── Buttons (shadcn variants via Streamlit kind) ────────────────────── */
+.stButton button, .stDownloadButton button {
+    border-radius: 0.5rem !important;
+    font-weight: 500 !important;
+    font-size: 13px !important;
+    letter-spacing: -0.005em !important;
+    padding: 8px 14px !important;
+    transition: background 120ms ease, border-color 120ms ease,
+                box-shadow 120ms ease, transform 100ms ease !important;
+    box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+}
+.stButton button:not([kind="primary"]) {
+    background: var(--card) !important;
+    color: var(--foreground) !important;
+    border: 1px solid var(--border) !important;
+}
+.stButton button:not([kind="primary"]):hover {
+    background: var(--accent) !important;
+    border-color: var(--ring) !important;
+}
+.stButton button:active, .stDownloadButton button:active {
+    transform: translateY(0.5px);
+}
+.stButton button[kind="primary"] {
+    padding: 8px 16px !important;
+    box-shadow: 0 1px 2px 0 oklch(0.696 0.170 162.480 / 0.25);
+}
+.stButton button[kind="primary"]:hover {
+    box-shadow: 0 2px 8px 0 oklch(0.696 0.170 162.480 / 0.35);
+}
+
+/* ── Inputs (shadcn Input/Textarea/Select) ───────────────────────────── */
+.stTextInput input, .stTextArea textarea,
+.stNumberInput input, .stDateInput input {
+    background: var(--card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0.5rem !important;
+    color: var(--foreground) !important;
+    font-size: 13.5px !important;
+    padding: 8px 12px !important;
+    transition: border-color 120ms ease, box-shadow 120ms ease !important;
+}
+.stTextInput input:focus, .stTextArea textarea:focus,
+.stNumberInput input:focus, .stDateInput input:focus {
+    border-color: var(--ring) !important;
+    box-shadow: 0 0 0 3px oklch(0.696 0.170 162.480 / 0.18) !important;
+    outline: none !important;
+}
+
+/* Selectbox container */
+.stSelectbox > div > div {
+    background: var(--card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0.5rem !important;
+    min-height: 38px !important;
+}
+.stSelectbox > div > div:focus-within {
+    border-color: var(--ring) !important;
+    box-shadow: 0 0 0 3px oklch(0.696 0.170 162.480 / 0.18) !important;
+}
+
+/* Sliders */
+.stSlider > div > div > div {
+    background: var(--border) !important;
+}
+.stSlider > div > div > div > div {
+    background: oklch(0.696 0.170 162.480) !important;
+}
+
+/* ── Tabs (shadcn underline-on-active) ───────────────────────────────── */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    padding: 0 4px;
+}
+.stTabs [data-baseweb="tab"] {
+    height: 38px !important;
+    padding: 0 16px !important;
+    font-size: 13.5px !important;
+    font-weight: 500 !important;
+    color: var(--muted-foreground) !important;
+    background: transparent !important;
+    border-bottom: 2px solid transparent !important;
+    border-radius: 0 !important;
+    transition: color 120ms ease, border-color 120ms ease !important;
+}
+.stTabs [data-baseweb="tab"]:hover {
+    color: var(--foreground) !important;
+}
+.stTabs [aria-selected="true"] {
+    color: var(--foreground) !important;
+    border-bottom-color: oklch(0.696 0.170 162.480) !important;
+    font-weight: 600 !important;
+}
+
+/* ── Radio (shadcn segmented control / pill nav) ─────────────────────── */
+.stRadio > div {
+    gap: 4px !important;
+}
+.stRadio label {
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    padding: 6px 10px !important;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+    cursor: pointer;
+}
+
+/* Horizontal radio = segmented control */
+.stRadio[data-baseweb="radio"] > div[role="radiogroup"][aria-orientation="horizontal"],
+.stRadio div[data-testid="stRadio"] [role="radiogroup"] {
+    /* fallback no-op */
+}
+
+/* ── Checkbox + Toggle ───────────────────────────────────────────────── */
+.stCheckbox label, .stToggle label {
+    font-size: 13.5px !important;
+    color: var(--foreground) !important;
+}
+
+/* ── Caption / helper text ───────────────────────────────────────────── */
+[data-testid="stCaptionContainer"], small.caption {
+    color: var(--muted-foreground) !important;
+    font-size: 12.5px !important;
+    line-height: 1.5 !important;
+}
+
+/* ── Dataframes / Tables ─────────────────────────────────────────────── */
+.stDataFrame {
+    border: 1px solid var(--border) !important;
+    border-radius: 0.5rem !important;
+    overflow: hidden !important;
+    background: var(--card) !important;
+}
+.stDataFrame thead th {
+    background: var(--muted) !important;
+    color: var(--muted-foreground) !important;
+    font-weight: 600 !important;
+    font-size: 11.5px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    padding: 10px 12px !important;
+    border-bottom: 1px solid var(--border) !important;
+}
+.stDataFrame tbody td {
+    font-size: 13px !important;
+    padding: 8px 12px !important;
+    border-bottom: 1px solid oklch(from var(--border) l c h / 0.5) !important;
+}
+.stDataFrame tbody tr:hover td {
+    background: oklch(from var(--accent) l c h / 0.4) !important;
+}
+
+/* ── Code blocks (st.code / inline `code`) — JetBrains Mono ──────────── */
+.stCode, pre, code {
+    font-family: var(--font-mono) !important;
+    font-size: 12.5px !important;
+    background: var(--muted) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0.5rem !important;
+}
+pre {
+    padding: 14px 16px !important;
+    line-height: 1.6 !important;
+}
+.block-container p code, .block-container li code {
+    padding: 2px 6px !important;
+    font-size: 11.5px !important;
+}
+
+/* ── Expanders ───────────────────────────────────────────────────────── */
+.streamlit-expanderHeader {
+    background: var(--card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0.5rem !important;
+    font-weight: 500 !important;
+    font-size: 13.5px !important;
+    transition: background 120ms ease !important;
+}
+.streamlit-expanderHeader:hover {
+    background: var(--accent) !important;
+}
+
+/* ── Toast / Alerts (shadcn Sonner-style) ────────────────────────────── */
+.stAlert, [data-testid="stAlert"] {
+    border-radius: 0.5rem !important;
+    border-width: 1px !important;
+    padding: 12px 16px !important;
+    font-size: 13px !important;
+    box-shadow: 0 4px 12px 0 rgba(0,0,0,0.06) !important;
+}
+
+/* ── Metric (shadcn KPI card) ────────────────────────────────────────── */
+[data-testid="stMetric"] {
+    background: var(--card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0.5rem !important;
+    padding: 14px 16px !important;
+    transition: border-color 150ms ease !important;
+}
+[data-testid="stMetric"]:hover { border-color: oklch(0.456 0 0) !important; }
+[data-testid="stMetricLabel"] {
+    font-size: 11.5px !important;
+    color: var(--muted-foreground) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.06em !important;
+    font-weight: 500 !important;
+}
+[data-testid="stMetricValue"] {
+    font-size: 22px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.02em !important;
+    color: var(--foreground) !important;
+}
+
+/* ── Divider ─────────────────────────────────────────────────────────── */
+hr {
+    border: none !important;
+    border-top: 1px solid var(--border) !important;
+    margin: 16px 0 !important;
+}
+
+/* ── Sidebar: tighter & more shadcn-like ─────────────────────────────── */
+[data-testid="stSidebar"] {
+    width: 248px !important;
+}
+[data-testid="stSidebar"] .stRadio label {
+    padding: 8px 12px !important;
+    border-radius: 0.5rem !important;
+    margin: 1px 0 !important;
+    font-size: 13.5px !important;
+    font-weight: 500 !important;
+    border: 1px solid transparent !important;
+}
+[data-testid="stSidebar"] .stRadio label:has(input:checked) {
+    background: var(--sidebar-accent) !important;
+    border-color: oklch(0.696 0.170 162.480 / 0.4) !important;
+    color: var(--foreground) !important;
+}
+[data-testid="stSidebar"] .stRadio label:hover {
+    background: var(--sidebar-accent) !important;
+}
+
+/* ── Spinner — shadcn-like subtle pulse ──────────────────────────────── */
+.stSpinner > div {
+    border-top-color: oklch(0.696 0.170 162.480) !important;
+}
+
+/* ── Popover anchor (⋯ menu) ─────────────────────────────────────────── */
+.stPopover button {
+    background: transparent !important;
+    border: 1px solid var(--border) !important;
+    color: var(--muted-foreground) !important;
+    font-size: 14px !important;
+    width: 100%;
+}
+.stPopover button:hover {
+    background: var(--accent) !important;
+    color: var(--foreground) !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
