@@ -667,6 +667,236 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
         transition-duration: 0.01ms !important;
     }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   STRATEGY LIBRARY  (SaaS-style cards)
+   ════════════════════════════════════════════════════════════════════════ */
+.lib-header {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    margin: 4px 0 22px 0; padding-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+}
+.lib-header h1 {
+    font-size: 32px; font-weight: 700; letter-spacing: -0.025em;
+    margin: 0; color: var(--foreground);
+}
+.lib-subtitle {
+    font-size: 14px; color: var(--muted-foreground);
+    margin: 6px 0 0 0; line-height: 1.5;
+}
+
+/* Strategy card body */
+.strat-card { padding: 2px 2px 8px 2px; }
+.strat-card-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 8px; margin-bottom: 2px;
+}
+.strat-name {
+    font-size: 16px; font-weight: 600; letter-spacing: -0.01em;
+    color: var(--foreground); line-height: 1.25;
+}
+.strat-subtype {
+    font-size: 11px; color: var(--muted-foreground);
+    margin: 4px 0 14px 0; text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 500;
+}
+
+/* Status chips */
+.chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 3px 8px; border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    line-height: 1.4; white-space: nowrap;
+}
+.chip-live     { color: oklch(0.696 0.170 162.480); border-color: oklch(0.696 0.170 162.480 / 0.5); background: oklch(0.696 0.170 162.480 / 0.08); }
+.chip-paper    { color: oklch(0.623 0.214 259.815); border-color: oklch(0.623 0.214 259.815 / 0.5); background: oklch(0.623 0.214 259.815 / 0.08); }
+.chip-research { color: var(--muted-foreground); }
+.chip-paused   { color: oklch(0.625 0.245 27.325); border-color: oklch(0.625 0.245 27.325 / 0.5); background: oklch(0.625 0.245 27.325 / 0.08); }
+
+/* KPI grid inside cards */
+.strat-kpis {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px; margin: 4px 0 12px 0;
+}
+.strat-kpis .kpi { display: flex; flex-direction: column; gap: 2px; }
+.kpi-label {
+    font-size: 10px; color: var(--muted-foreground);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    font-weight: 500;
+}
+.kpi-val {
+    font-family: var(--font-mono);
+    font-size: 16px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    color: var(--foreground); letter-spacing: -0.01em;
+}
+.kpi-val.pos { color: oklch(0.696 0.170 162.480); }
+.kpi-val.neg { color: oklch(0.625 0.245 27.325); }
+
+.strat-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: 4px 0 8px 0;
+    font-size: 11px; color: var(--muted-foreground);
+}
+
+/* Add-new placeholder card */
+.add-card-inner {
+    text-align: center; padding: 28px 12px;
+    color: var(--muted-foreground);
+}
+.add-card-inner .plus { font-size: 28px; line-height: 1; margin-bottom: 8px; }
+.add-card-inner .add-title { font-size: 15px; font-weight: 600; color: var(--foreground); }
+.add-card-inner .add-sub { font-size: 12px; margin-top: 4px; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   WIZARD  (Add Strategy)
+   ════════════════════════════════════════════════════════════════════════ */
+.step-pill {
+    display: inline-block;
+    padding: 5px 12px; border-radius: 999px;
+    background: var(--secondary);
+    font-size: 12px; color: var(--muted-foreground);
+    font-weight: 500;
+}
+
+.step-indicator {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin: 18px 0 24px 0; padding: 0 4px;
+}
+.step {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 8px; flex: 0 0 auto; min-width: 90px;
+}
+.step-dot {
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    font-size: 13px; font-weight: 600;
+    border: 1.5px solid var(--border);
+    background: var(--card);
+    color: var(--muted-foreground);
+    transition: all 180ms ease;
+}
+.step.step-active .step-dot {
+    background: oklch(0.696 0.170 162.480);
+    border-color: oklch(0.696 0.170 162.480);
+    color: var(--background);
+    box-shadow: 0 0 0 4px oklch(0.696 0.170 162.480 / 0.15);
+}
+.step.step-done .step-dot {
+    background: oklch(0.696 0.170 162.480);
+    border-color: oklch(0.696 0.170 162.480);
+    color: var(--background);
+}
+.step-label {
+    font-size: 10px; color: var(--muted-foreground);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    font-weight: 500; text-align: center;
+}
+.step.step-active .step-label,
+.step.step-done .step-label {
+    color: var(--foreground);
+}
+.step-line {
+    flex: 1; height: 2px; margin: 16px 6px 0 6px;
+    background: var(--border);
+    align-self: flex-start;
+}
+.step-line.line-done {
+    background: oklch(0.696 0.170 162.480);
+}
+
+/* Wizard body container */
+.wizard-step-body { padding: 6px 0 4px 0; }
+.wizard-step-body h3 {
+    font-size: 20px; font-weight: 600; letter-spacing: -0.02em;
+    margin: 0 0 4px 0; color: var(--foreground);
+}
+.wizard-step-body .caption {
+    font-size: 13px; color: var(--muted-foreground); margin-bottom: 18px;
+}
+
+/* DSL formula textarea — monospace */
+.stTextArea textarea, .stCode {
+    font-family: var(--font-mono) !important;
+    font-feature-settings: "tnum";
+    font-size: 13px !important;
+    line-height: 1.5 !important;
+}
+
+/* Available columns helper */
+.dsl-columns {
+    background: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    font-family: var(--font-mono);
+    font-size: 11px; color: var(--muted-foreground);
+    line-height: 1.6;
+    margin: 8px 0;
+}
+.dsl-columns code {
+    background: var(--card); padding: 1px 6px; border-radius: 4px;
+    color: var(--foreground); margin: 0 2px;
+}
+
+/* Validation badge */
+.dsl-valid {
+    color: oklch(0.696 0.170 162.480); font-size: 12px; font-weight: 500;
+    padding: 6px 0; display: flex; align-items: center; gap: 6px;
+}
+.dsl-invalid {
+    color: oklch(0.625 0.245 27.325); font-size: 12px; font-weight: 500;
+    padding: 6px 0; display: flex; align-items: center; gap: 6px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   GLOBAL POLISH — tabular nums + focus rings + heading scale tighten
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Tabular numerals globally for numeric content */
+.stMarkdown code,
+.stMarkdown table td,
+.stDataFrame td, .stDataFrame th,
+[data-testid="stMetricValue"], [data-testid="stMetricDelta"] {
+    font-variant-numeric: tabular-nums !important;
+    font-feature-settings: "tnum" !important;
+}
+
+/* Tighten H1 / H2 across pages */
+.page-title {
+    font-size: 28px !important; font-weight: 700 !important;
+    letter-spacing: -0.025em !important;
+}
+
+/* Focus ring on all interactive elements */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[data-testid="stRadio"] label:focus-visible {
+    outline: 2px solid oklch(0.696 0.170 162.480 / 0.7) !important;
+    outline-offset: 2px !important;
+    border-radius: var(--radius-sm);
+}
+
+/* Primary button — green accent */
+button[kind="primary"], .stButton button[kind="primary"] {
+    background: oklch(0.696 0.170 162.480) !important;
+    color: oklch(0.145 0 0) !important;
+    border: 1px solid oklch(0.696 0.170 162.480) !important;
+    font-weight: 600 !important;
+}
+button[kind="primary"]:hover, .stButton button[kind="primary"]:hover {
+    background: oklch(0.696 0.170 162.480 / 0.9) !important;
+    border-color: oklch(0.696 0.170 162.480 / 0.9) !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -3991,8 +4221,12 @@ def render_sidebar() -> str:
 
         page = st.radio(
             'Navigate',
-            ['🏠  Home', '🔄  Monthly Rotation', '🚀  IPO Edge',
-             '📈  Momentum Edge', '⚡  PEAD', '🎯  Suggestions', '🔬  Insights',
+            ['🏠  Home',
+             '📚  Strategy Library',
+             '➕  Add Strategy',
+             '🔄  Monthly Rotation', '🚀  IPO Edge',
+             '📈  Momentum Edge', '⚡  PEAD',
+             '🎯  Suggestions', '🔬  Insights',
              '📊  History & Proof'],
             label_visibility='collapsed',
         )
@@ -6370,6 +6604,571 @@ def render_insights(m: dict, i: dict, mo: dict) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  STRATEGY LIBRARY  (SaaS-style card grid)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import json as _json
+from datetime import datetime as _dt
+
+_STRATEGIES_INDEX = Path('strategies_index.json')
+
+
+def _load_strategies_index() -> list[dict]:
+    if not _STRATEGIES_INDEX.exists():
+        return []
+    try:
+        return _json.loads(_STRATEGIES_INDEX.read_text())['strategies']
+    except Exception:
+        return []
+
+
+def _save_strategies_index(strats: list[dict]) -> None:
+    payload = {'strategies': strats}
+    _STRATEGIES_INDEX.write_text(_json.dumps(payload, indent=2, default=str))
+
+
+def _human_time_ago(iso_str: str) -> str:
+    try:
+        ts = _dt.fromisoformat(iso_str.replace('Z', ''))
+        delta = _dt.now() - ts
+        sec = int(delta.total_seconds())
+        if sec < 60:    return 'just now'
+        if sec < 3600:  return f'{sec // 60}m ago'
+        if sec < 86400: return f'{sec // 3600}h ago'
+        if sec < 7 * 86400: return f'{sec // 86400}d ago'
+        return ts.strftime('%Y-%m-%d')
+    except Exception:
+        return iso_str[:10] if iso_str else '—'
+
+
+def _status_chip_html(status: str) -> str:
+    chip_map = {
+        'Live':     '<span class="chip chip-live">● Live</span>',
+        'Paper':    '<span class="chip chip-paper">◐ Paper</span>',
+        'Research': '<span class="chip chip-research">○ Research</span>',
+        'Paused':   '<span class="chip chip-paused">‖ Paused</span>',
+    }
+    return chip_map.get(status, f'<span class="chip">{status}</span>')
+
+
+def _render_sparkline(equity_csv: str, color: str = 'oklch(0.696 0.170 162.480)') -> None:
+    """Tiny inline sparkline from equity curve CSV."""
+    import plotly.graph_objects as go
+    p = Path(equity_csv) if equity_csv else None
+    if not p or not p.exists():
+        st.markdown('<div style="height:40px;color:var(--muted-foreground);font-size:11px;'
+                    'display:flex;align-items:center;justify-content:center;">'
+                    'no equity curve</div>', unsafe_allow_html=True)
+        return
+    try:
+        df = pd.read_csv(p)
+        # Find a value column
+        val_col = None
+        for c in ('equity', 'Portfolio_Value', 'Portfolio Value', 'value', 'NAV'):
+            if c in df.columns:
+                val_col = c; break
+        if val_col is None:
+            # try last numeric column
+            num_cols = df.select_dtypes(include='number').columns.tolist()
+            if not num_cols:
+                return
+            val_col = num_cols[-1]
+        s = df[val_col].dropna().astype(float).reset_index(drop=True)
+        if len(s) < 2:
+            return
+        # Down-sample to ~80 points
+        if len(s) > 80:
+            s = s.iloc[::max(1, len(s) // 80)]
+
+        fig = go.Figure(go.Scatter(
+            y=s.values, mode='lines',
+            line=dict(color=color, width=1.5),
+            fill='tozeroy', fillcolor='rgba(34,197,94,0.10)',
+            hoverinfo='skip',
+        ))
+        fig.update_layout(
+            height=44,
+            margin=dict(l=0, r=0, t=0, b=0),
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+            xaxis=dict(visible=False, fixedrange=True),
+            yaxis=dict(visible=False, fixedrange=True),
+            showlegend=False,
+        )
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'staticPlot': True})
+    except Exception:
+        st.markdown('<div style="height:40px;color:var(--muted-foreground);font-size:11px;">'
+                    'sparkline error</div>', unsafe_allow_html=True)
+
+
+def _render_strategy_card(strat: dict) -> None:
+    k = strat.get('kpis_inline', {})
+    cagr = k.get('cagr', 0) * 100
+    sharpe = k.get('sharpe', 0)
+    max_dd = k.get('max_dd', 0) * 100
+    delta_arrow = '↗' if cagr > 0 else '↘'
+    delta_class = 'pos' if cagr > 0 else 'neg'
+    status = strat.get('status', 'Research')
+
+    with st.container(border=True):
+        st.markdown(f"""
+            <div class="strat-card">
+              <div class="strat-card-head">
+                <div>
+                  <div class="strat-name">{strat['name']}</div>
+                  <div class="strat-subtype">{strat.get('type', '—')} · {status}</div>
+                </div>
+                <div>{_status_chip_html(status)}</div>
+              </div>
+              <div class="strat-kpis">
+                <div class="kpi"><span class="kpi-label">CAGR</span>
+                     <span class="kpi-val {delta_class}">{cagr:+.2f}% {delta_arrow}</span></div>
+                <div class="kpi"><span class="kpi-label">Sharpe</span>
+                     <span class="kpi-val">{sharpe:.2f}</span></div>
+                <div class="kpi"><span class="kpi-label">Max DD</span>
+                     <span class="kpi-val neg">{max_dd:+.2f}%</span></div>
+              </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        _render_sparkline(strat.get('equity_csv', ''))
+
+        st.markdown(f"""
+            <div class="strat-footer">
+              <span>Last run: {_human_time_ago(strat.get('last_run', ''))}</span>
+              <span>{k.get('num_trades', '—')} trades</span>
+            </div>
+        """, unsafe_allow_html=True)
+
+        b1, b2 = st.columns([4, 1])
+        with b1:
+            if st.button('Open', key=f"open_{strat['id']}", use_container_width=True):
+                page_key = strat.get('page_key', 'Home')
+                st.session_state['_jump_to'] = page_key
+                st.rerun()
+        with b2:
+            if st.button('⋯', key=f"menu_{strat['id']}", use_container_width=True,
+                         help='Backtest · Edit · Archive'):
+                st.toast(f"Actions for {strat['name']} — coming in v2")
+
+
+def _render_add_card() -> None:
+    with st.container(border=True):
+        st.markdown("""
+            <div class="add-card-inner">
+                <div class="plus">+</div>
+                <div class="add-title">New strategy</div>
+                <div class="add-sub">Define entry, exit, sizing rules</div>
+            </div>
+        """, unsafe_allow_html=True)
+        if st.button('Get started →', key='add_card_btn', use_container_width=True, type='primary'):
+            st.session_state['_page_override'] = 'add_strategy'
+            st.rerun()
+
+
+def render_strategy_library(m: dict, i: dict, mo: dict) -> None:
+    """Strategy Library page — grid of all strategies."""
+    st.markdown("""
+        <div class="lib-header">
+            <div>
+                <h1>Strategy Library</h1>
+                <p class="lib-subtitle">Browse, compare, and deploy your audit-graded strategies</p>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Action row
+    a1, a2 = st.columns([1, 5])
+    with a1:
+        if st.button('+ New strategy', type='primary', use_container_width=True, key='lib_new_btn'):
+            st.session_state['_page_override'] = 'add_strategy'
+            st.rerun()
+
+    # Filters
+    f1, f2, f3, f4 = st.columns([2, 2, 2, 4])
+    with f1:
+        type_filter = st.selectbox('Type', ['All', 'Quant', 'Momentum', 'Breakout', 'Earnings', 'Custom'],
+                                    key='lib_type_filter', label_visibility='collapsed')
+    with f2:
+        status_filter = st.selectbox('Status', ['All', 'Live', 'Paper', 'Research', 'Paused'],
+                                      key='lib_status_filter', label_visibility='collapsed')
+    with f3:
+        sort_by = st.selectbox('Sort', ['Last run', 'CAGR', 'Sharpe', 'Name'],
+                                key='lib_sort_by', label_visibility='collapsed')
+    with f4:
+        search = st.text_input('Search', placeholder='🔍  Search strategies...',
+                                key='lib_search', label_visibility='collapsed')
+
+    strats = _load_strategies_index()
+
+    if type_filter != 'All':
+        strats = [s for s in strats if s.get('type') == type_filter]
+    if status_filter != 'All':
+        strats = [s for s in strats if s.get('status') == status_filter]
+    if search:
+        s_lower = search.lower()
+        strats = [s for s in strats if s_lower in s['name'].lower()
+                  or s_lower in s.get('description', '').lower()]
+
+    sort_keys = {
+        'CAGR':     lambda s: -(s.get('kpis_inline', {}).get('cagr', 0)),
+        'Sharpe':   lambda s: -(s.get('kpis_inline', {}).get('sharpe', 0)),
+        'Name':     lambda s: s.get('name', ''),
+        'Last run': lambda s: s.get('last_run', ''),
+    }
+    if sort_by == 'Last run':
+        strats.sort(key=sort_keys[sort_by], reverse=True)
+    else:
+        strats.sort(key=sort_keys[sort_by])
+
+    if not strats:
+        st.info('No strategies match. Click "+ New strategy" to create one.')
+        return
+
+    st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+
+    # 3-col grid
+    for row_start in range(0, len(strats), 3):
+        cols = st.columns(3, gap='medium')
+        for col, strat in zip(cols, strats[row_start:row_start + 3]):
+            with col:
+                _render_strategy_card(strat)
+
+    # Trailing add-card if last row has empty slot(s)
+    remainder = (3 - (len(strats) % 3)) if (len(strats) % 3) else 0
+    if remainder > 0:
+        st.markdown('<div style="height:6px"></div>', unsafe_allow_html=True)
+        cols = st.columns(3, gap='medium')
+        with cols[0]:
+            _render_add_card()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  ADD STRATEGY  (5-step wizard)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_WIZARD_STEPS = ['Basics', 'Universe', 'Entry rules', 'Exit rules', 'Sizing & Save']
+
+
+def _wizard_init() -> None:
+    if '_wizard_step' not in st.session_state:
+        st.session_state['_wizard_step'] = 1
+    if '_wizard_data' not in st.session_state:
+        st.session_state['_wizard_data'] = {}
+
+
+def _render_step_indicator(active: int) -> None:
+    html = '<div class="step-indicator">'
+    for i, label in enumerate(_WIZARD_STEPS, start=1):
+        state = 'done' if i < active else ('active' if i == active else 'todo')
+        html += f'<div class="step step-{state}">'
+        html += f'<div class="step-dot">{i if state != "done" else "✓"}</div>'
+        html += f'<div class="step-label">{label}</div>'
+        html += '</div>'
+        if i < len(_WIZARD_STEPS):
+            line_class = 'line-done' if i < active else 'line-todo'
+            html += f'<div class="step-line {line_class}"></div>'
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def _dry_run_formula(formula: str) -> tuple[bool, str, int]:
+    """Validate formula syntax via pandas.eval on a dummy frame.
+
+    Returns (is_valid, msg, est_events_per_year).
+    """
+    try:
+        if not formula.strip():
+            return False, 'Empty formula', 0
+        # Build a tiny synthetic frame with common columns
+        df = pd.DataFrame({
+            'sue': [2.5, 0.5, -1, 3],
+            'piotroski': [8, 5, 3, 9],
+            'pb': [1.5, 3, 2, 1],
+            'pb_sector_median': [2, 2, 2, 2],
+            'rsi_14': [70, 45, 30, 80],
+            'atr_14': [10, 5, 2, 12],
+            'sma_50': [100, 200, 150, 120],
+            'sma_200': [80, 220, 140, 110],
+            'volume_z': [2, 0.5, -1, 3],
+            'mcap_cr': [50000, 10000, 5000, 100000],
+        })
+        # Replace AND/OR (case-insensitive) with & / |
+        normalized = formula.replace(' AND ', ' & ').replace(' and ', ' & ')
+        normalized = normalized.replace(' OR ', ' | ').replace(' or ', ' | ')
+        # Wrap atomic comparisons in parentheses-safe way — let pandas.eval handle
+        mask = df.eval(normalized)
+        if hasattr(mask, 'sum'):
+            hits = int(mask.sum())
+            # Extrapolate: 4 rows → events/yr roughly ~hits * (universe_size * quarters / 4)
+            est_per_yr = max(0, hits * 50)  # rough heuristic
+            return True, 'Formula valid', est_per_yr
+        return False, 'Formula did not evaluate to a boolean mask', 0
+    except Exception as e:
+        return False, f"Syntax: {e}", 0
+
+
+def _step_basics(data: dict) -> None:
+    st.markdown('<div class="wizard-step-body"><h3>Strategy basics</h3>'
+                '<p class="caption">Name and categorize your strategy</p></div>',
+                unsafe_allow_html=True)
+    data['name'] = st.text_input('Name *', value=data.get('name', ''),
+                                  placeholder='e.g., High SUE + Quality')
+    data['description'] = st.text_area('Description', value=data.get('description', ''),
+                                        placeholder='What does this strategy try to capture?',
+                                        height=80)
+    data['type'] = st.selectbox('Type', ['Quant', 'Momentum', 'Breakout', 'Earnings', 'Custom'],
+                                 index=['Quant', 'Momentum', 'Breakout', 'Earnings', 'Custom'].index(
+                                     data.get('type', 'Custom')))
+
+
+def _step_universe(data: dict) -> None:
+    st.markdown('<div class="wizard-step-body"><h3>Stock universe</h3>'
+                '<p class="caption">Which stocks should the strategy consider?</p></div>',
+                unsafe_allow_html=True)
+    data['universe'] = st.selectbox('Universe',
+        ['Nifty 50', 'Nifty 100', 'Nifty 200', 'Nifty 500',
+         'BSE 500', 'Full NSE+BSE', 'Custom CSV'],
+        index=['Nifty 50', 'Nifty 100', 'Nifty 200', 'Nifty 500',
+               'BSE 500', 'Full NSE+BSE', 'Custom CSV'].index(data.get('universe', 'Nifty 200')))
+    if data['universe'] == 'Custom CSV':
+        data['custom_csv_path'] = st.text_input('CSV path',
+            value=data.get('custom_csv_path', 'data/universe/custom.csv'),
+            help='CSV with a column named "ticker" or "yf_ticker"')
+
+
+def _step_entry(data: dict) -> None:
+    st.markdown('<div class="wizard-step-body"><h3>Entry rules</h3>'
+                '<p class="caption">When should the strategy buy?</p></div>',
+                unsafe_allow_html=True)
+    data['entry_mode'] = st.radio('Mode',
+                                   ['Formula DSL', 'Rule builder (coming soon)'],
+                                   horizontal=True,
+                                   index=0,
+                                   key='entry_mode_radio')
+
+    if data['entry_mode'] == 'Formula DSL':
+        st.markdown(
+            '<div class="dsl-columns">Available columns: '
+            '<code>sue</code> <code>piotroski</code> <code>pb</code> '
+            '<code>pb_sector_median</code> <code>rsi_14</code> <code>atr_14</code> '
+            '<code>sma_50</code> <code>sma_200</code> <code>volume_z</code> '
+            '<code>mcap_cr</code>'
+            '</div>', unsafe_allow_html=True)
+
+        data['entry_formula'] = st.text_area(
+            'Entry formula',
+            value=data.get('entry_formula', ''),
+            placeholder='e.g., sue > 2 AND piotroski >= 7 AND pb < pb_sector_median',
+            height=90,
+            key='entry_formula_input',
+        )
+
+        if data['entry_formula'].strip():
+            valid, msg, est = _dry_run_formula(data['entry_formula'])
+            if valid:
+                st.markdown(
+                    f'<div class="dsl-valid">✓ Formula valid — would trigger ~{est}/yr on a Nifty 200 universe</div>',
+                    unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="dsl-invalid">✗ {msg}</div>', unsafe_allow_html=True)
+    else:
+        st.info('Rule builder is on the roadmap. Use Formula DSL for now.')
+
+
+def _step_exit(data: dict) -> None:
+    st.markdown('<div class="wizard-step-body"><h3>Exit rules</h3>'
+                '<p class="caption">When should the strategy sell?</p></div>',
+                unsafe_allow_html=True)
+    data.setdefault('exits', {})
+
+    c1, c2 = st.columns(2)
+    with c1:
+        time_exit = st.checkbox('Time-based exit',
+                                 value=data['exits'].get('time_enabled', True))
+        if time_exit:
+            data['exits']['time_days'] = st.number_input('Hold days',
+                value=data['exits'].get('time_days', 60), min_value=1, max_value=730, step=1)
+        data['exits']['time_enabled'] = time_exit
+
+        next_earn = st.checkbox('Exit day before next earnings',
+                                 value=data['exits'].get('next_earnings', True))
+        data['exits']['next_earnings'] = next_earn
+    with c2:
+        hard_stop = st.checkbox('Hard stop loss',
+                                 value=data['exits'].get('hard_stop_enabled', True))
+        if hard_stop:
+            data['exits']['hard_stop_pct'] = st.number_input('Hard stop % (loss)',
+                value=data['exits'].get('hard_stop_pct', 10.0),
+                min_value=1.0, max_value=50.0, step=0.5)
+        data['exits']['hard_stop_enabled'] = hard_stop
+
+        trail = st.checkbox('Trailing stop',
+                            value=data['exits'].get('trail_enabled', False))
+        if trail:
+            data['exits']['trail_pct'] = st.number_input('Trail % from peak',
+                value=data['exits'].get('trail_pct', 8.0),
+                min_value=1.0, max_value=50.0, step=0.5)
+        data['exits']['trail_enabled'] = trail
+
+
+def _step_sizing_save(data: dict) -> None:
+    st.markdown('<div class="wizard-step-body"><h3>Sizing & save</h3>'
+                '<p class="caption">How big should each position be?</p></div>',
+                unsafe_allow_html=True)
+    data['sizing'] = data.get('sizing', {})
+    data['sizing']['method'] = st.selectbox('Method',
+        ['Equal weight (capped)', 'Equal weight (unlimited)', 'Volatility-targeted', 'SUE-weighted'],
+        index=['Equal weight (capped)', 'Equal weight (unlimited)', 'Volatility-targeted', 'SUE-weighted'].index(
+            data['sizing'].get('method', 'Equal weight (capped)')))
+
+    if 'capped' in data['sizing']['method']:
+        data['sizing']['max_positions'] = st.number_input('Max concurrent positions',
+            value=data['sizing'].get('max_positions', 10), min_value=1, max_value=50, step=1)
+
+    data['sizing']['initial_cash'] = st.number_input('Initial cash (₹)',
+        value=data['sizing'].get('initial_cash', 1_000_000),
+        min_value=10_000, max_value=10_00_00_000, step=10_000)
+
+    st.markdown('<div style="height:12px"></div>', unsafe_allow_html=True)
+    st.markdown('### Review')
+    st.json({
+        'Name':        data.get('name', '—'),
+        'Type':        data.get('type', '—'),
+        'Universe':    data.get('universe', '—'),
+        'Entry':       data.get('entry_formula') or 'No entry formula',
+        'Exits':       data.get('exits', {}),
+        'Sizing':      data.get('sizing', {}),
+    })
+
+
+def _validate_step(step: int, data: dict) -> tuple[bool, str]:
+    if step == 1:
+        if not data.get('name', '').strip():
+            return False, 'Strategy name is required'
+        existing = [s['id'] for s in _load_strategies_index()]
+        sid = data['name'].lower().replace(' ', '_')
+        if sid in existing:
+            return False, f"Name already exists ({sid}). Pick another."
+        return True, ''
+    if step == 3:
+        if data.get('entry_mode') == 'Formula DSL':
+            if not data.get('entry_formula', '').strip():
+                return False, 'Entry formula required'
+            valid, msg, _ = _dry_run_formula(data['entry_formula'])
+            if not valid:
+                return False, msg
+        return True, ''
+    if step == 4:
+        ex = data.get('exits', {})
+        any_enabled = any([ex.get('time_enabled'), ex.get('next_earnings'),
+                            ex.get('hard_stop_enabled'), ex.get('trail_enabled')])
+        if not any_enabled:
+            return False, 'At least one exit rule required'
+        return True, ''
+    return True, ''
+
+
+def _save_user_strategy(data: dict) -> str:
+    sid = data['name'].lower().replace(' ', '_').replace('-', '_')
+    strats = _load_strategies_index()
+    new_strat = {
+        'id': sid,
+        'name': data['name'],
+        'type': data.get('type', 'Custom'),
+        'status': 'Research',
+        'description': data.get('description', ''),
+        'universe': data.get('universe', 'Nifty 200'),
+        'entry_rule': data.get('entry_formula', ''),
+        'exit_rule': _summarize_exits(data.get('exits', {})),
+        'sizing': data.get('sizing', {}),
+        'trades_csv': '',
+        'equity_csv': '',
+        'kpis_inline': {},
+        'last_run': _dt.now().isoformat(timespec='seconds'),
+        'created': _dt.now().isoformat(timespec='seconds'),
+        'page_key': 'Library',
+    }
+    strats.append(new_strat)
+    _save_strategies_index(strats)
+    # Also dump the full spec
+    spec_dir = Path('strategies'); spec_dir.mkdir(exist_ok=True)
+    (spec_dir / f"{sid}.json").write_text(_json.dumps(data, indent=2, default=str))
+    return sid
+
+
+def _summarize_exits(ex: dict) -> str:
+    parts = []
+    if ex.get('time_enabled'):
+        parts.append(f"hold {ex.get('time_days', 60)}d")
+    if ex.get('next_earnings'):
+        parts.append('next earnings')
+    if ex.get('hard_stop_enabled'):
+        parts.append(f"hard stop {ex.get('hard_stop_pct', 10)}%")
+    if ex.get('trail_enabled'):
+        parts.append(f"trail {ex.get('trail_pct', 8)}%")
+    return ' · '.join(parts) or '—'
+
+
+def render_add_strategy() -> None:
+    """5-step wizard for creating a new strategy."""
+    _wizard_init()
+    step = st.session_state['_wizard_step']
+    data = st.session_state['_wizard_data']
+
+    # Header row
+    h1, h2 = st.columns([2, 1])
+    with h1:
+        if st.button('← Back to Library', key='wiz_back_lib'):
+            st.session_state['_wizard_step'] = 1
+            st.session_state['_wizard_data'] = {}
+            st.session_state['_page_override'] = 'library'
+            st.rerun()
+    with h2:
+        st.markdown(f'<div class="step-pill" style="float:right;">Step {step} of {len(_WIZARD_STEPS)}</div>',
+                    unsafe_allow_html=True)
+
+    st.markdown('<h1 style="font-size:28px;font-weight:700;letter-spacing:-0.025em;'
+                'margin:8px 0 4px 0;">Create new strategy</h1>'
+                '<p style="font-size:14px;color:var(--muted-foreground);margin:0 0 4px 0;">'
+                'Define entry, exit, and sizing rules</p>', unsafe_allow_html=True)
+
+    _render_step_indicator(step)
+
+    with st.container(border=True):
+        if step == 1:   _step_basics(data)
+        elif step == 2: _step_universe(data)
+        elif step == 3: _step_entry(data)
+        elif step == 4: _step_exit(data)
+        elif step == 5: _step_sizing_save(data)
+
+    # Footer nav
+    st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+    fb1, fb2, fb3 = st.columns([1, 1, 2])
+    with fb1:
+        if step > 1:
+            if st.button('← Back', key='wiz_prev'):
+                st.session_state['_wizard_step'] -= 1; st.rerun()
+    with fb3:
+        next_label = ['Next: Universe →', 'Next: Entry rules →', 'Next: Exit rules →',
+                       'Next: Sizing →', 'Save strategy'][step - 1]
+        if st.button(next_label, key='wiz_next', type='primary', use_container_width=True):
+            ok, msg = _validate_step(step, data)
+            if not ok:
+                st.error(msg)
+            else:
+                if step == len(_WIZARD_STEPS):
+                    sid = _save_user_strategy(data)
+                    st.success(f'Saved strategy "{data["name"]}" (id: {sid}). Status: Research')
+                    st.session_state['_wizard_step'] = 1
+                    st.session_state['_wizard_data'] = {}
+                    st.session_state['_page_override'] = 'library'
+                    st.rerun()
+                else:
+                    st.session_state['_wizard_step'] += 1
+                    st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -6386,8 +7185,23 @@ def main():
 
     page_clean = page.split('  ', 1)[-1] if '  ' in page else page.lstrip('🏠🔄🚀📈📊 ')
 
+    # Wizard / detail page overrides
+    override = st.session_state.get('_page_override')
+    if override == 'library':
+        st.session_state['_page_override'] = None
+        render_strategy_library(m, i, mo)
+        return
+    elif override == 'add_strategy':
+        st.session_state['_page_override'] = None
+        render_add_strategy()
+        return
+
     if 'Home' in page:
         render_home(m, i, mo)
+    elif 'Strategy Library' in page:
+        render_strategy_library(m, i, mo)
+    elif 'Add Strategy' in page:
+        render_add_strategy()
     elif 'Monthly' in page:
         render_monthly(m)
     elif 'IPO' in page:

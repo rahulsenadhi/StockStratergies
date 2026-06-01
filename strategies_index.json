@@ -1,0 +1,97 @@
+{
+  "strategies": [
+    {
+      "id": "monthly_rotation",
+      "name": "Monthly Rotation",
+      "type": "Quant",
+      "status": "Live",
+      "description": "Rotate into top-5 Nifty 50 stocks by Relative Strength each month",
+      "universe": "Nifty 50",
+      "entry_rule": "Top-5 RS Score (monthly)",
+      "exit_rule": "Last Friday of month rebalance",
+      "trades_csv": "rebalance_log.csv",
+      "equity_csv": "backtest_results.csv",
+      "live_signals_csv": "live_rankings.csv",
+      "kpis_inline": {
+        "cagr": 0.2249,
+        "sharpe": 1.54,
+        "max_dd": -0.1143,
+        "total_return": 0.8075,
+        "alpha": 0.1391,
+        "num_trades": 35
+      },
+      "last_run": "2026-06-01T12:42:00",
+      "created": "2025-12-01",
+      "page_key": "Monthly"
+    },
+    {
+      "id": "ipo_edge",
+      "name": "IPO Edge",
+      "type": "Breakout",
+      "status": "Live",
+      "description": "Buy recent IPOs (<1yr listing) on base-breakout patterns",
+      "universe": "NSE IPOs (252 trading days)",
+      "entry_rule": "Stage 1 base + 10d breakout",
+      "exit_rule": "Hard stop -10% or SMA10 trail",
+      "trades_csv": "ipo_edge_trades.csv",
+      "equity_csv": "ipo_edge_equity.csv",
+      "kpis_inline": {
+        "cagr": 0.1019,
+        "sharpe": 1.39,
+        "max_dd": -0.0568,
+        "total_return": 0.2204,
+        "win_rate": 0.562,
+        "num_trades": 64
+      },
+      "last_run": "2026-05-29T22:00:00",
+      "created": "2025-08-01",
+      "page_key": "IPO"
+    },
+    {
+      "id": "momentum_edge",
+      "name": "Momentum Edge",
+      "type": "Momentum",
+      "status": "Live",
+      "description": "Large/mid-cap stocks recovering from below 220 EMA then breaking ATH",
+      "universe": "FULL_NSE_BSE (~963 active)",
+      "entry_rule": "F1-F6 filter funnel + sequential signal",
+      "exit_rule": "15% Hard Stop OR 220 EMA Break OR ATH trail",
+      "trades_csv": "momentum_edge_trades.csv",
+      "equity_csv": "momentum_edge_equity.csv",
+      "kpis_inline": {
+        "cagr": 0.1216,
+        "sharpe": 0.84,
+        "max_dd": -0.2635,
+        "total_return": 1.9471,
+        "win_rate": 0.292,
+        "num_trades": 137
+      },
+      "last_run": "2026-06-01T13:55:00",
+      "created": "2016-12-30",
+      "page_key": "Momentum"
+    },
+    {
+      "id": "pead",
+      "name": "PEAD",
+      "type": "Earnings",
+      "status": "Paper",
+      "description": "Top-decile SUE earnings surprise filtered by Piotroski >=7 and P/B <= sector median",
+      "universe": "Nifty 50-ish (54 tickers)",
+      "entry_rule": "SUE decile=10 AND Piotroski>=7 AND PB<=sector_median",
+      "exit_rule": "60d hold OR day-before-next-earnings",
+      "trades_csv": "pead_trades.csv",
+      "equity_csv": "pead_equity.csv",
+      "kpis_csv": "pead_kpis.csv",
+      "kpis_inline": {
+        "cagr": 0.2610,
+        "sharpe": 15.26,
+        "max_dd": -0.0312,
+        "win_rate": 1.0,
+        "num_trades": 4
+      },
+      "last_run": "2026-05-27T00:27:00",
+      "created": "2026-05-25",
+      "page_key": "PEAD"
+    }
+  ]
+}
