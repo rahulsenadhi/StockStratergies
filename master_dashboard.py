@@ -1577,6 +1577,84 @@ html, body, [data-testid="stApp"] {
     }
 }
 
+/* ── Equal-height columns (fixes ragged card grid) ───────────────────── */
+[data-testid="stHorizontalBlock"] {
+    display: flex !important;
+    align-items: stretch !important;
+    gap: 18px !important;
+}
+[data-testid="stHorizontalBlock"] > [data-testid="column"] {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 0 !important;
+}
+[data-testid="stHorizontalBlock"] > [data-testid="column"] > div {
+    flex: 1;
+    display: flex !important;
+    flex-direction: column !important;
+}
+[data-testid="stHorizontalBlock"] > [data-testid="column"] [data-testid="stVerticalBlockBorderWrapper"] {
+    flex: 1 1 auto;
+    height: 100%;
+}
+
+/* KPI tiles consistent min-height + better center alignment */
+[data-testid="stMetric"] {
+    min-height: 108px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+}
+
+/* Sidebar nav option labels should not wrap awkwardly */
+[data-testid="stSidebar"] .stRadio label {
+    white-space: nowrap !important;
+}
+
+/* Page section vertical rhythm */
+.block-container > div > div > [data-testid="stVerticalBlock"] {
+    gap: 18px !important;
+}
+.section-spacer-lg { height: 36px; }
+.section-spacer    { height: 22px; }
+
+/* Subheaders modern look */
+.block-container [data-testid="stMarkdownContainer"] > h3 {
+    margin: 28px 0 10px 0 !important;
+    padding-bottom: 8px !important;
+    border-bottom: 1px solid var(--glass-border) !important;
+    display: flex !important; align-items: center !important;
+    gap: 8px !important;
+}
+.block-container [data-testid="stMarkdownContainer"] > h3::before {
+    content: '';
+    width: 3px; height: 18px;
+    background: linear-gradient(180deg, var(--indigo), var(--emerald));
+    border-radius: 2px;
+    display: inline-block;
+}
+
+/* lib-header gets more breathing room */
+.lib-header {
+    margin: 8px 0 28px 0 !important;
+    padding-bottom: 20px !important;
+    border-bottom: 1px solid var(--glass-border) !important;
+}
+
+/* Strategy library cards — uniform target height + nicer body padding */
+.strat-card {
+    min-height: 200px !important;
+}
+
+/* Dataframe gets airier */
+.stDataFrame {
+    padding: 2px !important;
+}
+.stDataFrame thead th {
+    background: rgba(255,255,255,0.04) !important;
+    padding: 11px 14px !important;
+}
+
 /* ── Subtle grain overlay (optional, very subtle) ────────────────────── */
 [data-testid="stApp"]::after {
     content: '';
@@ -5027,7 +5105,7 @@ def render_sidebar() -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def render_home(m: dict, i: dict, mo: dict):
-    # SaaS Dashboard header
+    # ── SaaS Dashboard header ──────────────────────────────────────────────
     st.markdown("""
     <div class="lib-header">
         <div>
@@ -5037,50 +5115,62 @@ def render_home(m: dict, i: dict, mo: dict):
     </div>
     """, unsafe_allow_html=True)
 
-    # Aggregate KPI tiles from strategies_index
+    # ── KPI strip (top of fold) ────────────────────────────────────────────
     _strats = _load_strategies_index()
     n_strats = len(_strats)
     n_live = sum(1 for s in _strats if s.get('status') == 'Live')
+    n_paper = sum(1 for s in _strats if s.get('status') == 'Paper')
     cagrs = [s.get('kpis_inline', {}).get('cagr', 0) for s in _strats]
     avg_cagr = (sum(cagrs) / len(cagrs)) if cagrs else 0
+    best_cagr = max(cagrs) if cagrs else 0
     win_rates = [s.get('kpis_inline', {}).get('win_rate', 0) for s in _strats
                   if s.get('kpis_inline', {}).get('win_rate', 0) > 0]
     avg_win = (sum(win_rates) / len(win_rates)) if win_rates else 0
     n_trades = sum(s.get('kpis_inline', {}).get('num_trades', 0) for s in _strats)
 
-    k1, k2, k3, k4 = st.columns(4)
-    with k1: st.metric('Total Strategies', f'{n_strats}', f'{n_live} live')
-    with k2: st.metric('Avg Win Rate', f'{avg_win*100:.1f}%')
-    with k3: st.metric('Avg CAGR', f'{avg_cagr*100:+.2f}%')
+    k1, k2, k3, k4 = st.columns(4, gap='medium')
+    with k1: st.metric('Total Strategies', f'{n_strats}', f'{n_live} live · {n_paper} paper')
+    with k2: st.metric('Avg CAGR', f'{avg_cagr*100:+.2f}%', f'Best {best_cagr*100:+.2f}%')
+    with k3: st.metric('Avg Win Rate', f'{avg_win*100:.1f}%')
     with k4: st.metric('Total Trades', f'{n_trades:,}')
 
-    # Recent backtests row
-    st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+    # ── Recent backtests (compact card-style table) ────────────────────────
+    st.markdown('<div class="section-spacer-lg"></div>', unsafe_allow_html=True)
     st.subheader('Recent Backtests')
-    recent = sorted(_strats, key=lambda s: s.get('last_run', ''), reverse=True)[:4]
-    rec_rows = []
-    for s in recent:
-        k = s.get('kpis_inline', {})
-        rec_rows.append({
-            'Strategy': s['name'],
-            'Type': s.get('type', '—'),
-            'Status': s.get('status', '—'),
-            'CAGR': f"{k.get('cagr', 0)*100:+.2f}%",
-            'Sharpe': f"{k.get('sharpe', 0):.2f}",
-            'Max DD': f"{k.get('max_dd', 0)*100:+.2f}%",
-            'Trades': k.get('num_trades', 0),
-            'Last run': _human_time_ago(s.get('last_run', '')),
-        })
-    if rec_rows:
-        st.dataframe(pd.DataFrame(rec_rows), use_container_width=True, hide_index=True)
 
-    st.markdown('<div style="height:14px"></div>', unsafe_allow_html=True)
-    st.markdown("""
-    <div style="padding:4px 0 20px 0;">
-      <div class="page-title" style="color:var(--foreground);">Strategy Overview</div>
-      <div class="page-sub">Three rules-based strategies that remove emotion from investing</div>
-    </div>
-    """, unsafe_allow_html=True)
+    recent = sorted(_strats, key=lambda s: s.get('last_run', ''), reverse=True)[:5]
+    if recent:
+        rec_rows = []
+        for s in recent:
+            k = s.get('kpis_inline', {})
+            rec_rows.append({
+                'Strategy': s['name'],
+                'Type': s.get('type', '—'),
+                'Status': s.get('status', '—'),
+                'CAGR': f"{k.get('cagr', 0)*100:+.2f}%",
+                'Sharpe': f"{k.get('sharpe', 0):.2f}",
+                'Max DD': f"{k.get('max_dd', 0)*100:+.2f}%",
+                'Trades': int(k.get('num_trades', 0)),
+                'Last run': _human_time_ago(s.get('last_run', '')),
+            })
+        st.dataframe(pd.DataFrame(rec_rows), use_container_width=True,
+                      hide_index=True, height=240)
+    else:
+        st.info('No strategies yet — head to **Builder** to create one.')
+
+    # ── Top-performing strategy cards (compact grid, 3 cols) ───────────────
+    st.markdown('<div class="section-spacer-lg"></div>', unsafe_allow_html=True)
+    st.subheader('Top Performers')
+
+    top = sorted(_strats, key=lambda s: s.get('kpis_inline', {}).get('sharpe', 0),
+                  reverse=True)[:3]
+    if top:
+        cols = st.columns(3, gap='medium')
+        for col, strat in zip(cols, top):
+            with col:
+                _render_strategy_card(strat)
+    else:
+        st.caption('No data yet.')
 
     STRATEGY_DESC = {
         S_MONTHLY: {
