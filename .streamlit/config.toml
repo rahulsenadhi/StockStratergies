@@ -1,0 +1,15 @@
+[server]
+runOnSave = true
+headless = true
+port = 8500
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "dark"
+primaryColor = "#10b981"
+backgroundColor = "#0f172a"
+secondaryBackgroundColor = "#1e293b"
+textColor = "#f1f5f9"
+font = "sans serif"

@@ -16,6 +16,45 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
+
+# ── FINTECH-V2 Plotly Theme ─────────────────────────────────────────────
+FINTECH_PLOTLY = dict(
+    font=dict(family='Inter, -apple-system, sans-serif', size=12, color='#94a3b8'),
+    paper_bgcolor='rgba(0,0,0,0)',
+    plot_bgcolor='rgba(0,0,0,0)',
+    xaxis=dict(
+        gridcolor='rgba(148,163,184,0.10)',
+        zerolinecolor='rgba(148,163,184,0.20)',
+        showline=False,
+        tickfont=dict(size=11, color='#94a3b8'),
+    ),
+    yaxis=dict(
+        gridcolor='rgba(148,163,184,0.10)',
+        zerolinecolor='rgba(148,163,184,0.20)',
+        showline=False,
+        tickfont=dict(size=11, color='#94a3b8'),
+    ),
+    hoverlabel=dict(
+        bgcolor='rgba(15,23,42,0.95)',
+        bordercolor='rgba(148,163,184,0.25)',
+        font=dict(color='#f1f5f9', family='JetBrains Mono, monospace', size=11),
+    ),
+    colorway=['#3b82f6', '#10b981', '#f59e0b', '#ef4444',
+              '#8b5cf6', '#06b6d4', '#ec4899'],
+    margin=dict(l=44, r=22, t=44, b=44),
+)
+
+
+def apply_fintech_theme(fig: 'go.Figure') -> 'go.Figure':
+    """Apply consistent fintech-v2 chart styling. Returns the same fig."""
+    if fig is None:
+        return fig
+    try:
+        fig.update_layout(**FINTECH_PLOTLY)
+    except Exception:
+        pass
+    return fig
 import streamlit as st
 
 from core import analytics as core_analytics
@@ -107,6 +146,10 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+/* ════════════════════════════════════════════════════════════════════════
+   CSS BUILD v8 — 2026-06-01 fintech-v2
+   If you don't see "v8" via DevTools → Elements → <style>, the server is stale.
+   ════════════════════════════════════════════════════════════════════════ */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ── Design tokens — SuperDesign "Modern Dark" (Linear/Vercel inspired) ─────
@@ -1661,6 +1704,61 @@ html, body, [data-testid="stApp"] {
 .stDataFrame thead th {
     background: rgba(255,255,255,0.04) !important;
     padding: 11px 14px !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   LAYER 8 — FINTECH-V2 OVERRIDES  (latest wins via source order)
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Move A: Constrained page width (Linear/Vercel/Ramp feel) ────────── */
+.main .block-container,
+.block-container {
+    max-width: 1400px !important;
+    padding: 2rem 2.5rem 4rem !important;
+    margin: 0 auto !important;
+}
+@media (min-width: 1600px) {
+    .main .block-container,
+    .block-container { max-width: 1480px !important; }
+}
+[data-testid="stVerticalBlock"] > [data-testid="stVerticalBlockBorderWrapper"] {
+    margin-bottom: 0.75rem !important;
+}
+
+/* ── Move B: Multi-tier shadow scale + gradient ring on cards ────────── */
+:root {
+    --shadow-rest:  0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.06);
+    --shadow-hover: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 10px 20px -5px rgb(0 0 0 / 0.10);
+    --ring-gradient: linear-gradient(135deg,
+                                     rgb(255 255 255 / 0.12),
+                                     rgb(255 255 255 / 0.02));
+}
+[data-theme="dark"], html:not([data-theme="light"]) {
+    --shadow-rest:  0 1px 2px 0 rgb(0 0 0 / 0.4), 0 1px 3px 0 rgb(0 0 0 / 0.30);
+    --shadow-hover: 0 4px 12px -2px rgb(0 0 0 / 0.55), 0 14px 30px -8px rgb(0 0 0 / 0.45);
+}
+[data-testid="stVerticalBlockBorderWrapper"] {
+    position: relative !important;
+    box-shadow: var(--shadow-rest) !important;
+    transition: box-shadow 180ms cubic-bezier(.4,0,.2,1),
+                transform 180ms cubic-bezier(.4,0,.2,1) !important;
+}
+[data-testid="stVerticalBlockBorderWrapper"]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--ring-gradient);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+    z-index: 1;
+}
+[data-testid="stVerticalBlockBorderWrapper"]:hover {
+    box-shadow: var(--shadow-hover) !important;
+    transform: translateY(-1px) !important;
 }
 
 /* ── Subtle grain overlay (optional, very subtle) ────────────────────── */
@@ -8104,13 +8202,11 @@ def _equity_curve_chart(equity: pd.DataFrame) -> 'go.Figure':
         fill='tozeroy', fillcolor='rgba(34,197,94,0.08)',
         name='Equity', hovertemplate='%{x|%Y-%m-%d}<br>₹%{y:,.0f}<extra></extra>',
     ))
+    apply_fintech_theme(fig)
     fig.update_layout(
-        height=340, margin=dict(l=8, r=8, t=10, b=8),
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        xaxis=dict(showgrid=False, color='#888', linecolor='#444'),
-        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.06)',
-                   color='#888', tickformat=',d'),
+        height=340, margin=dict(l=10, r=10, t=10, b=10),
         showlegend=False,
+        yaxis=dict(tickformat=',d'),
     )
     return fig
 
@@ -8129,17 +8225,15 @@ def _drawdown_chart(equity: pd.DataFrame) -> 'go.Figure':
     dd = ((s - peak) / peak) * 100
     fig = go.Figure(go.Scatter(
         x=eq[date_col], y=dd,
-        mode='lines', line=dict(color='oklch(0.625 0.245 27.325)', width=1.5),
-        fill='tozeroy', fillcolor='rgba(220,38,38,0.18)',
+        mode='lines', line=dict(color='#ef4444', width=1.5),
+        fill='tozeroy', fillcolor='rgba(239,68,68,0.18)',
         hovertemplate='%{x|%Y-%m-%d}<br>%{y:.2f}%<extra></extra>',
     ))
+    apply_fintech_theme(fig)
     fig.update_layout(
-        height=240, margin=dict(l=8, r=8, t=10, b=8),
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        xaxis=dict(showgrid=False, color='#888'),
-        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.06)',
-                   color='#888', ticksuffix='%'),
+        height=240, margin=dict(l=10, r=10, t=10, b=10),
         showlegend=False,
+        yaxis=dict(ticksuffix='%'),
     )
     return fig
 
@@ -8178,12 +8272,12 @@ def _monthly_returns_heatmap(equity: pd.DataFrame) -> 'go.Figure':
         hovertemplate='%{y} %{x}<br>%{z:+.2f}%<extra></extra>',
         showscale=False,
     ))
+    apply_fintech_theme(fig)
     fig.update_layout(
         height=max(220, 40 * len(pivot.index) + 80),
-        margin=dict(l=8, r=8, t=10, b=8),
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        xaxis=dict(color='#aaa', side='top'),
-        yaxis=dict(color='#aaa', autorange='reversed'),
+        margin=dict(l=10, r=10, t=14, b=10),
+        xaxis=dict(side='top', gridcolor='rgba(0,0,0,0)'),
+        yaxis=dict(autorange='reversed', gridcolor='rgba(0,0,0,0)'),
     )
     return fig
 
