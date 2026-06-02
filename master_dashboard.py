@@ -1294,6 +1294,10 @@ hr {
     --glass-bg:       rgba(255, 255, 255, 0.025);
     --glass-border:   rgba(255, 255, 255, 0.06);
     --glass-hover:    rgba(255, 255, 255, 0.045);
+    /* Solid card backgrounds (used by Layer 8 — dark default) */
+    --card-glass-bg:      rgba(20, 20, 30, 0.55);
+    --card-glass-border:  rgba(255, 255, 255, 0.10);
+    --card-glass-hover:   rgba(30, 30, 42, 0.65);
     --indigo:         oklch(0.623 0.214 264);
     --indigo-soft:    oklch(0.623 0.214 264 / 0.16);
     --emerald:        oklch(0.696 0.170 162.480);
@@ -1302,13 +1306,58 @@ hr {
     --noise-opacity:  0.025;
 }
 
-[data-theme="light"], html[data-theme="light"] :root {
-    --bg-grad-from:   oklch(0.985 0.003 264);
-    --bg-grad-mid:    oklch(0.972 0.006 264);
-    --bg-grad-to:     oklch(0.955 0.008 270);
-    --glass-bg:       rgba(255, 255, 255, 0.62);
-    --glass-border:   rgba(15, 23, 42, 0.06);
-    --glass-hover:    rgba(255, 255, 255, 0.85);
+/* Light theme: clean white background, white-frosted cards */
+html[data-theme="light"], html[data-theme="light"] :root,
+body[data-theme="light"], [data-theme="light"] {
+    --background:     oklch(1.000 0 0);
+    --foreground:     oklch(0.145 0 0);
+    --card:           oklch(1.000 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --secondary:      oklch(0.965 0 0);
+    --muted:          oklch(0.965 0 0);
+    --muted-foreground: oklch(0.46 0 0);
+    --accent:         oklch(0.94 0 0);
+    --border:         oklch(0.90 0 0);
+
+    --bg-grad-from:   #ffffff;
+    --bg-grad-mid:    #fafbfc;
+    --bg-grad-to:     #f4f6fa;
+    --glass-bg:       rgba(255, 255, 255, 0.72);
+    --glass-border:   rgba(15, 23, 42, 0.08);
+    --glass-hover:    rgba(255, 255, 255, 0.92);
+    --card-glass-bg:      rgba(255, 255, 255, 0.86);
+    --card-glass-border:  rgba(15, 23, 42, 0.08);
+    --card-glass-hover:   rgba(255, 255, 255, 0.98);
+    --noise-opacity:  0.015;
+
+    --shadow-rest:  0 1px 2px 0 rgb(15 23 42 / 0.04),
+                    0 1px 3px 0 rgb(15 23 42 / 0.06);
+    --shadow-hover: 0 4px 6px -1px rgb(15 23 42 / 0.08),
+                    0 10px 20px -5px rgb(15 23 42 / 0.10);
+}
+
+/* OS auto-light when no explicit data-theme set */
+@media (prefers-color-scheme: light) {
+    html:not([data-theme="dark"]) {
+        --background:     oklch(1.000 0 0);
+        --foreground:     oklch(0.145 0 0);
+        --card:           oklch(1.000 0 0);
+        --card-foreground: oklch(0.145 0 0);
+        --secondary:      oklch(0.965 0 0);
+        --muted:          oklch(0.965 0 0);
+        --muted-foreground: oklch(0.46 0 0);
+        --accent:         oklch(0.94 0 0);
+        --border:         oklch(0.90 0 0);
+        --bg-grad-from:   #ffffff;
+        --bg-grad-mid:    #fafbfc;
+        --bg-grad-to:     #f4f6fa;
+        --glass-bg:       rgba(255, 255, 255, 0.72);
+        --glass-border:   rgba(15, 23, 42, 0.08);
+        --glass-hover:    rgba(255, 255, 255, 0.92);
+        --card-glass-bg:      rgba(255, 255, 255, 0.86);
+        --card-glass-border:  rgba(15, 23, 42, 0.08);
+        --card-glass-hover:   rgba(255, 255, 255, 0.98);
+    }
 }
 
 /* Ambient gradient + soft spotlight on page background */
@@ -1339,10 +1388,10 @@ html, body, [data-testid="stApp"] {
 
 /* ── Glassmorphism cards (superdesign 2026 spec) ─────────────────────── */
 [data-testid="stVerticalBlockBorderWrapper"] {
-    background: rgba(20, 20, 30, 0.55) !important;
+    background: var(--card-glass-bg) !important;
     backdrop-filter: blur(12px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
-    border: 1px solid rgba(255,255,255,0.10) !important;
+    border: 1px solid var(--card-glass-border) !important;
     border-radius: 12px !important;
     box-shadow:
         0 1px 0 rgba(255,255,255,0.04) inset,
@@ -1354,22 +1403,20 @@ html, body, [data-testid="stApp"] {
                 background 220ms ease !important;
 }
 [data-testid="stVerticalBlockBorderWrapper"]:hover {
-    background: var(--glass-hover) !important;
-    border-color: rgba(255,255,255,0.12) !important;
+    background: var(--card-glass-hover) !important;
+    border-color: var(--indigo) !important;
     transform: translateY(-2px);
     box-shadow:
-        0 1px 0 rgba(255,255,255,0.05) inset,
-        0 20px 48px -12px rgba(0,0,0,0.55),
-        0 8px 16px -6px rgba(0,0,0,0.35),
+        var(--shadow-hover),
         0 0 0 1px var(--indigo-soft) !important;
 }
 
 /* ── Modern KPI / Metric (superdesign fintech spec) ──────────────────── */
 [data-testid="stMetric"] {
-    background: rgba(20, 20, 30, 0.55) !important;
+    background: var(--card-glass-bg) !important;
     backdrop-filter: blur(12px) saturate(180%) !important;
     -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
-    border: 1px solid rgba(255,255,255,0.10) !important;
+    border: 1px solid var(--card-glass-border) !important;
     border-radius: 12px !important;
     padding: 20px 22px !important;
     position: relative;
@@ -1772,6 +1819,114 @@ html, body, [data-testid="stApp"] {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
     mix-blend-mode: overlay;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   LIGHT-MODE EXPLICIT OVERRIDES  (Layer 9)
+   Ensures every dark-hardcoded surface flips when data-theme="light"
+   ════════════════════════════════════════════════════════════════════════ */
+[data-theme="light"], html[data-theme="light"] [data-testid="stApp"] {
+    background:
+        radial-gradient(1200px 800px at 100% 0%,
+            rgba(99, 102, 241, 0.06) 0%, transparent 50%),
+        radial-gradient(900px 600px at 0% 100%,
+            rgba(16, 185, 129, 0.04) 0%, transparent 50%),
+        linear-gradient(160deg, #ffffff 0%, #fafbfc 55%, #f4f6fa 100%) !important;
+    background-attachment: fixed !important;
+}
+[data-theme="light"] [data-testid="stApp"]::after {
+    mix-blend-mode: multiply !important;
+    opacity: 0.012 !important;
+}
+
+/* Sidebar in light */
+[data-theme="light"] [data-testid="stSidebar"] > div:first-child {
+    background: rgba(255, 255, 255, 0.78) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    box-shadow:
+        0 1px 0 rgba(255,255,255,0.6) inset,
+        0 18px 36px -10px rgba(15, 23, 42, 0.10) !important;
+}
+[data-theme="light"] [data-testid="stSidebar"] .stRadio label {
+    color: oklch(0.42 0 0) !important;
+}
+[data-theme="light"] [data-testid="stSidebar"] .stRadio label:hover {
+    background: rgba(15, 23, 42, 0.04) !important;
+    color: oklch(0.18 0 0) !important;
+}
+[data-theme="light"] [data-testid="stSidebar"] .stRadio label:has(input:checked) {
+    background: linear-gradient(135deg,
+                                 rgba(99, 102, 241, 0.10),
+                                 rgba(16, 185, 129, 0.10)) !important;
+    color: oklch(0.18 0 0) !important;
+    border: 1px solid rgba(99, 102, 241, 0.30) !important;
+}
+
+/* Text + headings */
+[data-theme="light"] .block-container h1,
+[data-theme="light"] .lib-header h1,
+[data-theme="light"] .block-container h2,
+[data-theme="light"] .block-container h3 {
+    color: oklch(0.145 0 0) !important;
+    background: none !important;
+    -webkit-text-fill-color: oklch(0.145 0 0) !important;
+}
+[data-theme="light"] .lib-subtitle,
+[data-theme="light"] [data-testid="stMetricLabel"] {
+    color: oklch(0.42 0 0) !important;
+}
+[data-theme="light"] [data-testid="stMetricValue"] {
+    color: oklch(0.145 0 0) !important;
+    -webkit-text-fill-color: oklch(0.145 0 0) !important;
+}
+
+/* Buttons in light */
+[data-theme="light"] .stButton button:not([kind="primary"]) {
+    background: rgba(255, 255, 255, 0.78) !important;
+    border: 1px solid rgba(15, 23, 42, 0.10) !important;
+    color: oklch(0.145 0 0) !important;
+}
+[data-theme="light"] .stButton button:not([kind="primary"]):hover {
+    background: #ffffff !important;
+    border-color: rgba(99, 102, 241, 0.35) !important;
+}
+
+/* Inputs in light */
+[data-theme="light"] .stTextInput input,
+[data-theme="light"] .stTextArea textarea,
+[data-theme="light"] .stNumberInput input,
+[data-theme="light"] .stSelectbox > div > div {
+    background: rgba(255, 255, 255, 0.78) !important;
+    border: 1px solid rgba(15, 23, 42, 0.10) !important;
+    color: oklch(0.145 0 0) !important;
+}
+
+/* Dataframes in light */
+[data-theme="light"] .stDataFrame {
+    background: rgba(255, 255, 255, 0.86) !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+[data-theme="light"] .stDataFrame thead th {
+    background: rgba(15, 23, 42, 0.04) !important;
+    color: oklch(0.42 0 0) !important;
+}
+
+/* Code blocks in light */
+[data-theme="light"] .stCode, [data-theme="light"] pre,
+[data-theme="light"] code {
+    background: rgba(15, 23, 42, 0.04) !important;
+    border: 1px solid rgba(15, 23, 42, 0.06) !important;
+    color: oklch(0.145 0 0) !important;
+}
+
+/* Brand text + chip text in light */
+[data-theme="light"] .brand-l1 { color: oklch(0.145 0 0) !important; }
+[data-theme="light"] .brand-l2 { color: oklch(0.42 0 0) !important; }
+
+/* Status chips — darker text on light bg */
+[data-theme="light"] .chip-live { color: oklch(0.40 0.13 162) !important; }
+[data-theme="light"] .chip-paper { color: oklch(0.42 0.18 259) !important; }
+[data-theme="light"] .chip-research { color: oklch(0.42 0 0) !important; }
+[data-theme="light"] .chip-paused { color: oklch(0.45 0.20 27) !important; }
 
 </style>
 """, unsafe_allow_html=True)
