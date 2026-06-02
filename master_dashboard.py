@@ -1294,22 +1294,21 @@ html, body, [data-testid="stApp"] {
     max-width: 1440px !important;
 }
 
-/* ── Glassmorphism cards ────────────────────────────────────────────── */
+/* ── Glassmorphism cards (superdesign 2026 spec) ─────────────────────── */
 [data-testid="stVerticalBlockBorderWrapper"] {
-    background: var(--glass-bg) !important;
-    backdrop-filter: blur(14px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
-    border: 1px solid var(--glass-border) !important;
-    border-radius: 14px !important;
+    background: rgba(20, 20, 30, 0.55) !important;
+    backdrop-filter: blur(12px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+    border: 1px solid rgba(255,255,255,0.10) !important;
+    border-radius: 12px !important;
     box-shadow:
         0 1px 0 rgba(255,255,255,0.04) inset,
-        0 10px 32px -12px rgba(0,0,0,0.45),
-        0 4px 12px -4px rgba(0,0,0,0.25) !important;
-    padding: 22px 22px 18px 22px !important;
-    transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
-                border-color 240ms ease,
-                box-shadow 240ms ease,
-                background 240ms ease !important;
+        0 8px 32px rgba(0,0,0,0.30) !important;
+    padding: 20px 20px 18px 20px !important;
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 220ms ease,
+                box-shadow 220ms ease,
+                background 220ms ease !important;
 }
 [data-testid="stVerticalBlockBorderWrapper"]:hover {
     background: var(--glass-hover) !important;
@@ -1322,68 +1321,79 @@ html, body, [data-testid="stApp"] {
         0 0 0 1px var(--indigo-soft) !important;
 }
 
-/* ── Modern KPI / Metric ─────────────────────────────────────────────── */
+/* ── Modern KPI / Metric (superdesign fintech spec) ──────────────────── */
 [data-testid="stMetric"] {
-    background: var(--glass-bg) !important;
-    backdrop-filter: blur(14px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(14px) saturate(180%) !important;
-    border: 1px solid var(--glass-border) !important;
-    border-radius: 14px !important;
-    padding: 18px 20px !important;
+    background: rgba(20, 20, 30, 0.55) !important;
+    backdrop-filter: blur(12px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(12px) saturate(180%) !important;
+    border: 1px solid rgba(255,255,255,0.10) !important;
+    border-radius: 12px !important;
+    padding: 20px 22px !important;
     position: relative;
     overflow: hidden;
-    transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
-                border-color 240ms ease,
-                box-shadow 240ms ease !important;
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 220ms ease,
+                box-shadow 220ms ease !important;
     box-shadow:
         0 1px 0 rgba(255,255,255,0.04) inset,
-        0 8px 24px -10px rgba(0,0,0,0.4) !important;
+        0 8px 32px rgba(0,0,0,0.30) !important;
 }
 [data-testid="stMetric"]::before {
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 1px;
-    background: linear-gradient(90deg, transparent, var(--indigo) 30%, var(--emerald) 70%, transparent);
-    opacity: 0.5;
+    background: linear-gradient(90deg,
+                                 transparent,
+                                 var(--indigo) 30%,
+                                 var(--emerald) 70%,
+                                 transparent);
+    opacity: 0.6;
 }
 [data-testid="stMetric"]:hover {
-    transform: translateY(-2px);
-    border-color: var(--indigo-soft) !important;
-    box-shadow:
-        0 1px 0 rgba(255,255,255,0.05) inset,
-        0 20px 40px -12px rgba(0,0,0,0.55),
-        0 0 0 1px var(--indigo-soft) !important;
+    transform: translateY(-1px);
+    border-color: rgba(255,255,255,0.18) !important;
 }
 [data-testid="stMetricValue"] {
-    font-size: 28px !important;
+    font-size: 34px !important;
     font-weight: 600 !important;
-    letter-spacing: -0.03em !important;
-    background: linear-gradient(180deg, var(--foreground) 0%,
-                                          oklch(from var(--foreground) calc(l - 0.15) c h) 100%);
+    letter-spacing: -0.035em !important;
+    line-height: 1.1 !important;
+    font-variant-numeric: tabular-nums !important;
+    color: var(--foreground) !important;
+    background: none !important;
+    -webkit-text-fill-color: var(--foreground) !important;
+}
+[data-testid="stMetricLabel"] {
+    font-size: 10.5px !important;
+    color: oklch(0.62 0 0) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.10em !important;
+    font-weight: 500 !important;
+    margin-bottom: 10px !important;
+}
+[data-testid="stMetricDelta"] {
+    font-size: 12px !important;
+    font-weight: 500 !important;
+    margin-top: 6px !important;
+}
+/* Delta gets the gradient accent — only place it lives */
+[data-testid="stMetricDelta"] svg + div {
+    background: linear-gradient(135deg, var(--indigo), var(--emerald));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-}
-[data-testid="stMetricLabel"] {
-    font-size: 11px !important;
-    color: var(--muted-foreground) !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
-    font-weight: 500 !important;
-    margin-bottom: 6px !important;
 }
 
 /* ── Modern Typography hierarchy ─────────────────────────────────────── */
 .block-container h1, .lib-header h1 {
-    font-size: 36px !important;
+    font-size: 32px !important;
     font-weight: 600 !important;
-    letter-spacing: -0.035em !important;
-    line-height: 1.1 !important;
-    background: linear-gradient(180deg, var(--foreground), oklch(from var(--foreground) calc(l - 0.18) c h));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    letter-spacing: -0.04em !important;
+    line-height: 1.15 !important;
+    color: var(--foreground) !important;
+    background: none !important;
+    -webkit-text-fill-color: var(--foreground) !important;
 }
 .lib-subtitle {
     font-size: 15px !important;
@@ -1482,12 +1492,10 @@ html, body, [data-testid="stApp"] {
     border-radius: 10px !important;
 }
 .brand-l1 {
-    font-size: 17px !important;
-    font-weight: 700 !important;
-    background: linear-gradient(135deg, var(--foreground), oklch(from var(--foreground) calc(l - 0.2) c h));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    color: var(--foreground) !important;
+    letter-spacing: -0.015em !important;
 }
 .brand-l2 {
     font-size: 11px !important;
@@ -8100,7 +8108,7 @@ def _equity_curve_chart(equity: pd.DataFrame) -> 'go.Figure':
         height=340, margin=dict(l=8, r=8, t=10, b=8),
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         xaxis=dict(showgrid=False, color='#888', linecolor='#444'),
-        yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.12)',
+        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.06)',
                    color='#888', tickformat=',d'),
         showlegend=False,
     )
@@ -8129,7 +8137,7 @@ def _drawdown_chart(equity: pd.DataFrame) -> 'go.Figure':
         height=240, margin=dict(l=8, r=8, t=10, b=8),
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         xaxis=dict(showgrid=False, color='#888'),
-        yaxis=dict(showgrid=True, gridcolor='rgba(128,128,128,0.12)',
+        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.06)',
                    color='#888', ticksuffix='%'),
         showlegend=False,
     )
