@@ -5427,22 +5427,14 @@ def render_sidebar() -> str:
         )
         _theme_map = {'🌙 Dark': 'dark', '☀️ Light': 'light', '🖥️ Auto (OS)': 'auto'}
         _theme_val = _theme_map.get(theme_choice, 'dark')
-        # st.markdown with <script> tags does NOT execute the JS (innerHTML).
-        # Use st.components.v1.html — runs in an iframe, then targets parent root doc.
-        import streamlit.components.v1 as _components
-        _components.html(
+        # st.html with unsafe_allow_javascript=True runs JS in the main doc scope.
+        # Sets data-theme on <html> AND <body>; CSS selectors target either.
+        st.html(
             f"""<script>
             (function() {{
                 const v = "{_theme_val}";
-                // Walk up to the topmost accessible document
-                let doc = window.parent.document;
-                try {{
-                    while (doc.defaultView && doc.defaultView.parent !== doc.defaultView) {{
-                        doc = doc.defaultView.parent.document;
-                    }}
-                }} catch (e) {{}}
-                const root = doc.documentElement;
-                const body = doc.body;
+                const root = document.documentElement;
+                const body = document.body;
                 if (v === 'auto') {{
                     root.removeAttribute('data-theme');
                     if (body) body.removeAttribute('data-theme');
@@ -5452,8 +5444,7 @@ def render_sidebar() -> str:
                 }}
             }})();
             </script>""",
-            height=0,
-            width=0,
+            unsafe_allow_javascript=True,
         )
 
         st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
