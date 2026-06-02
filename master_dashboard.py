@@ -1928,6 +1928,152 @@ html, body, [data-testid="stApp"] {
 [data-theme="light"] .chip-research { color: oklch(0.42 0 0) !important; }
 [data-theme="light"] .chip-paused { color: oklch(0.45 0.20 27) !important; }
 
+/* ════════════════════════════════════════════════════════════════════════
+   LAYER 10 — CANONICAL RESET  (wins by source order; cleans up clutter)
+   5-level type scale + ONE dataframe spec + airy spacing
+   ════════════════════════════════════════════════════════════════════════ */
+
+:root {
+    /* Single source of truth — type scale */
+    --fs-display:   30px;   /* KPI value (was 28-34, now 30) */
+    --fs-h1:        28px;
+    --fs-h2:        20px;
+    --fs-h3:        16px;
+    --fs-body:      14px;
+    --fs-caption:   12px;
+    --fs-label:     11px;   /* uppercase labels, chips */
+    --lh-tight:     1.15;
+    --lh-normal:    1.5;
+    --lh-loose:     1.7;
+}
+
+/* Reset headings + body sizes (override every earlier rule) */
+.block-container h1, .lib-header h1 {
+    font-size: var(--fs-h1) !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.025em !important;
+    line-height: var(--lh-tight) !important;
+    margin: 0 0 4px 0 !important;
+}
+.block-container h2 {
+    font-size: var(--fs-h2) !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.015em !important;
+    line-height: var(--lh-tight) !important;
+    margin: 24px 0 12px 0 !important;
+}
+.block-container h3 {
+    font-size: var(--fs-h3) !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.01em !important;
+    line-height: var(--lh-tight) !important;
+    margin: 18px 0 10px 0 !important;
+}
+.block-container p, .block-container li {
+    font-size: var(--fs-body) !important;
+    line-height: var(--lh-normal) !important;
+}
+.lib-subtitle {
+    font-size: var(--fs-body) !important;
+    margin-top: 6px !important;
+}
+
+/* KPI tile — canonical */
+[data-testid="stMetric"] {
+    padding: 18px 20px !important;
+    min-height: 96px !important;
+}
+[data-testid="stMetricLabel"] {
+    font-size: var(--fs-label) !important;
+    letter-spacing: 0.08em !important;
+    font-weight: 500 !important;
+    margin-bottom: 8px !important;
+}
+[data-testid="stMetricValue"] {
+    font-size: var(--fs-display) !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.025em !important;
+    line-height: var(--lh-tight) !important;
+}
+[data-testid="stMetricDelta"] {
+    font-size: var(--fs-caption) !important;
+    font-weight: 500 !important;
+    margin-top: 4px !important;
+}
+
+/* ── ONE canonical dataframe spec (override all earlier) ─────────────── */
+.stDataFrame {
+    padding: 0 !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
+}
+.stDataFrame thead th {
+    font-size: var(--fs-label) !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.06em !important;
+    text-transform: uppercase !important;
+    padding: 12px 14px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    border-bottom: 1px solid var(--border) !important;
+}
+.stDataFrame tbody td {
+    font-size: var(--fs-body) !important;
+    padding: 11px 14px !important;
+    line-height: 1.4 !important;
+    border-bottom: 1px solid rgba(128,128,128,0.08) !important;
+    font-variant-numeric: tabular-nums !important;
+    font-feature-settings: "tnum" !important;
+}
+.stDataFrame tbody tr:last-child td { border-bottom: none !important; }
+.stDataFrame tbody tr:hover td {
+    background: rgba(99, 102, 241, 0.04) !important;
+}
+
+/* Light-mode dataframe overrides */
+[data-theme="light"] .stDataFrame {
+    background: #ffffff !important;
+    border: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+[data-theme="light"] .stDataFrame thead th {
+    background: oklch(0.97 0 0) !important;
+    color: oklch(0.42 0 0) !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+}
+[data-theme="light"] .stDataFrame tbody td {
+    color: oklch(0.18 0 0) !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.05) !important;
+}
+[data-theme="light"] .stDataFrame tbody tr:hover td {
+    background: rgba(99, 102, 241, 0.05) !important;
+}
+
+/* ── Captions / helper text ──────────────────────────────────────────── */
+.stCaption, [data-testid="stCaptionContainer"], small {
+    font-size: var(--fs-caption) !important;
+    line-height: var(--lh-normal) !important;
+    color: var(--muted-foreground) !important;
+}
+
+/* ── Buttons — single size canonical ─────────────────────────────────── */
+.stButton button, .stDownloadButton button {
+    font-size: var(--fs-body) !important;
+    padding: 8px 16px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+}
+
+/* ── Spacing rhythm between vertical sections ────────────────────────── */
+[data-testid="stVerticalBlock"] {
+    gap: 14px !important;
+}
+
+/* Sidebar nav font — slightly larger for legibility */
+[data-testid="stSidebar"] .stRadio label {
+    font-size: var(--fs-body) !important;
+    padding: 10px 14px !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -5281,19 +5427,33 @@ def render_sidebar() -> str:
         )
         _theme_map = {'🌙 Dark': 'dark', '☀️ Light': 'light', '🖥️ Auto (OS)': 'auto'}
         _theme_val = _theme_map.get(theme_choice, 'dark')
-        st.markdown(
+        # st.markdown with <script> tags does NOT execute the JS (innerHTML).
+        # Use st.components.v1.html — runs in an iframe, then targets parent root doc.
+        import streamlit.components.v1 as _components
+        _components.html(
             f"""<script>
             (function() {{
                 const v = "{_theme_val}";
-                const root = window.parent.document.documentElement;
+                // Walk up to the topmost accessible document
+                let doc = window.parent.document;
+                try {{
+                    while (doc.defaultView && doc.defaultView.parent !== doc.defaultView) {{
+                        doc = doc.defaultView.parent.document;
+                    }}
+                }} catch (e) {{}}
+                const root = doc.documentElement;
+                const body = doc.body;
                 if (v === 'auto') {{
                     root.removeAttribute('data-theme');
+                    if (body) body.removeAttribute('data-theme');
                 }} else {{
                     root.setAttribute('data-theme', v);
+                    if (body) body.setAttribute('data-theme', v);
                 }}
             }})();
             </script>""",
-            unsafe_allow_html=True,
+            height=0,
+            width=0,
         )
 
         st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
