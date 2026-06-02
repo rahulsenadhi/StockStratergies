@@ -745,11 +745,19 @@ def run_backtest(indicators: dict[str, pd.DataFrame],
                 entry_queue[wl_ticker] = wl_info
 
         # ── 3. Mark portfolio to market ────────────────────────────────────────
-        holdings_value = sum(
-            pos['shares'] * indicators[t].loc[date]['close']
-            for t, pos in positions.items()
-            if t in indicators and date in indicators[t].index
-        )
+        holdings_value = 0.0
+        for t, pos in positions.items():
+            if t not in indicators:
+                continue
+            ind = indicators[t]
+            if date in ind.index:
+                px = ind.loc[date, 'close']
+            else:
+                prior = ind.loc[ind.index < date, 'close']
+                if prior.empty:
+                    continue
+                px = prior.iloc[-1]
+            holdings_value += pos['shares'] * px
         equity_curve.append({
             'Date':      date,
             'Equity':    round(cash + holdings_value, 2),

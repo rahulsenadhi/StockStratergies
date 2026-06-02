@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Strategy Guide</title>
+<style>
+:root {
+  --bg: #ffffff; --fg: #1f2937; --muted: #6b7280;
+  --border: #e5e7eb; --card: #f9fafb; --code: #f3f4f6;
+  --accent: #2563eb;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#0d1117; --fg:#e6edf3; --muted:#8b949e;
+          --border:#30363d; --card:#161b22; --code:#1e242c;
+          --accent:#58a6ff; }
+}
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+       max-width: 920px; margin: 40px auto; padding: 0 24px;
+       background: var(--bg); color: var(--fg); line-height: 1.6; }
+h1, h2, h3, h4 { color: var(--fg); border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+h1 { font-size: 2.2em; }
+h2 { font-size: 1.6em; margin-top: 2em; }
+h3 { font-size: 1.25em; border: none; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { background: var(--code); padding: 2px 6px; border-radius: 4px;
+       font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+       font-size: 0.9em; }
+pre { background: var(--code); padding: 14px 16px; border-radius: 6px; overflow-x: auto;
+      border: 1px solid var(--border); }
+pre code { background: transparent; padding: 0; }
+table { border-collapse: collapse; margin: 1em 0; width: 100%; }
+th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+th { background: var(--card); font-weight: 600; }
+tr:nth-child(even) td { background: var(--card); }
+blockquote { border-left: 4px solid var(--accent); padding-left: 16px; color: var(--muted); margin: 1em 0; }
+hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+</style>
+</head>
+<body>
+<h1 id="stock-strategy-hub-easy-guide">Stock Strategy Hub — Easy Guide</h1>
+<p>A plain-English manual for running and understanding your 4 stock trading strategies.</p>
+<hr />
+<h2 id="what-is-this">What is this?</h2>
+<p>You have <strong>4 different ways of picking Indian stocks</strong>, each based on a different idea about what makes a stock go up. The computer does the hard math; you read the answer.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Strategy</th>
+<th>One-line idea</th>
+<th>Best for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Monthly Rotation</strong></td>
+<td>Buy the 5 strongest Nifty 50 stocks each month, sell the weak ones</td>
+<td>Beginners — most reliable, biggest profits historically</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>IPO Edge</strong></td>
+<td>Buy brand new stocks (IPOs) when they show strength</td>
+<td>Adventurous — small-cap focus</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Momentum Edge</strong></td>
+<td>Buy any stock that's recovering and breaking to new highs</td>
+<td>Long-term holds (~6 months)</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>PEAD</strong></td>
+<td>Buy stocks that just reported surprise good earnings</td>
+<td>Earnings season players</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="one-button-daily-run">One-button daily run</h2>
+<p>If you only remember one command, remember this. Double-click in File Explorer or run from terminal:</p>
+<pre><code>refresh_data.bat
+</code></pre>
+<p>This file does everything:
+- Downloads today's stock prices
+- Re-runs all 4 strategies with fresh data
+- Updates the dashboards</p>
+<p><strong>Time:</strong> 5–15 minutes (depending on internet speed).
+<strong>When to run:</strong> Once a day, after Indian market closes (after 4 PM IST).</p>
+<hr />
+<h2 id="opening-the-dashboards">Opening the dashboards</h2>
+<p>After <code>refresh_data.bat</code> finishes, run this once to launch the dashboards:</p>
+<pre><code>python run_all.py --dash-only
+</code></pre>
+<p>Your browser opens automatically to the <strong>Master Hub</strong> at http://localhost:8500. From the left sidebar, click any of these:</p>
+<ul>
+<li>🏠 <strong>Home</strong> — Quick snapshot of all 4 strategies</li>
+<li>🔄 <strong>Monthly Rotation</strong> — Today's top 5 picks for the month</li>
+<li>🚀 <strong>IPO Edge</strong> — Recent IPOs that are breaking out</li>
+<li>📈 <strong>Momentum Edge</strong> — Stocks recovering and hitting new highs</li>
+<li>⚡ <strong>PEAD</strong> — Earnings-surprise plays</li>
+<li>🎯 <strong>Suggestions</strong> — Computer's top picks across all 4 strategies</li>
+<li>🔬 <strong>Insights</strong> — How the strategies behave together</li>
+<li>📊 <strong>History &amp; Proof</strong> — Backtests, charts, win rates</li>
+</ul>
+<p><strong>Light or dark mode:</strong> sidebar has a Theme toggle (🌙 Dark / ☀️ Light / 🖥️ Auto).</p>
+<hr />
+<h2 id="strategy-1-monthly-rotation-recommended-starting-point">Strategy 1: Monthly Rotation 🏆 (recommended starting point)</h2>
+<p><strong>The idea:</strong> Out of 50 big Indian companies (Nifty 50), 5 always outperform in any given month. Buy those 5, hold for a month, then on the last Friday of the month sell whatever's no longer in the top 5 and replace with the new top 5.</p>
+<p><strong>What it has done:</strong>
+- <strong>+22.65% per year</strong> (4 years tracked)
+- Nifty index did only +9.96% — so this is <strong>+12.68% per year better than just buying the index</strong>
+- Worst dip was only -11% (mild)</p>
+<p><strong>How to use it:</strong>
+1. Open Master Hub → 🔄 Monthly Rotation
+2. Look at the table of 10 stocks ranked 1–10
+3. The top 5 (highlighted) = today's portfolio
+4. <strong>Next rebalance date</strong> is shown on the page — that's the day to actually buy/sell
+5. The signal column tells you what to do:
+   - 🟢 Strong BUY — stock outperforming
+   - 🟡 Mild BUY — modest gain
+   - 🟠 Weak — borderline
+   - 🔴 AVOID/SELL — underperforming</p>
+<p><strong>Today's top 5 (example):</strong> ADANIENT, ADANIGREEN, GRASIM, ADANIPORTS, ASIANPAINT</p>
+<p><strong>Manual re-run if needed:</strong></p>
+<pre><code>python step1_download_data.py
+python step2_backtest_momentum.py
+python step3_dashboard.py
+</code></pre>
+<hr />
+<h2 id="strategy-2-ipo-edge">Strategy 2: IPO Edge 🚀</h2>
+<p><strong>The idea:</strong> Brand new IPOs (within 1 year of listing) often have a quiet base-building phase, then a breakout. Buy the breakout, ride it for 1–4 weeks.</p>
+<p><strong>What it has done:</strong>
+- <strong>+10.19% per year</strong>
+- Very low drawdown (-5.68%) — safer than the others
+- 64 closed trades, <strong>56% win rate</strong></p>
+<p><strong>How to use it:</strong>
+1. Open Master Hub → 🚀 IPO Edge
+2. Look at "Currently Open" positions — these are trades the strategy is in right now
+3. Check the table for setup type:
+   - <strong>Stage 1</strong> — building base (cleanest entry)
+   - <strong>Stage 3</strong> — already breaking out (riskier, missed early)
+4. Exit reason shown when the trade closes:
+   - <strong>Hard Stop</strong> = -10% loss limit hit, cut losses
+   - <strong>SMA10 Trail</strong> = price broke its trailing stop, take profit
+   - <strong>SL→Breakeven</strong> = stop moved to entry, locked in safety</p>
+<p><strong>Manual re-run:</strong></p>
+<pre><code>python ipo_edge_downloader.py
+python ipo_edge_backtest.py
+</code></pre>
+<hr />
+<h2 id="strategy-3-momentum-edge">Strategy 3: Momentum Edge 📈</h2>
+<p><strong>The idea:</strong> A stock that fell below its 220-day average (was beaten down), then recovers and breaks to a new high — that's a sign of a long-term turnaround. Hold for ~6 months.</p>
+<p><strong>What it has done:</strong>
+- <strong>+14.68% per year over 10 years</strong> vs Nifty +12.17%
+- Final value: ₹10,000 → ₹3,63,935 over the period (~36×)
+- 130 trades, holds average <strong>191 days each</strong>
+- <strong>Big wins, sometimes big losses</strong> — avg gain +85%, avg loss -13%</p>
+<p><strong>How to use it:</strong>
+1. Open Master Hub → 📈 Momentum Edge
+2. <strong>Market Regime</strong> at top tells you to participate or not:
+   - 🟢 BULL — go ahead, take new positions
+   - 🔴 BEAR — skip new entries, hold existing
+3. Today's signals table shows stocks meeting all 6 filters
+4. If you see "0 signals" — market doesn't have qualifying setups right now (this is normal)</p>
+<p><strong>Manual re-run:</strong></p>
+<pre><code>python nse_bse_downloader.py     # SLOW — 15–30 min, only needed weekly
+python momentum_edge_backtest.py
+</code></pre>
+<hr />
+<h2 id="strategy-4-pead-newest-experimental">Strategy 4: PEAD ⚡ (newest, experimental)</h2>
+<p><strong>The idea:</strong> When a company reports earnings that beat what analysts expected, the stock often keeps drifting up for ~2 months. Buy after a positive surprise, hold ~60 days or until next earnings.</p>
+<p><strong>What it has done so far:</strong>
+- Only 54 stocks tested (Nifty 50ish)
+- 4 trades since 2024 — too few to be sure yet
+- <strong>All 4 trades won</strong> (WIPRO twice, CIPLA, TATASTEEL)
+- Best trade: WIPRO +10%, worst: WIPRO +2%</p>
+<p><strong>Why so few trades?</strong> PEAD needs strict filters (top 10% surprise + healthy balance sheet + reasonable price). Most quarters, only 1–2 stocks across the universe qualify.</p>
+<p><strong>How to use it:</strong>
+1. Open Master Hub → ⚡ PEAD
+2. Four tabs at top:
+   - <strong>Live + Open</strong> — stocks qualifying today + currently held
+   - <strong>Backtest</strong> — historical performance + charts
+   - <strong>Calendar + Heatmap</strong> — upcoming earnings dates + which sectors are beating expectations
+   - <strong>Screener</strong> — filter all events by SUE/Piotroski/PB
+3. Glossary at top of page explains the jargon (SUE, Piotroski, P/B, etc.)</p>
+<p><strong>Manual re-run:</strong></p>
+<pre><code>python pead_build_history.py --start 2024-01-01 --end 2026-05-27
+python pead_backtest.py --start 2024-06-01 --end 2026-05-27 --flavor both
+</code></pre>
+<hr />
+<h2 id="daily-routine-5-minutes">Daily routine (5 minutes)</h2>
+<ol>
+<li>After market closes (4 PM IST), double-click <code>refresh_data.bat</code></li>
+<li>Wait for it to finish (background, you can do other things)</li>
+<li>Open http://localhost:8500 in browser</li>
+<li>Check the <strong>Suggestions</strong> page — that combines all 4 strategies into 1 picks list</li>
+<li>Check the <strong>Master Hub home page</strong> for any "next rebalance" alerts</li>
+</ol>
+<hr />
+<h2 id="weekly-routine-15-minutes-saturday-morning">Weekly routine (15 minutes, Saturday morning)</h2>
+<ol>
+<li>Run <code>python nse_bse_downloader.py</code> — refreshes the wide stock universe for Momentum Edge (slow, ~20 min)</li>
+<li>Re-run Momentum Edge backtest: <code>python momentum_edge_backtest.py</code></li>
+<li>Review the <strong>History &amp; Proof</strong> page — see if strategies are still beating benchmarks</li>
+</ol>
+<hr />
+<h2 id="monthly-routine-last-friday">Monthly routine (last Friday)</h2>
+<ol>
+<li><strong>Monthly Rotation rebalance day.</strong> Check the dashboard's "Next Rebalance Date" — when it's today:</li>
+<li>Sell anything that fell out of the top 5</li>
+<li>Buy anything that newly entered the top 5</li>
+<li>Update your broker positions to match the new top 5</li>
+</ol>
+<hr />
+<h2 id="what-do-these-numbers-mean">What do these numbers mean?</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Plain meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>CAGR</strong></td>
+<td>Average yearly return. CAGR +20% means ₹1 lakh becomes ~₹1.2 lakh per year, compounding</td>
+</tr>
+<tr>
+<td><strong>Max DD</strong></td>
+<td>Biggest dip during the test. -15% means at one point you'd have been down 15% — can you stomach that?</td>
+</tr>
+<tr>
+<td><strong>Sharpe</strong></td>
+<td>How much profit per unit of stress. &gt;1 = good, &gt;2 = excellent</td>
+</tr>
+<tr>
+<td><strong>Win rate</strong></td>
+<td>% of trades that made money. 50%+ is fine if winners &gt; losers</td>
+</tr>
+<tr>
+<td><strong>Alpha</strong></td>
+<td>Extra return above just buying the index. +10% alpha = 10% better than Nifty</td>
+</tr>
+<tr>
+<td><strong>SUE</strong></td>
+<td>(PEAD only) How big the earnings surprise was. &gt;+2 = big beat</td>
+</tr>
+<tr>
+<td><strong>Piotroski</strong></td>
+<td>(PEAD only) Balance-sheet health 0–9. 7+ = strong company</td>
+</tr>
+<tr>
+<td><strong>P/B</strong></td>
+<td>(PEAD only) Price compared to book value. Lower vs sector = cheaper</td>
+</tr>
+<tr>
+<td><strong>Rebalance</strong></td>
+<td>Sell old picks, buy new picks. Monthly Rotation does this on last Friday</td>
+</tr>
+<tr>
+<td><strong>220 EMA</strong></td>
+<td>(Momentum Edge) Long-term price trend line — like a moving floor</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="if-something-breaks">If something breaks</h2>
+<table>
+<thead>
+<tr>
+<th>Problem</th>
+<th>Try this</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dashboard shows old data</td>
+<td>Run <code>refresh_data.bat</code> again</td>
+</tr>
+<tr>
+<td>"No data available"</td>
+<td>Run the strategy's downloader (e.g. <code>python step1_download_data.py</code>)</td>
+</tr>
+<tr>
+<td>Dashboards won't open</td>
+<td>Run <code>python run_all.py --dash-only</code></td>
+</tr>
+<tr>
+<td>Port already in use error</td>
+<td>Existing dashboards already running — just open http://localhost:8500</td>
+</tr>
+<tr>
+<td>PEAD page shows "no data"</td>
+<td>Run <code>python pead_build_history.py --start 2024-01-01 --end 2026-05-27</code></td>
+</tr>
+<tr>
+<td>Slow data downloads</td>
+<td>Already cached after first run — second runs are much faster (PEAD: 5 min → 40 sec)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="where-the-result-files-live">Where the result files live</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>What it contains</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>live_rankings.csv</code></td>
+<td>Today's Monthly Rotation top 10</td>
+</tr>
+<tr>
+<td><code>backtest_results.csv</code></td>
+<td>Monthly Rotation historical performance</td>
+</tr>
+<tr>
+<td><code>ipo_edge_trades.csv</code></td>
+<td>All IPO Edge trades, open + closed</td>
+</tr>
+<tr>
+<td><code>momentum_edge_trades.csv</code></td>
+<td>All Momentum Edge trades</td>
+</tr>
+<tr>
+<td><code>pead_trades.csv</code></td>
+<td>All PEAD trades</td>
+</tr>
+<tr>
+<td><code>pead_data/live_signals.csv</code></td>
+<td>Today's PEAD qualifying entries</td>
+</tr>
+<tr>
+<td><code>pead_kpis.csv</code></td>
+<td>PEAD performance metrics</td>
+</tr>
+<tr>
+<td><code>*_equity.csv</code></td>
+<td>Daily portfolio value over time (for charts)</td>
+</tr>
+</tbody>
+</table>
+<p>Open any of these in Excel or Google Sheets to look at the raw numbers.</p>
+<hr />
+<h2 id="quick-reference-every-command">Quick reference — every command</h2>
+<pre><code># Daily (5 min)
+refresh_data.bat
+
+# Open dashboards
+python run_all.py --dash-only
+
+# Individual strategies
+python step1_download_data.py + step2_backtest_momentum.py + step3_dashboard.py
+python ipo_edge_downloader.py + ipo_edge_backtest.py
+python momentum_edge_downloader.py + momentum_edge_backtest.py
+python pead_downloader.py
+python pead_backtest.py --start 2024-06-01 --end 2026-05-27 --flavor both
+
+# Weekly (slow — wide stock universe)
+python nse_bse_downloader.py
+
+# Universe rebuild (rarely — when new IPOs added)
+python build_universe.py
+</code></pre>
+<hr />
+<h2 id="a-reminder">A reminder</h2>
+<p>These strategies have been tested on past data. <strong>Past performance is not a guarantee of future returns.</strong> Indian markets can move differently than the test period suggests. Always:</p>
+<ol>
+<li>Start with a small amount you can afford to lose</li>
+<li>Follow the rules — don't override the system based on news/feelings</li>
+<li>Track results in a spreadsheet so you know if the strategy is still working</li>
+<li>Re-evaluate quarterly — if a strategy stops working for 6+ months, pause it</li>
+</ol>
+<p>Good luck. The hard work is in following the rules, not in picking the rules.</p>
+</body>
+</html>

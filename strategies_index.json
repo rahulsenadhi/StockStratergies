@@ -83,7 +83,7 @@
       "equity_csv": "pead_equity.csv",
       "kpis_csv": "pead_kpis.csv",
       "kpis_inline": {
-        "cagr": 0.2610,
+        "cagr": 0.261,
         "sharpe": 15.26,
         "max_dd": -0.0312,
         "win_rate": 1.0,

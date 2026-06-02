@@ -3,11 +3,15 @@ Download 3 years of daily historical data for Nifty 50 stocks from Yahoo Finance
 Saves each stock as a separate CSV file in the /data folder.
 """
 
+import sys
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 import os
 from pathlib import Path
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 
 # Nifty 50 stocks with their Yahoo Finance tickers
 NIFTY_50_STOCKS = {

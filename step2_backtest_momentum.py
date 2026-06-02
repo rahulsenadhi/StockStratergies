@@ -6,10 +6,14 @@ Momentum Rotation Strategy Backtest for Nifty 50 Stocks
 - Smart rotation: hold stocks that remain in top 5, sell those that drop out
 """
 
+import sys
 import pandas as pd
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
+
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 from datetime import datetime
 import warnings
 

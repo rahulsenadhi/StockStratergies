@@ -16,6 +16,8 @@ Run order:
 """
 
 import sys
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
 import time
 import datetime
 import requests
@@ -36,9 +38,9 @@ DATA_FOLDER      = './data/nse_bse'
 YEARS_HISTORY    = 10           # 10y needed for backtest indicators (220-EMA etc.)
 STALE_DAYS       = 1            # skip re-download if file modified < 1 day ago
 MIN_ROWS         = 100          # discard stocks with fewer rows than this
-BATCH_SIZE       = 50           # symbols per yf.download() call
-BATCH_SLEEP      = 2.0          # seconds between batch calls
-SYMBOL_SLEEP     = 0.5          # seconds between individual retry downloads
+BATCH_SIZE       = 100          # symbols per yf.download() call
+BATCH_SLEEP      = 1.0          # seconds between batch calls
+SYMBOL_SLEEP     = 0.3          # seconds between individual retry downloads
 BENCHMARK_SYM    = '^NSEI'
 
 NSE_URL = 'https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv'
