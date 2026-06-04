@@ -55,3 +55,38 @@ class Recommendation:
         d = asdict(self)
         d["targets"] = [asdict(t) if isinstance(t, Target) else t for t in self.targets]
         return d
+
+
+def build_entry_path(
+    ohlcv: pd.DataFrame,
+    entry_date: pd.Timestamp,
+    entry_price: float,
+    max_horizon: int = MAX_HORIZON_DAYS,
+) -> pd.DataFrame:
+    """Return a DataFrame of the post-entry path with running MFE/MAE.
+
+    Columns: day (1-based offset), ret, mfe, mae — all in percent vs entry_price.
+    Rows are the trading days strictly after entry_date, up to max_horizon.
+    Returns an empty DataFrame if no forward data or entry_price is invalid.
+    """
+    cols = ["day", "ret", "mfe", "mae"]
+    if ohlcv is None or ohlcv.empty or not entry_price or entry_price <= 0:
+        return pd.DataFrame(columns=cols)
+
+    fwd = ohlcv[ohlcv.index > pd.Timestamp(entry_date)].head(max_horizon)
+    if fwd.empty:
+        return pd.DataFrame(columns=cols)
+
+    close = fwd["Close"].to_numpy(dtype=float)
+    high = fwd["High"].to_numpy(dtype=float)
+    low = fwd["Low"].to_numpy(dtype=float)
+
+    ret = (close / entry_price - 1.0) * 100.0
+    fav = (high / entry_price - 1.0) * 100.0
+    adv = (low / entry_price - 1.0) * 100.0
+    mfe = np.maximum.accumulate(fav)
+    mae = np.minimum.accumulate(adv)
+
+    return pd.DataFrame(
+        {"day": np.arange(1, len(fwd) + 1), "ret": ret, "mfe": mfe, "mae": mae}
+    )

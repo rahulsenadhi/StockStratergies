@@ -25,3 +25,36 @@ def test_constants_and_dataclasses_exist():
     assert d["strategy"] == "x"
     assert d["targets"][0]["pct"] == 6.0
     assert d["sample_size"] == 30
+
+
+def _ohlcv(dates, highs, lows, closes):
+    idx = pd.to_datetime(dates)
+    return pd.DataFrame(
+        {"Open": closes, "High": highs, "Low": lows, "Close": closes, "Volume": 0},
+        index=idx,
+    )
+
+
+def test_build_entry_path_mfe_mae_running():
+    # entry on day 0 at 100. Forward 3 days.
+    df = _ohlcv(
+        ["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04"],
+        highs=[100, 110, 105, 108],
+        lows=[100, 98, 90, 102],
+        closes=[100, 108, 95, 106],
+    )
+    path = ea.build_entry_path(df, pd.Timestamp("2024-01-01"), 100.0, max_horizon=3)
+    # day offsets 1..3 (strictly after entry_date)
+    assert list(path["day"]) == [1, 2, 3]
+    # ret = close/entry - 1, in %
+    assert path["ret"].tolist() == pytest.approx([8.0, -5.0, 6.0])
+    # running MFE uses High: max(110,105,108)/100 -1 -> 10 at d1(110), stays 10
+    assert path["mfe"].tolist() == pytest.approx([10.0, 10.0, 10.0])
+    # running MAE uses Low: min so far: -2 (98), then -10 (90), then -10
+    assert path["mae"].tolist() == pytest.approx([-2.0, -10.0, -10.0])
+
+
+def test_build_entry_path_short_history():
+    df = _ohlcv(["2024-01-01", "2024-01-02"], [100, 101], [100, 99], [100, 100.5])
+    path = ea.build_entry_path(df, pd.Timestamp("2024-01-01"), 100.0, max_horizon=90)
+    assert list(path["day"]) == [1]   # only one day available after entry
