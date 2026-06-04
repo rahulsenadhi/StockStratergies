@@ -58,3 +58,21 @@ def test_load_ohlcv_parquet_honors_whitelist_skip_minbars(tmp_path, monkeypatch)
     assert "T1.NS" not in sk
     none, _ = store.load_ohlcv_parquet("nse_bse", min_bars=999)
     assert none == {}
+
+
+def test_get_bars_filters(tmp_path, monkeypatch):
+    _make_csv_dataset(tmp_path, monkeypatch, n_tickers=3, n_bars=20)
+    cvt.backfill("nse_bse")
+
+    allb = store.get_bars("nse_bse")
+    assert {"ticker", "Date"}.issubset(allb.columns)
+    assert set(allb["ticker"].unique()) == {"T0.NS", "T1.NS", "T2.NS"}
+
+    sub = store.get_bars("nse_bse", tickers=["T1.NS"], cols=["Close"])
+    assert set(sub["ticker"].unique()) == {"T1.NS"}
+    assert set(sub.columns) == {"ticker", "Date", "Close"}
+
+    rng = store.get_bars("nse_bse", tickers=["T0.NS"],
+                         start="2024-01-10", end="2024-01-15")
+    assert rng["Date"].min() >= pd.Timestamp("2024-01-10")
+    assert rng["Date"].max() <= pd.Timestamp("2024-01-15")

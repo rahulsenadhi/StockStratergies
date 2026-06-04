@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import duckdb
 import pandas as pd
 
 DATASETS = {
@@ -61,3 +62,42 @@ def load_ohlcv_parquet(
         ohlcv[ticker] = df
         mtimes[ticker] = part.stat().st_mtime
     return ohlcv, mtimes
+
+
+def _connect() -> "duckdb.DuckDBPyConnection":
+    return duckdb.connect(database=":memory:")
+
+
+def get_bars(
+    dataset: str, tickers: list | None = None,
+    start: str | None = None, end: str | None = None,
+    cols: list | None = None,
+) -> pd.DataFrame:
+    """Tidy slice query via DuckDB. Columns: ticker, Date, + requested OHLCV
+    (all OHLCV when cols is None). Returns an empty DataFrame if no store."""
+    d = parquet_dir(dataset)
+    if not has_store(dataset):
+        return pd.DataFrame(columns=["ticker", "Date"] + (cols or _OHLCV))
+
+    select_cols = ", ".join(["ticker", "Date"] + (cols or _OHLCV))
+    glob = str(d / "ticker=*" / "bars.parquet").replace("\\", "/")
+    where = []
+    params: list = []
+    if tickers:
+        ph = ", ".join(["?"] * len(tickers))
+        where.append(f"ticker IN ({ph})")
+        params.extend(tickers)
+    if start:
+        where.append("Date >= ?")
+        params.append(start)
+    if end:
+        where.append("Date <= ?")
+        params.append(end)
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
+    sql = (f"SELECT {select_cols} FROM read_parquet(?, hive_partitioning=true)"
+           f"{clause} ORDER BY ticker, Date")
+    con = _connect()
+    try:
+        return con.execute(sql, [glob, *params]).df()
+    finally:
+        con.close()
