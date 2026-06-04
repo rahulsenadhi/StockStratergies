@@ -85,6 +85,21 @@ def test_refresh_strategy_script_mode_runs_script_only(monkeypatch):
     assert "step1_download_data.py" in " ".join(called[0])
 
 
+def test_refresh_strategy_script_mode_with_dataset_syncs(monkeypatch):
+    monkeypatch.setitem(refresh.STRATEGY_CFG, "scripted_ds", {
+        "folder": "data/x", "dataset": "x_ds", "script": "nse_bse_downloader.py",
+    })
+    called = []
+    monkeypatch.setattr(refresh.subprocess, "run", lambda cmd, **k: called.append(cmd))
+    monkeypatch.setattr(refresh.incremental, "refresh_tickers",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not fetch")))
+    refresh.refresh_strategy("scripted_ds")
+    joined = [" ".join(c) for c in called]
+    assert any("nse_bse_downloader.py" in j for j in joined)      # ran the script
+    assert any("convert_to_parquet.py" in j and "x_ds" in j for j in joined)  # synced
+    assert len(called) == 2
+
+
 def test_refresh_strategy_no_dataset_skips_sync(tmp_path, monkeypatch):
     folder = tmp_path / "ds"
     _seed(folder)

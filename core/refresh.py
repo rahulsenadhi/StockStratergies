@@ -43,8 +43,7 @@ STRATEGY_CFG: dict[str, dict] = {
     "nse_bse": {
         "folder": "data/nse_bse",
         "dataset": "nse_bse",
-        "tickers_fn": lambda: _universe_from_folder("data/nse_bse"),
-        "precompute": [],
+        "script": "nse_bse_downloader.py",   # batch downloader (2300 tickers) — not per-ticker engine
     },
 }
 
@@ -63,20 +62,18 @@ def refresh_strategy(name: str, st_status=None) -> dict[str, str]:
     if cfg.get("script"):
         log(f"Running {cfg['script']} (full download)…")
         subprocess.run([PY, str(_REPO_ROOT / cfg["script"])], check=True)
-        return {}
-
-    tickers = cfg["tickers_fn"]()
-    log(f"Fetching gaps for {len(tickers)} tickers…")
-    status = incremental.refresh_tickers(
-        tickers, cfg["folder"], dt.date.today(), incremental.yf_fetch)
-
-    updated = sum(1 for v in status.values() if v.startswith(("gap_appended", "full")))
-    skipped = sum(1 for v in status.values() if v == "skipped")
-    failed = sum(1 for v in status.values() if v.startswith("failed"))
-    log(f"{updated} updated · {skipped} already current · {failed} failed.")
-
-    if failed and updated == 0 and skipped == 0:
-        raise RuntimeError(f"All {failed} tickers failed — likely network/Yahoo. Data unchanged.")
+        status: dict[str, str] = {}
+    else:
+        tickers = cfg["tickers_fn"]()
+        log(f"Fetching gaps for {len(tickers)} tickers…")
+        status = incremental.refresh_tickers(
+            tickers, cfg["folder"], dt.date.today(), incremental.yf_fetch)
+        updated = sum(1 for v in status.values() if v.startswith(("gap_appended", "full")))
+        skipped = sum(1 for v in status.values() if v == "skipped")
+        failed = sum(1 for v in status.values() if v.startswith("failed"))
+        log(f"{updated} updated · {skipped} already current · {failed} failed.")
+        if failed and updated == 0 and skipped == 0:
+            raise RuntimeError(f"All {failed} tickers failed — likely network/Yahoo. Data unchanged.")
 
     if cfg.get("dataset"):
         log("Syncing Parquet store…")

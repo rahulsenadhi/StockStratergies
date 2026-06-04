@@ -194,5 +194,5 @@ def yf_fetch(ticker: str, start: dt.date, end: dt.date) -> pd.DataFrame:
     import yfinance as yf
     return yf.download(
         ticker, start=str(start), end=str(end),
-        progress=False, auto_adjust=False,
+        progress=False, auto_adjust=True,
     )
