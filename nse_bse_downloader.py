@@ -26,6 +26,8 @@ import yfinance as yf
 from io import StringIO
 from pathlib import Path
 
+from core import incremental
+
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
@@ -98,60 +100,9 @@ def _is_fresh(path: Path) -> bool:
     return age.total_seconds() / 86400 < STALE_DAYS
 
 
-def _standardize(df: pd.DataFrame) -> pd.DataFrame | None:
-    """
-    Normalise a raw yfinance DataFrame:
-    - Flatten MultiIndex columns
-    - Ensure Date index → Date column
-    - Keep only OHLCV columns
-    - Drop rows where Close is NaN
-    - Return None if result is empty
-    """
-    if df is None or df.empty:
-        return None
-
-    # Flatten MultiIndex (single-ticker batch returns flat; belt-and-suspenders)
-    if isinstance(df.columns, pd.MultiIndex):
-        df = df.copy()
-        df.columns = [col[0] if col[0] else col[1] for col in df.columns]
-
-    df = df.reset_index()
-    # yfinance names the date column 'Date' or 'Datetime' depending on version
-    for date_col in ('Date', 'Datetime', 'index'):
-        if date_col in df.columns:
-            df = df.rename(columns={date_col: 'Date'})
-            break
-
-    required = {'Open', 'High', 'Low', 'Close', 'Volume'}
-    if not required.issubset(df.columns):
-        return None
-
-    keep = [c for c in ['Date', 'Open', 'High', 'Low', 'Close', 'Volume'] if c in df.columns]
-    df = df[keep].copy()
-    df['Date'] = pd.to_datetime(df['Date']).dt.date
-    df = df.dropna(subset=['Close']).drop_duplicates(subset='Date').sort_values('Date')
-    df = df.reset_index(drop=True)
-    return df if len(df) >= MIN_ROWS else None
-
-
-def _merge_with_existing(new_df: pd.DataFrame, existing_path: Path) -> pd.DataFrame:
-    """Append new rows to an existing CSV, dedup by Date, return merged."""
-    try:
-        existing = pd.read_csv(existing_path)
-        existing['Date'] = pd.to_datetime(existing['Date']).dt.date
-        merged = pd.concat([existing, new_df], ignore_index=True)
-        merged = merged.drop_duplicates(subset='Date').sort_values('Date').reset_index(drop=True)
-        return merged
-    except Exception:
-        return new_df
-
-
-def _save(df: pd.DataFrame, path: Path) -> bool:
-    try:
-        df.to_csv(path, index=False)
-        return True
-    except Exception:
-        return False
+# Standardize / merge / save now live in core.incremental:
+#   incremental.standardize(df)        — normalise a raw yfinance frame
+#   incremental.merge_save(df, path)   — standardize + merge + dedup + atomic write
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -176,7 +127,7 @@ def _parse_batch_result(
     if not isinstance(raw.columns, pd.MultiIndex):
         # Single-symbol batch — raw IS the ticker's DataFrame
         if len(symbols) == 1:
-            df = _standardize(raw)
+            df = incremental.standardize(raw)
             if df is not None:
                 results[symbols[0]] = df
         return results
@@ -188,7 +139,7 @@ def _parse_batch_result(
             continue
         try:
             ticker_df = raw[sym].copy()
-            df = _standardize(ticker_df)
+            df = incremental.standardize(ticker_df)
             if df is not None:
                 results[sym] = df
         except Exception:
@@ -197,9 +148,14 @@ def _parse_batch_result(
     return results
 
 
-def download_batch(symbols: list[str], period: str) -> dict[str, pd.DataFrame]:
+def download_batch(
+    symbols: list[str],
+    start: datetime.date,
+    end: datetime.date,
+) -> dict[str, pd.DataFrame]:
     """
-    Download a list of symbols in one yf.download() call.
+    Download a list of symbols in one yf.download() call over [start, end).
+    `end` is exclusive (yfinance convention, supplied by plan_fetch).
     Returns {symbol: cleaned_DataFrame} for every successful symbol.
     """
     if not symbols:
@@ -207,7 +163,8 @@ def download_batch(symbols: list[str], period: str) -> dict[str, pd.DataFrame]:
     try:
         raw = yf.download(
             symbols,
-            period=period,
+            start=str(start),
+            end=str(end),
             interval='1d',
             group_by='ticker',
             auto_adjust=True,
@@ -224,20 +181,25 @@ def download_batch(symbols: list[str], period: str) -> dict[str, pd.DataFrame]:
 # PHASE 4 — INDIVIDUAL RETRY
 # ─────────────────────────────────────────────────────────────────────────────
 
-def download_single(symbol: str, period: str) -> pd.DataFrame | None:
+def download_single(
+    symbol: str,
+    start: datetime.date,
+    end: datetime.date,
+) -> pd.DataFrame | None:
     """
-    Download one symbol individually with try/except.
-    Returns a cleaned DataFrame or None on any failure.
+    Download one symbol individually over [start, end) with try/except.
+    `end` is exclusive. Returns a cleaned DataFrame or None on any failure.
     """
     try:
         raw = yf.download(
             symbol,
-            period=period,
+            start=str(start),
+            end=str(end),
             interval='1d',
             auto_adjust=True,
             progress=False,
         )
-        return _standardize(raw)
+        return incremental.standardize(raw)
     except Exception as e:
         if '429' in str(e):
             print(f'\n  Rate-limit (429) on {symbol} — waiting 60s ...', flush=True)
@@ -255,11 +217,16 @@ def download_benchmark(data_folder: Path) -> None:
     if _is_fresh(path):
         print(f'  Benchmark {sym}: fresh, skipping.')
         return
+    today = datetime.date.today()
+    plan = incremental.plan_fetch(path, today)
+    if plan.kind == 'skip':
+        print(f'  Benchmark {sym}: up to date, skipping.')
+        return
     print(f'  Downloading benchmark {sym} ...')
-    df = download_single(sym, '10y')
-    if df is not None and not df.empty:
-        _save(df, path)
-        print(f'  Benchmark saved: {path}  ({len(df)} rows)')
+    df = download_single(sym, plan.start, plan.end)
+    added = incremental.merge_save(df, path)
+    if added >= 0:
+        print(f'  Benchmark saved: {path}  (+{added} rows)')
     else:
         print(f'  WARNING: benchmark {sym} download failed.')
 
@@ -301,19 +268,31 @@ def main() -> None:
     total = len(all_symbols)
     print(f'\n  Total symbols  : {total}')
 
-    # ── Phase 2: separate fresh vs needs-download ─────────────────────────────
-    fresh_syms:    list[str] = []
-    full_syms:     list[str] = []   # file missing → download full 10y
-    stale_syms:    list[str] = []   # file exists but old → append 60d
+    # ── Phase 2: classify via plan_fetch (skip / gap / full) ──────────────────
+    # _is_fresh is a cheap mtime pre-filter: if the CSV was just written we skip
+    # the (more expensive) max-Date read inside plan_fetch.
+    today = datetime.date.today()
+    fresh_syms: list[str] = []
+    full_syms:  list[str] = []   # no CSV yet → full backfill window
+    # stale symbols carry their per-symbol gap start (from plan_fetch)
+    gap_starts: dict[str, datetime.date] = {}
+    gap_end:    datetime.date | None = None
 
     for sym in all_symbols:
         path = data_folder / f'{sym}.csv'
         if _is_fresh(path):
             fresh_syms.append(sym)
-        elif path.exists():
-            stale_syms.append(sym)
-        else:
+            continue
+        plan = incremental.plan_fetch(path, today)
+        if plan.kind == 'skip':
+            fresh_syms.append(sym)
+        elif plan.kind == 'full':
             full_syms.append(sym)
+        else:  # gap
+            gap_starts[sym] = plan.start
+            gap_end = plan.end
+
+    stale_syms = list(gap_starts.keys())
 
     print(f'  Fresh (skip)   : {len(fresh_syms)}')
     print(f'  Full download  : {len(full_syms)}')
@@ -324,8 +303,11 @@ def main() -> None:
 
     t_start = time.time()
 
-    # helper: run batches for a symbol list and period
-    def _run_batches(syms: list[str], period: str, mode: str) -> None:
+    # helper: run batches for a symbol list over [start, end) (end exclusive).
+    # When per-symbol starts differ (gap pass), the caller passes the minimum
+    # start; over-fetching is harmless — merge_save dedups by Date per symbol.
+    def _run_batches(syms: list[str], start: datetime.date,
+                     end: datetime.date, mode: str) -> None:
         nonlocal failed_syms
         n_ok = n_fail = done = 0
         batches = [syms[i:i + BATCH_SIZE] for i in range(0, len(syms), BATCH_SIZE)]
@@ -335,22 +317,28 @@ def main() -> None:
             label = batch[0] if batch else ''
             _bar(done, len(syms), label, n_ok, n_fail)
 
-            results = download_batch(batch, period)
+            results = download_batch(batch, start, end)
 
             for sym in batch:
                 path = data_folder / f'{sym}.csv'
                 df = results.get(sym)
 
                 if df is not None:
-                    # Merge with existing for stale updates
-                    if mode == 'stale' and path.exists():
-                        df = _merge_with_existing(df, path)
+                    # merge_save standardizes (no-op here), merges with any
+                    # existing CSV, dedups by Date, and writes atomically.
+                    added = incremental.merge_save(df, path)
+                    rows = 0
+                    if added >= 0:
+                        try:
+                            rows = len(pd.read_csv(path, usecols=['Date']))
+                        except Exception:
+                            rows = 0
 
-                    if len(df) >= MIN_ROWS and _save(df, path):
+                    if added >= 0 and rows >= MIN_ROWS:
                         status_rows.append({
                             'Symbol': sym, 'Status': 'SUCCESS',
-                            'Rows': len(df),
-                            'LastDate': str(df['Date'].iloc[-1]),
+                            'Rows': rows,
+                            'LastDate': str(incremental.last_stored_date(path)),
                             'Mode': mode,
                         })
                         n_ok += 1
@@ -372,15 +360,21 @@ def main() -> None:
 
         print()  # newline after progress bar
 
+    full_start = today - datetime.timedelta(days=incremental.FULL_LOOKBACK_DAYS)
+    full_end   = today + datetime.timedelta(days=1)
+
     # ── Phase 3a: full downloads ──────────────────────────────────────────────
     if full_syms:
         print(f'\n  ── Pass 1/2: Full downloads ({len(full_syms)} symbols) ──')
-        _run_batches(full_syms, f'{YEARS_HISTORY}y', 'full')
+        _run_batches(full_syms, full_start, full_end, 'full')
 
-    # ── Phase 3b: stale updates ───────────────────────────────────────────────
+    # ── Phase 3b: stale updates (gap fetch) ───────────────────────────────────
     if stale_syms:
+        # one batch window = earliest gap start across the pass; per-symbol
+        # over-fetch is deduped on merge.
+        batch_start = min(gap_starts.values())
         print(f'\n  ── Pass 1/2: Stale updates ({len(stale_syms)} symbols) ──')
-        _run_batches(stale_syms, '60d', 'stale')
+        _run_batches(stale_syms, batch_start, gap_end, 'stale')
 
     # ── Phase 3c: fresh skips ─────────────────────────────────────────────────
     for sym in fresh_syms:
@@ -399,14 +393,23 @@ def main() -> None:
             print(f'\r  Retry {i}/{len(failed_syms)}: {sym:<30}', end='', flush=True)
             path = data_folder / f'{sym}.csv'
 
-            df = download_single(sym, f'{YEARS_HISTORY}y')
-            if df is not None and len(df) >= MIN_ROWS and _save(df, path):
+            # Retry always re-fetches the full window so a missing CSV can be
+            # backfilled; merge_save dedups against anything already present.
+            df = download_single(sym, full_start, full_end)
+            added = incremental.merge_save(df, path)
+            rows = 0
+            if added >= 0:
+                try:
+                    rows = len(pd.read_csv(path, usecols=['Date']))
+                except Exception:
+                    rows = 0
+            if added >= 0 and rows >= MIN_ROWS:
                 # Update status_rows: replace last BATCH_FAILED entry for this sym
                 for row in reversed(status_rows):
                     if row['Symbol'] == sym and row['Status'] in ('BATCH_FAILED', 'INSUFFICIENT_DATA'):
                         row['Status'] = 'SUCCESS'
-                        row['Rows'] = len(df)
-                        row['LastDate'] = str(df['Date'].iloc[-1])
+                        row['Rows'] = rows
+                        row['LastDate'] = str(incremental.last_stored_date(path))
                         break
                 retry_ok += 1
             else:
