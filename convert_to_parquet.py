@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 from pathlib import Path
 
@@ -73,6 +74,7 @@ def backfill(dataset: str) -> int:
     for csv in sorted(csv_dir.glob("*.csv")):
         df = load_single(csv)
         if df is None:
+            logging.warning("convert_to_parquet: skipping unreadable CSV %s", csv)
             continue
         ticker = csv.stem
         _write_partition(parquet_dir, ticker, df)
@@ -98,6 +100,7 @@ def sync(dataset: str) -> dict:
             continue
         df = load_single(csv)
         if df is None:
+            logging.warning("convert_to_parquet: skipping unreadable CSV %s", csv)
             skipped += 1
             continue
         _write_partition(parquet_dir, ticker, df)
