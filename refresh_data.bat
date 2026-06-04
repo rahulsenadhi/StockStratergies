@@ -32,6 +32,14 @@ if errorlevel 1 (
     echo  ok NSE/BSE done >> "%LOG%"
 )
 
+echo [2b] Syncing Parquet store ... >> "%LOG%"
+"%PY%" convert_to_parquet.py --sync nse_bse >> "%LOG%" 2>&1
+if errorlevel 1 (
+    echo  !! convert_to_parquet.py FAILED >> "%LOG%"
+) else (
+    echo  ok parquet sync done >> "%LOG%"
+)
+
 echo [3/5] Rebuilding Momentum Edge parquet cache + backtest ... >> "%LOG%"
 "%PY%" momentum_edge_backtest.py >> "%LOG%" 2>&1
 if errorlevel 1 (

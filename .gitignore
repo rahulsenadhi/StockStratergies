@@ -14,6 +14,9 @@ data/nse_bse/
 momentum_edge_data/
 ipo_data/
 
+# Regenerable Parquet store (rebuilt from CSVs by convert_to_parquet.py)
+data/parquet/
+
 # Claude Code internal files
 .claude/
 

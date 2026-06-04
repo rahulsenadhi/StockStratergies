@@ -59,11 +59,13 @@ PIPELINES = {
     ],
     'IPO Edge': [
         [PY, 'ipo_edge_downloader.py'],
+        [PY, 'convert_to_parquet.py', '--sync', 'ipo_data'],
         [PY, 'ipo_edge_backtest.py'],
     ],
     'Momentum Edge': [
         [PY, 'build_universe.py'],
         [PY, 'nse_bse_downloader.py'],
+        [PY, 'convert_to_parquet.py', '--sync', 'nse_bse'],
         [PY, 'momentum_edge_backtest.py'],
     ],
     'PEAD': [
