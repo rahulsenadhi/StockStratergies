@@ -124,3 +124,69 @@ def merge_save(new_df: pd.DataFrame | None, path) -> int:
     merged.to_csv(tmp, index=False)
     os.replace(tmp, p)                        # atomic; crash before this keeps old CSV
     return len(merged) - before
+
+
+from concurrent.futures import ThreadPoolExecutor
+from typing import Callable
+
+FetchFn = Callable[[str, dt.date, dt.date], pd.DataFrame]
+
+
+def refresh_tickers(
+    tickers,
+    data_folder,
+    today: dt.date,
+    fetch_fn: FetchFn,
+    *,
+    max_workers: int = 8,
+    min_rows_new: int = MIN_ROWS,
+) -> dict[str, str]:
+    """Plan -> fetch (only non-skip tickers) -> merge_save. Per-ticker isolated.
+
+    fetch_fn(ticker, start, end) -> raw OHLCV DataFrame (end exclusive).
+    Returns {ticker: "skipped" | "gap_appended(n)" | "full(n)" | "failed(reason)"}.
+    """
+    folder = Path(data_folder)
+    folder.mkdir(parents=True, exist_ok=True)
+
+    status: dict[str, str] = {}
+    to_fetch: list[tuple[str, FetchPlan]] = []
+    for t in tickers:
+        plan = plan_fetch(folder / f"{t}.csv", today)
+        if plan.kind == "skip":
+            status[t] = "skipped"
+        else:
+            to_fetch.append((t, plan))
+
+    def _one(item):
+        ticker, plan = item
+        path = folder / f"{ticker}.csv"
+        existed = path.exists()
+        try:
+            raw = fetch_fn(ticker, plan.start, plan.end)
+        except Exception as e:
+            return ticker, f"failed({type(e).__name__})"
+        added = merge_save(raw, path)
+        if added < 0:
+            return ticker, "failed(empty)"
+        if not existed and plan.kind == "full":
+            if len(pd.read_csv(path)) < min_rows_new:
+                path.unlink(missing_ok=True)
+                return ticker, "failed(min_rows)"
+            return ticker, f"full({added})"
+        return ticker, (f"gap_appended({added})" if plan.kind == "gap" else f"full({added})")
+
+    if to_fetch:
+        with ThreadPoolExecutor(max_workers=max_workers) as ex:
+            for ticker, st in ex.map(_one, to_fetch):
+                status[ticker] = st
+    return status
+
+
+def yf_fetch(ticker: str, start: dt.date, end: dt.date) -> pd.DataFrame:
+    """Real network fetch: single-ticker yfinance download for [start, end)."""
+    import yfinance as yf
+    return yf.download(
+        ticker, start=str(start), end=str(end),
+        progress=False, auto_adjust=False,
+    )

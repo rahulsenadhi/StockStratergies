@@ -120,3 +120,76 @@ def test_merge_save_empty_returns_negative(tmp_path):
     p = tmp_path / "t.csv"
     assert inc.merge_save(pd.DataFrame(), p) == -1
     assert not p.exists()
+
+
+def test_refresh_tickers_skips_current_and_appends_gap(tmp_path):
+    folder = tmp_path / "ds"
+    folder.mkdir()
+    _write_csv(folder / "CUR.csv", ["2024-06-04"])      # current -> skip
+    _write_csv(folder / "OLD.csv", ["2024-05-30"])      # gap
+
+    calls = []
+
+    def fake_fetch(ticker, start, end):
+        calls.append(ticker)
+        return _raw(["2024-05-31", "2024-06-03", "2024-06-04"])
+
+    status = inc.refresh_tickers(
+        ["CUR", "OLD"], folder, dt.date(2024, 6, 4), fake_fetch, max_workers=1)
+
+    assert status["CUR"] == "skipped"
+    assert status["OLD"].startswith("gap_appended")
+    assert calls == ["OLD"]                              # CUR never hit the network
+
+
+def test_refresh_tickers_new_ticker_full(tmp_path):
+    folder = tmp_path / "ds"
+    folder.mkdir()
+    dates = pd.bdate_range("2024-01-01", periods=120).strftime("%Y-%m-%d").tolist()
+
+    status = inc.refresh_tickers(
+        ["NEW"], folder, dt.date(2024, 6, 20),
+        lambda t, s, e: _raw(dates), max_workers=1)
+
+    assert status["NEW"].startswith("full")
+    assert (folder / "NEW.csv").exists()
+
+
+def test_refresh_tickers_new_ticker_below_min_rows_discarded(tmp_path):
+    folder = tmp_path / "ds"
+    folder.mkdir()
+    status = inc.refresh_tickers(
+        ["TINY"], folder, dt.date(2024, 6, 20),
+        lambda t, s, e: _raw(["2024-06-18", "2024-06-19"]),  # 2 rows < MIN_ROWS
+        max_workers=1, min_rows_new=100)
+    assert status["TINY"] == "failed(min_rows)"
+    assert not (folder / "TINY.csv").exists()
+
+
+def test_refresh_tickers_one_failure_isolated(tmp_path):
+    folder = tmp_path / "ds"
+    folder.mkdir()
+    _write_csv(folder / "A.csv", ["2024-05-30"])
+    _write_csv(folder / "B.csv", ["2024-05-30"])
+
+    def fake_fetch(ticker, start, end):
+        if ticker == "A":
+            raise RuntimeError("boom")
+        return _raw(["2024-05-31", "2024-06-04"])
+
+    status = inc.refresh_tickers(
+        ["A", "B"], folder, dt.date(2024, 6, 4), fake_fetch, max_workers=1)
+    assert status["A"].startswith("failed")
+    assert status["B"].startswith("gap_appended")        # B unaffected
+
+
+def test_refresh_tickers_empty_return_is_skip_noop(tmp_path):
+    folder = tmp_path / "ds"
+    folder.mkdir()
+    _write_csv(folder / "A.csv", ["2024-05-30"])
+    before = (folder / "A.csv").read_bytes()
+    status = inc.refresh_tickers(
+        ["A"], folder, dt.date(2024, 6, 4),
+        lambda t, s, e: pd.DataFrame(), max_workers=1)     # empty fetch
+    assert status["A"] == "failed(empty)"
+    assert (folder / "A.csv").read_bytes() == before       # untouched
