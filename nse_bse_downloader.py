@@ -324,6 +324,10 @@ def main() -> None:
                 df = results.get(sym)
 
                 if df is not None:
+                    # Capture brand-new status BEFORE merge_save so we can clean
+                    # up a partial CSV that never met MIN_ROWS (mirrors
+                    # core/incremental.py refresh_tickers._one).
+                    existed = path.exists()
                     # merge_save standardizes (no-op here), merges with any
                     # existing CSV, dedups by Date, and writes atomically.
                     added = incremental.merge_save(df, path)
@@ -338,11 +342,16 @@ def main() -> None:
                         status_rows.append({
                             'Symbol': sym, 'Status': 'SUCCESS',
                             'Rows': rows,
-                            'LastDate': str(incremental.last_stored_date(path)),
+                            'LastDate': str(incremental.last_stored_date(path) or 'N/A'),
                             'Mode': mode,
                         })
                         n_ok += 1
                     else:
+                        # Brand-new symbol below MIN_ROWS: delete the partial CSV
+                        # so it neither pollutes the universe nor gets re-fetched
+                        # as a phantom gap on the next run.
+                        if not existed:
+                            Path(path).unlink(missing_ok=True)
                         failed_syms.append(sym)
                         status_rows.append({'Symbol': sym, 'Status': 'INSUFFICIENT_DATA', 'Mode': mode})
                         n_fail += 1
@@ -393,6 +402,8 @@ def main() -> None:
             print(f'\r  Retry {i}/{len(failed_syms)}: {sym:<30}', end='', flush=True)
             path = data_folder / f'{sym}.csv'
 
+            # Capture brand-new status BEFORE merge_save (see batch pass).
+            existed = path.exists()
             # Retry always re-fetches the full window so a missing CSV can be
             # backfilled; merge_save dedups against anything already present.
             df = download_single(sym, full_start, full_end)
@@ -409,10 +420,15 @@ def main() -> None:
                     if row['Symbol'] == sym and row['Status'] in ('BATCH_FAILED', 'INSUFFICIENT_DATA'):
                         row['Status'] = 'SUCCESS'
                         row['Rows'] = rows
-                        row['LastDate'] = str(incremental.last_stored_date(path))
+                        row['LastDate'] = str(incremental.last_stored_date(path) or 'N/A')
                         break
                 retry_ok += 1
             else:
+                # Brand-new symbol that never reached MIN_ROWS: delete the
+                # partial CSV so it doesn't pollute the universe or become a
+                # phantom gap on the next run.
+                if not existed:
+                    Path(path).unlink(missing_ok=True)
                 # Final failure — keep as FAILED
                 for row in reversed(status_rows):
                     if row['Symbol'] == sym and row['Status'] in ('BATCH_FAILED', 'INSUFFICIENT_DATA'):
