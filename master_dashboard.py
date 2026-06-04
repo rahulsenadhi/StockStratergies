@@ -2275,13 +2275,6 @@ def _get_pe(ticker_ns: str) -> float | None:
         return None
 
 
-def _score_bar(score: float, max_score: int = 10) -> str:
-    filled = min(max_score, max(0, round(score)))
-    empty  = max_score - filled
-    bar    = '█' * filled + '░' * empty
-    return f'{bar}  {score:.1f}/{max_score}'
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 #  DATA LOADERS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -4614,52 +4607,6 @@ def chart_equity(eq_df: pd.DataFrame, col: str, name: str,
         legend=dict(orientation='h', x=0, y=1.08, bgcolor='rgba(0,0,0,0)'),
         height=300,
         margin=dict(l=10, r=10, t=30, b=10),
-    )
-    return fig
-
-
-def chart_plotly_table(df: pd.DataFrame, col_widths: list[int] | None = None,
-                       row_colors: list[str] | None = None,
-                       score_col: str | None = 'Score') -> go.Figure:
-    """Plotly table with optional per-row colours and score bar column."""
-    disp = df.copy()
-    if score_col and score_col in disp.columns:
-        disp[score_col] = disp[score_col].apply(
-            lambda x: _score_bar(float(x)) if str(x) not in ('—', 'nan', '') else '—'
-        )
-
-    vals   = [disp[c].tolist() for c in disp.columns]
-    n_rows = len(disp)
-    light  = _is_light_theme()
-    header_fill = '#eef1f6' if light else '#1a1f35'
-    header_font = '#5b6472' if light else '#8892a4'
-    cell_font   = '#1a1a1a' if light else '#d8dde8'
-    if row_colors:
-        # In light mode, flip dark-navy row fills to white but keep light tints
-        # (e.g. the blue top-5 highlight).
-        fill = ([('#ffffff' if rc.startswith(('rgba(15', '#0', '#12', '#1a', '#1e')) else rc)
-                 for rc in row_colors] if light else row_colors)
-    else:
-        fill = ['#ffffff' if light else '#12172a'] * n_rows
-    fig = go.Figure(go.Table(
-        columnwidth=col_widths,
-        header=dict(
-            values=[f'<b>{c}</b>' for c in disp.columns],
-            fill_color=header_fill, align='center',
-            font=dict(color=header_font, size=11), height=30,
-        ),
-        cells=dict(
-            values=vals,
-            fill_color=[fill] * len(disp.columns),
-            align='left',
-            font=dict(color=cell_font, size=11),
-            height=26,
-        ),
-    ))
-    fig.update_layout(
-        **_plotly_base(),
-        height=min(56 + n_rows * 28, 680),
-        margin=dict(l=0, r=0, t=0, b=0),
     )
     return fig
 
