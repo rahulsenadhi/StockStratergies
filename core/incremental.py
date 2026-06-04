@@ -64,3 +64,63 @@ def plan_fetch(path, today: dt.date, full_lookback_days: int = FULL_LOOKBACK_DAY
     if trading_days_between(last, today) <= 0:
         return FetchPlan("skip")
     return FetchPlan("gap", last + dt.timedelta(days=1), today + dt.timedelta(days=1))
+
+
+import os
+
+
+def standardize(df: pd.DataFrame | None) -> pd.DataFrame | None:
+    """Normalize a raw yfinance frame to Date,O,H,L,C,V. None if empty/invalid.
+
+    Note: no minimum-row gate here (gap fetches return few rows); MIN_ROWS is
+    enforced only for brand-new tickers in refresh_tickers.
+    """
+    if df is None or getattr(df, "empty", True):
+        return None
+    if isinstance(df.columns, pd.MultiIndex):
+        df = df.copy()
+        df.columns = [c[0] if c[0] else c[1] for c in df.columns]
+    df = df.reset_index()
+    for date_col in ("Date", "Datetime", "index"):
+        if date_col in df.columns:
+            df = df.rename(columns={date_col: "Date"})
+            break
+    if not {"Open", "High", "Low", "Close", "Volume"}.issubset(df.columns):
+        return None
+    keep = [c for c in ["Date"] + OHLCV if c in df.columns]
+    df = df[keep].copy()
+    df["Date"] = pd.to_datetime(df["Date"]).dt.date
+    df = (df.dropna(subset=["Close"])
+            .drop_duplicates(subset="Date")
+            .sort_values("Date")
+            .reset_index(drop=True))
+    return df if len(df) else None
+
+
+def merge_save(new_df: pd.DataFrame | None, path) -> int:
+    """Standardize new_df, append into CSV at path (dedup by Date), atomic write.
+
+    Returns count of NEW rows added (>=0), or -1 if new_df is empty/invalid.
+    Idempotent: if nothing new, the file is left byte-identical (no rewrite).
+    """
+    std = standardize(new_df)
+    if std is None:
+        return -1
+    p = Path(path)
+    if p.exists():
+        existing = pd.read_csv(p)
+        existing["Date"] = pd.to_datetime(existing["Date"]).dt.date
+        before = len(existing)
+        merged = (pd.concat([existing, std], ignore_index=True)
+                    .drop_duplicates(subset="Date")
+                    .sort_values("Date")
+                    .reset_index(drop=True))
+        if len(merged) == before:
+            return 0                          # nothing new -> don't touch the file
+    else:
+        before = 0
+        merged = std
+    tmp = p.with_suffix(".csv.tmp")
+    merged.to_csv(tmp, index=False)
+    os.replace(tmp, p)                        # atomic; crash before this keeps old CSV
+    return len(merged) - before

@@ -70,3 +70,53 @@ def test_plan_fetch_weekend_is_skip(tmp_path):
     _write_csv(p, ["2024-06-07"])                   # Fri
     plan = inc.plan_fetch(p, dt.date(2024, 6, 8))   # Sat -> 0 trading days -> skip
     assert plan.kind == "skip"
+
+
+def _raw(dates, close=100.0):
+    return pd.DataFrame({
+        "Date": dates, "Open": close, "High": close, "Low": close,
+        "Close": close, "Volume": 5,
+    })
+
+
+def test_standardize_drops_nan_close_and_dupes():
+    df = _raw(["2024-01-01", "2024-01-01", "2024-01-02"])
+    df.loc[2, "Close"] = float("nan")
+    out = inc.standardize(df)
+    assert list(out["Date"]) == [dt.date(2024, 1, 1)]
+
+
+def test_standardize_missing_cols_returns_none():
+    assert inc.standardize(pd.DataFrame({"Date": ["2024-01-01"], "Close": [1.0]})) is None
+
+
+def test_merge_save_new_file(tmp_path):
+    p = tmp_path / "t.csv"
+    added = inc.merge_save(_raw(["2024-01-01", "2024-01-02"]), p)
+    assert added == 2
+    assert inc.last_stored_date(p) == dt.date(2024, 1, 2)
+
+
+def test_merge_save_appends_and_dedups(tmp_path):
+    p = tmp_path / "t.csv"
+    inc.merge_save(_raw(["2024-01-01", "2024-01-02"]), p)
+    added = inc.merge_save(_raw(["2024-01-02", "2024-01-03"]), p)   # 02 overlaps
+    assert added == 1
+    df = pd.read_csv(p)
+    assert list(pd.to_datetime(df["Date"]).dt.strftime("%Y-%m-%d")) == \
+        ["2024-01-01", "2024-01-02", "2024-01-03"]
+
+
+def test_merge_save_idempotent_no_rewrite(tmp_path):
+    p = tmp_path / "t.csv"
+    inc.merge_save(_raw(["2024-01-01", "2024-01-02"]), p)
+    before = p.read_bytes()
+    added = inc.merge_save(_raw(["2024-01-01", "2024-01-02"]), p)   # same data
+    assert added == 0
+    assert p.read_bytes() == before        # byte-identical, no write
+
+
+def test_merge_save_empty_returns_negative(tmp_path):
+    p = tmp_path / "t.csv"
+    assert inc.merge_save(pd.DataFrame(), p) == -1
+    assert not p.exists()
