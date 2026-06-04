@@ -186,10 +186,34 @@ def test_refresh_tickers_one_failure_isolated(tmp_path):
 def test_refresh_tickers_empty_return_is_skip_noop(tmp_path):
     folder = tmp_path / "ds"
     folder.mkdir()
+
+    # Existing file: empty fetch (e.g. holiday) -> "skipped", file untouched
     _write_csv(folder / "A.csv", ["2024-05-30"])
     before = (folder / "A.csv").read_bytes()
     status = inc.refresh_tickers(
         ["A"], folder, dt.date(2024, 6, 4),
-        lambda t, s, e: pd.DataFrame(), max_workers=1)     # empty fetch
-    assert status["A"] == "failed(empty)"
+        lambda t, s, e: pd.DataFrame(), max_workers=1)
+    assert status["A"] == "skipped"
     assert (folder / "A.csv").read_bytes() == before       # untouched
+
+    # Brand-new ticker (no prior CSV): empty fetch -> genuine "failed(empty)", no file created
+    status2 = inc.refresh_tickers(
+        ["BRAND_NEW"], folder, dt.date(2024, 6, 4),
+        lambda t, s, e: pd.DataFrame(), max_workers=1)
+    assert status2["BRAND_NEW"] == "failed(empty)"
+    assert not (folder / "BRAND_NEW.csv").exists()
+
+
+def test_merge_save_crash_before_replace_keeps_original(tmp_path, monkeypatch):
+    p = tmp_path / "t.csv"
+    inc.merge_save(_raw(["2024-01-01", "2024-01-02"]), p)
+    before = p.read_bytes()
+
+    def boom(*a, **k):
+        raise OSError("simulated crash")
+    monkeypatch.setattr(inc.os, "replace", boom)
+
+    with pytest.raises(OSError):
+        inc.merge_save(_raw(["2024-01-03"]), p)
+
+    assert p.read_bytes() == before          # original intact

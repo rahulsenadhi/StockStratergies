@@ -168,6 +168,10 @@ def refresh_tickers(
             return ticker, f"failed({type(e).__name__})"
         added = merge_save(raw, path)
         if added < 0:
+            # Empty/invalid fetch: no-op for existing files (e.g. holiday),
+            # genuine failure only when there was no prior CSV at all.
+            if existed:
+                return ticker, "skipped"
             return ticker, "failed(empty)"
         if not existed and plan.kind == "full":
             if len(pd.read_csv(path)) < min_rows_new:
