@@ -58,3 +58,33 @@ def test_build_entry_path_short_history():
     df = _ohlcv(["2024-01-01", "2024-01-02"], [100, 101], [100, 99], [100, 100.5])
     path = ea.build_entry_path(df, pd.Timestamp("2024-01-01"), 100.0, max_horizon=90)
     assert list(path["day"]) == [1]   # only one day available after entry
+
+
+def test_build_matrix_collects_paths_and_excursions():
+    df_a = _ohlcv(
+        ["2024-01-01", "2024-01-02", "2024-01-03"],
+        highs=[100, 112, 108], lows=[100, 99, 95], closes=[100, 110, 104],
+    )
+    df_b = _ohlcv(
+        ["2024-01-01", "2024-01-02", "2024-01-03"],
+        highs=[50, 51, 60], lows=[50, 45, 48], closes=[50, 48, 58],
+    )
+    ohlcv = {"A": df_a, "B": df_b}
+    entries = pd.DataFrame({
+        "ticker": ["A", "B", "MISSING"],
+        "entry_date": pd.to_datetime(["2024-01-01", "2024-01-01", "2024-01-01"]),
+        "entry_price": [100.0, 50.0, 10.0],
+    })
+
+    paths, mfe_arr, mae_arr, skipped = ea.build_matrix(entries, ohlcv, max_horizon=2)
+
+    assert len(paths) == 2          # MISSING has no price data
+    assert skipped == 1
+    # per-entry overall MFE (last value of running mfe column):
+    #   A: highs over 2 fwd days [112, 108] -> running max [12, 12] -> 12.0
+    #   B: highs over 2 fwd days [51, 60]   -> running max [2, 20]  -> 20.0
+    assert sorted(np.round(mfe_arr, 2).tolist()) == [12.0, 20.0]
+    # per-entry overall MAE (last value of running mae column):
+    #   A: lows over 2 fwd days [99, 95] -> running min [-1, -5] -> -5.0
+    #   B: lows over 2 fwd days [45, 48] -> running min [-10, -10] -> -10.0
+    assert sorted(np.round(mae_arr, 2).tolist()) == [-10.0, -5.0]

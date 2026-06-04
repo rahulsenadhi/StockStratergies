@@ -90,3 +90,34 @@ def build_entry_path(
     return pd.DataFrame(
         {"day": np.arange(1, len(fwd) + 1), "ret": ret, "mfe": mfe, "mae": mae}
     )
+
+
+def build_matrix(
+    entries: pd.DataFrame,
+    ohlcv: dict,
+    max_horizon: int = MAX_HORIZON_DAYS,
+) -> tuple[list, np.ndarray, np.ndarray, int]:
+    """Build per-entry paths and overall excursion arrays.
+
+    Returns (paths, mfe_arr, mae_arr, skipped):
+      paths   - list of per-entry path DataFrames (from build_entry_path)
+      mfe_arr - np.array of each entry's overall max-favorable-excursion %
+      mae_arr - np.array of each entry's overall max-adverse-excursion %
+      skipped - count of entries with no usable forward price data
+    """
+    paths: list = []
+    mfes: list = []
+    maes: list = []
+    skipped = 0
+
+    for row in entries.itertuples(index=False):
+        df = ohlcv.get(row.ticker)
+        path = build_entry_path(df, row.entry_date, row.entry_price, max_horizon)
+        if path.empty:
+            skipped += 1
+            continue
+        paths.append(path)
+        mfes.append(float(path["mfe"].iloc[-1]))
+        maes.append(float(path["mae"].iloc[-1]))
+
+    return paths, np.array(mfes), np.array(maes), skipped
