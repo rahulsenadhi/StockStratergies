@@ -95,6 +95,10 @@ def _equity_metrics(eq: pd.Series) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+# Task 2: win_rate (multi-source) + alpha vs benchmark
+# ---------------------------------------------------------------------------
+
 _PNL_COL_CANDIDATES = ["PnL_Pct", "return_pct", "PnL"]
 
 
