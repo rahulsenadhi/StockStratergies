@@ -2384,6 +2384,87 @@ def load_momentum():
     return out
 
 
+import json as _json_exit  # json is only imported inside functions elsewhere
+
+
+@st.cache_data(ttl=300)
+def load_exit_recs() -> dict:
+    """Read exit_recommendations.json (per-strategy hold/exit recommendations).
+
+    Returns {} if the file is missing or unreadable so callers degrade gracefully.
+    """
+    p = Path(BASE_DIR) / 'exit_recommendations.json'
+    if not p.exists():
+        return {}
+    try:
+        return _json_exit.loads(p.read_text())
+    except Exception:
+        return {}
+
+
+def _pick_rec(strategy: str, bucket: str | None = None) -> dict | None:
+    """Return the recommendation for a strategy, preferring a bucket-level one."""
+    recs = load_exit_recs().get(strategy, {})
+    if not recs:
+        return None
+    if bucket and bucket in recs:
+        return recs[bucket]
+    return recs.get('ALL')
+
+
+def _exit_badge(rec: dict | None) -> str:
+    """One-line scale-out summary, e.g. 'Hold ~32d - T1/T2/T3 +6/+12/+22% - Stop -8%'."""
+    if not rec:
+        return '-'
+    tg = rec.get('targets', [])
+    if len(tg) >= 3:
+        tline = f"T1/T2/T3 +{tg[0]['pct']:.0f}/+{tg[1]['pct']:.0f}/+{tg[2]['pct']:.0f}%"
+    else:
+        tline = 'targets n/a'
+    return f"Hold ~{rec['hold_days']}d - {tline} - Stop {rec['stop_pct']:.0f}%"
+
+
+def _exit_playbook_card(rec: dict | None, *, title: str = 'Exit Playbook') -> None:
+    """Render the detailed recommendation card + return-by-day curve."""
+    if not rec:
+        st.info('Exit Playbook: insufficient trade history to recommend a hold/exit plan yet.')
+        return
+
+    dq = 'intraday OHLCV' if rec.get('data_quality') == 'ohlcv' else 'close-only (approx.)'
+    st.markdown(f"#### Exit Playbook - {title}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric('Recommended hold', f"{rec['hold_days']} days",
+              help='Trading days that historically maximised median return per unit of drawdown.')
+    c2.metric('Median return at hold', f"{rec['hold_median_return']:.1f}%")
+    c3.metric('Win rate at hold', f"{rec['hold_win_rate']*100:.0f}%")
+
+    tdf = pd.DataFrame([
+        {'Tier': f'T{n+1}', 'Profit target': f"+{t['pct']:.1f}%",
+         'Book': f"{t['book_pct']}%", 'Hit rate (hist.)': f"{t['hit_rate']*100:.0f}%"}
+        for n, t in enumerate(rec.get('targets', []))
+    ])
+    if not tdf.empty:
+        st.markdown(_modern_table(tdf), unsafe_allow_html=True)
+    st.caption(f"Stop level: **{rec['stop_pct']:.1f}%**  -  "
+               f"sample: **{rec['sample_size']} trades**  -  data: {dq}")
+
+    curve = rec.get('curve', [])
+    if curve:
+        cdf = pd.DataFrame(curve)
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=cdf['day'], y=cdf['median'], name='Median return %',
+                                 mode='lines'))
+        fig.add_trace(go.Scatter(x=cdf['day'], y=cdf['p25'], name='p25', mode='lines',
+                                 line=dict(dash='dot')))
+        fig.add_trace(go.Scatter(x=cdf['day'], y=cdf['p75'], name='p75', mode='lines',
+                                 line=dict(dash='dot')))
+        fig.add_vline(x=rec['hold_days'], line=dict(color='#7c9cff', dash='dash'))
+        fig.update_layout(height=260, margin=dict(l=10, r=10, t=10, b=10),
+                          xaxis_title='Days held', yaxis_title='Return %',
+                          template='plotly_dark')
+        st.plotly_chart(fig, use_container_width=True)
+
+
 def _read_precomputed_momentum():
     """Read precomputed momentum outputs written by precompute_momentum_signals.py.
 
@@ -5864,6 +5945,8 @@ def render_monthly(m: dict):
         color
     ), unsafe_allow_html=True)
 
+    _exit_playbook_card(_pick_rec('monthly_rotation'), title='Monthly Rotation')
+
     eq = m.get('equity')
     if eq is None:
         st.error('No backtest data. Run **step1 → step2 → step3** first.')
@@ -5947,6 +6030,8 @@ def render_monthly(m: dict):
         tbl['Return_%']      = tbl['Return_%'].apply(lambda x: f'{x:+.2f}%')
         tbl['RS_Score']      = tbl['RS_Score'].apply(lambda x: f'{x:+.2f}%')
         tbl['Signal']        = tbl['Signal'].str.replace('🟢 ', '').str.replace('🔴 ', '')
+        if not tbl.empty:
+            tbl['Exit Plan'] = _exit_badge(_pick_rec('monthly_rotation'))
         st.markdown(_modern_table(
             tbl, numeric_cols=['Rank', 'Current_Price', 'Return_%', 'RS_Score'],
             status_col='Signal', sortable=True, max_height=520),
@@ -5981,6 +6066,8 @@ def render_ipo(i: dict):
         '10-day average or hits a hard stop. A partial profit is booked at +15% gain.',
         color
     ), unsafe_allow_html=True)
+
+    _exit_playbook_card(_pick_rec('ipo_edge'), title='IPO Edge')
 
     eq     = i.get('equity')
     trades = i.get('trades')
@@ -6094,6 +6181,8 @@ def render_ipo(i: dict):
         if 'Hist Avg%' in disp.columns:
             disp['Hist Avg%'] = disp['Hist Avg%'].apply(lambda x: f'{x:+.1f}%')
 
+        if not disp.empty:
+            disp['Exit Plan'] = _exit_badge(_pick_rec('ipo_edge'))
         n_cols = len(disp.columns)
         widths = ([60, 130, 90, 80, 75, 60, 65, 55, 60, 80, 70, 75, 70, 50, 130, 60, 60])[:n_cols]
         st.markdown(_modern_table(disp, sortable=True, max_height=560),
@@ -6171,6 +6260,8 @@ def render_momentum(mo: dict):
         'and are now breaking to new all-time highs — caught at the perfect moment.</div><br>',
         unsafe_allow_html=True,
     )
+
+    _exit_playbook_card(_pick_rec('momentum_edge'), title='Momentum Edge')
 
     eq     = mo.get('equity')
     trades = mo.get('trades')
@@ -6402,6 +6493,8 @@ def render_momentum(mo: dict):
                 d['Hist Win%'] = d['Hist Win%'].apply(lambda x: f'{x:.0f}%')
             if 'Hist Avg%' in d.columns:
                 d['Hist Avg%'] = d['Hist Avg%'].apply(lambda x: f'{x:+.1f}%')
+            if not d.empty:
+                d['Exit Plan'] = _exit_badge(_pick_rec('momentum_edge'))
             n_c = len(d.columns)
             w   = ([60, 130, 90, 70, 80, 70, 80, 70, 70, 70, 70, 75, 70, 70, 65, 55, 60, 60])[:n_c]
             st.markdown(_modern_table(d, sortable=True, max_height=560),

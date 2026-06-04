@@ -19,6 +19,22 @@ def render() -> None:
         "Post-Earnings-Announcement Drift — long top-decile SUE filtered for quality."
     )
 
+    try:
+        _p = Path(__file__).resolve().parent / 'exit_recommendations.json'
+        _pead = json.loads(_p.read_text()).get('pead', {}).get('ALL') if _p.exists() else None
+    except Exception:
+        _pead = None
+    if _pead:
+        st.markdown('#### Exit Playbook - PEAD')
+        st.write(f"Recommended hold **{_pead['hold_days']} days** - "
+                 f"targets +{_pead['targets'][0]['pct']:.0f}/"
+                 f"+{_pead['targets'][1]['pct']:.0f}/"
+                 f"+{_pead['targets'][2]['pct']:.0f}% - "
+                 f"stop {_pead['stop_pct']:.0f}% - "
+                 f"sample {_pead['sample_size']} trades")
+    else:
+        st.info('Exit Playbook: insufficient PEAD trade history yet.')
+
     _glossary_expander()
     _refresh_strip()
 
