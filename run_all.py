@@ -254,6 +254,9 @@ def main():
             if not ok:
                 print(f'\n  WARNING: {strategy} pipeline failed — continuing with existing data.')
                 all_ok = False
+        run_pipeline('Exit Recommendations', [
+            [PY, 'precompute_exit_recommendations.py'],
+        ])
         if all_ok:
             print(f'\n  All pipelines completed successfully.')
         else:
