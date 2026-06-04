@@ -8,6 +8,7 @@ Then run:  python ipo_edge_backtest.py
 Then run:  streamlit run ipo_edge_dashboard.py
 """
 
+import datetime as dt
 import os
 import sys
 import warnings
@@ -18,6 +19,8 @@ from pathlib import Path
 import pandas as pd
 import requests
 import yfinance as yf
+
+from core import incremental
 
 warnings.filterwarnings('ignore')
 if hasattr(sys.stdout, 'reconfigure'):
@@ -301,50 +304,13 @@ def main():
     print(f'\n  Universe size   : {len(universe)} tickers\n' + sep() + '\n')
 
     summary_rows = []
-    counts = {'passed': 0, 'skipped': 0, 'failed': 0}
 
-    for ticker, company in universe.items():
-        df = download_ohlcv(ticker, start, today)
-
-        if df is None or len(df) < 3:
-            print(f'  FAIL   {ticker:<22} {company[:40]}  —  no data')
-            counts['failed'] += 1
-            continue
-
-        passed, reason = apply_filters(ticker, df, today)
-        listing_date = df.index[0].date()
-        listing_age  = (today - listing_date).days
-
-        if not passed:
-            print(f'  SKIP   {ticker:<22} {company[:38]:<38}  {reason}')
-            counts['skipped'] += 1
-            continue
-
-        out_path = os.path.join(DATA_FOLDER, f'{ticker}.csv')
-        df.to_csv(out_path)
-
-        avg_vol   = float(df['Volume'].replace(0, pd.NA).dropna().mean())
-        avg_value = float((df['Close'] * df['Volume'].replace(0, pd.NA)).dropna().mean())
-        ipo_hi    = round(float(df['High'].iloc[0]), 2)
-        latest    = round(float(df['Close'].iloc[-1]), 2)
-
-        print(
-            f'  OK     {ticker:<22} {company[:38]:<38}  '
-            f'listed {listing_date}  ({listing_age}d)  Rs{latest:,.2f}'
-        )
-
-        summary_rows.append({
-            'Ticker':           ticker,
-            'Company':          company,
-            'Listing_Date':     listing_date,
-            'Listing_Age_Days': listing_age,
-            'Trading_Days':     len(df),
-            'IPO_Day_High':     ipo_hi,
-            'Latest_Close':     latest,
-            'Avg_Vol_000s':     round(avg_vol / 1_000, 1),
-            'Avg_Value_Cr':     round(avg_value / 1e7, 2),
-        })
-        counts['passed'] += 1
+    tickers = list(universe.keys())
+    status = incremental.refresh_tickers(
+        tickers, DATA_FOLDER, dt.date.today(), incremental.yf_fetch)
+    ok = sum(1 for s in status.values() if not s.startswith("failed"))
+    fail = sum(1 for s in status.values() if s.startswith("failed"))
+    print(f'  Saved/current : {ok}  ·  Failed : {fail}  →  {DATA_FOLDER}/')
 
     # Benchmark
     print()
@@ -361,10 +327,9 @@ def main():
         pd.DataFrame(summary_rows).to_csv(summary_path, index=False)
 
     print('\n' + sep())
-    print(f'  Saved   : {counts["passed"]} stocks  →  {DATA_FOLDER}/')
-    print(f'  Skipped : {counts["skipped"]}  (too old, or below liquidity threshold)')
-    print(f'  Failed  : {counts["failed"]}  (no data on Yahoo Finance)')
-    if counts['failed'] > 0:
+    print(f'  Saved/current : {ok} stocks  →  {DATA_FOLDER}/')
+    print(f'  Failed        : {fail}  (no data or below min-rows threshold)')
+    if fail > 0:
         print(f'  Tip     : Some NSE tickers may use different codes on Yahoo Finance')
     print(sep('═') + '\n')
 
