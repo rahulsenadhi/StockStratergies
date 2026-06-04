@@ -10,8 +10,6 @@ the CSV loader's dict shape).
 """
 from __future__ import annotations
 
-import os
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import duckdb
@@ -24,7 +22,6 @@ DATASETS = {
 }
 PARQUET_ROOT = "data/parquet"
 _OHLCV = ["Open", "High", "Low", "Close", "Volume"]
-_DEFAULT_WORKERS = min(32, (os.cpu_count() or 4) * 2)
 
 
 def parquet_dir(dataset: str) -> Path:
@@ -37,23 +34,6 @@ def has_store(dataset: str) -> bool:
     return d.exists() and any(d.glob("ticker=*/bars.parquet"))
 
 
-def _read_partition(args: tuple):
-    part, skip, whitelist, min_bars = args
-    ticker = part.parent.name.split("=", 1)[1]
-    if ticker in skip:
-        return None, None, None
-    if whitelist is not None and ticker not in whitelist:
-        return None, None, None
-    df = pd.read_parquet(part)
-    df["Date"] = pd.to_datetime(df["Date"])
-    df = df.set_index("Date").sort_index()
-    df.index.name = "Date"
-    df = df[_OHLCV].dropna(subset=["Close"])
-    if len(df) < min_bars:
-        return None, None, None
-    return ticker, df, part.stat().st_mtime
-
-
 def load_ohlcv_parquet(
     dataset: str, min_bars: int = 10,
     skip: set | None = None, whitelist: set | None = None,
@@ -61,19 +41,36 @@ def load_ohlcv_parquet(
     """Drop-in equivalent of data_io.load_ohlcv reading the Parquet store.
 
     Returns ({ticker: OHLCV DataFrame with Date index}, {ticker: parquet mtime}).
-    Parallelized per-partition (pyarrow releases the GIL).
+    Reads all partitions in one DuckDB pass (far faster than per-file reads at
+    thousands of tickers), then splits per ticker.
     """
-    d = parquet_dir(dataset)
+    if not has_store(dataset):
+        return {}, {}
     skip = skip or set()
-    parts = sorted(d.glob("ticker=*/bars.parquet"))
-    args = [(p, skip, whitelist, min_bars) for p in parts]
+    d = parquet_dir(dataset)
+    glob = str(d / "ticker=*" / "bars.parquet").replace("\\", "/")
+    con = _connection()
+    sql = ("SELECT ticker, Date, Open, High, Low, Close, Volume "
+           "FROM read_parquet(?, hive_partitioning=true) ORDER BY ticker, Date")
+    df = con.execute(sql, [glob]).df()
+
     ohlcv: dict = {}
     mtimes: dict = {}
-    with ThreadPoolExecutor(max_workers=_DEFAULT_WORKERS) as pool:
-        for ticker, df, mt in pool.map(_read_partition, args):
-            if ticker is not None:
-                ohlcv[ticker] = df
-                mtimes[ticker] = mt
+    for ticker, g in df.groupby("ticker", sort=False):
+        if ticker in skip:
+            continue
+        if whitelist is not None and ticker not in whitelist:
+            continue
+        gg = g.set_index("Date")[_OHLCV].dropna(subset=["Close"])
+        if len(gg) < min_bars:
+            continue
+        gg.index.name = "Date"
+        ohlcv[ticker] = gg
+        part = d / f"ticker={ticker}" / "bars.parquet"
+        try:
+            mtimes[ticker] = part.stat().st_mtime
+        except OSError:
+            mtimes[ticker] = 0.0
     return ohlcv, mtimes
 
 
