@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from core.refresh_ui import render_staleness_banner
 
 warnings.filterwarnings('ignore')
 
@@ -1974,6 +1975,8 @@ def main():
         st.session_state['selected_ticker'] = None
 
     controls = render_sidebar()
+
+    render_staleness_banner("momentum", "momentum_edge_data")
 
     # ── Top-level tabs ─────────────────────────────────────────────────────────
     tab_scr, tab_bt = st.tabs(['📊 Live Screener', '📋 Backtest Report'])

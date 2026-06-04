@@ -58,6 +58,7 @@ def apply_fintech_theme(fig: 'go.Figure') -> 'go.Figure':
 import streamlit as st
 
 from core import analytics as core_analytics
+from core.refresh_ui import render_staleness_banner
 from core import data_io as core_data_io
 from core import glossary as core_glossary
 from core import indicators as core_indicators
@@ -8884,6 +8885,8 @@ def render_backtest_results(strat_id: str) -> None:
 def main():
     page = render_sidebar()
     core_glossary.render_sidebar(st)
+
+    render_staleness_banner("nse_bse", "data/nse_bse")
 
     with st.spinner('Loading data…'):
         m  = load_monthly()

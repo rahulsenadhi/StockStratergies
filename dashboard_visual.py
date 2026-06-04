@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from core.refresh_ui import render_staleness_banner
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -61,6 +62,8 @@ st.markdown("""<style>
 </style>""", unsafe_allow_html=True)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+render_staleness_banner("nifty50", "data")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def rs_color(rs):

@@ -18,6 +18,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 import yfinance as yf
+from core.refresh_ui import render_staleness_banner
 
 warnings.filterwarnings('ignore')
 
@@ -165,6 +166,7 @@ st.markdown("""<style>
 }
 </style>""", unsafe_allow_html=True)
 
+render_staleness_banner("ipo", "ipo_data")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  QUALITY FILTER HELPERS
