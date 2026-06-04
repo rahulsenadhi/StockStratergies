@@ -2094,6 +2094,33 @@ html, body, [data-testid="stApp"] {
     padding: 10px 14px !important;
 }
 
+/* ── UI v2: modern table + theme tokens (self-contained, namespaced) ──────── */
+:root, [data-theme="dark"] {
+    --mtbl-surface:#12172a; --mtbl-surface-2:#0e1117; --mtbl-border:#1e2235;
+    --mtbl-text:#e6e9f0; --mtbl-text-muted:#8892a4;
+    --mtbl-accent:#10b981; --mtbl-pos:#22c55e; --mtbl-neg:#ef4444; --mtbl-warn:#f59e0b;
+}
+[data-theme="light"] {
+    --mtbl-surface:#ffffff; --mtbl-surface-2:#f5f7fa; --mtbl-border:#dde3ec;
+    --mtbl-text:#0f172a; --mtbl-text-muted:#5b6472;
+    --mtbl-accent:#0e7c5a; --mtbl-pos:#15803d; --mtbl-neg:#b91c1c; --mtbl-warn:#b45309;
+}
+.mtbl-wrap{ width:100%; border:1px solid var(--mtbl-border); border-radius:10px; overflow:auto; margin:4px 0 8px; }
+.mtbl{ width:100%; border-collapse:collapse; font-family:var(--font-sans); font-size:12.5px; color:var(--mtbl-text); background:var(--mtbl-surface); }
+.mtbl thead th{ position:sticky; top:0; z-index:1; background:var(--mtbl-surface-2); color:var(--mtbl-text-muted);
+    text-align:left; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em;
+    padding:9px 12px; border-bottom:1px solid var(--mtbl-border); white-space:nowrap; }
+.mtbl tbody td{ padding:8px 12px; border-bottom:1px solid var(--mtbl-border); }
+.mtbl tbody tr:last-child td{ border-bottom:none; }
+.mtbl tbody tr:hover{ background:color-mix(in srgb, var(--mtbl-accent) 7%, transparent); }
+.mtbl-num{ text-align:right; font-family:var(--font-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.mtbl-pill{ display:inline-block; padding:2px 9px; border-radius:999px; font-size:10.5px; font-weight:600; }
+.mtbl-pill-pos{ background:color-mix(in srgb,var(--mtbl-pos) 16%,transparent); color:var(--mtbl-pos); }
+.mtbl-pill-neg{ background:color-mix(in srgb,var(--mtbl-neg) 16%,transparent); color:var(--mtbl-neg); }
+.mtbl-pill-warn{ background:color-mix(in srgb,var(--mtbl-warn) 16%,transparent); color:var(--mtbl-warn); }
+.mtbl-pill-muted{ background:color-mix(in srgb,var(--mtbl-text-muted) 18%,transparent); color:var(--mtbl-text-muted); }
+[data-testid="stMetricValue"]{ font-variant-numeric:tabular-nums; }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -5550,16 +5577,21 @@ def render_sidebar() -> str:
             label_visibility='collapsed',
         )
 
-        # Dark-only theme. Light/Auto removed: Streamlit's native dataframes render
-        # in a canvas locked to the config theme.base (dark) and cannot be rethemed
-        # by our CSS overlay, so light mode showed dark boxes. Force data-theme=dark
-        # so any OS auto-light CSS (html:not([data-theme="dark"])) never applies.
+        # Light/Dark toggle. All data tables are now custom theme-aware HTML
+        # (_modern_table) instead of st.dataframe, so light mode no longer shows
+        # dark boxes. Explicit data-theme overrides OS auto-light leakage.
+        st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
+        theme_choice = st.radio('Theme', ['🌙 Dark', '☀️ Light'],
+                                horizontal=True, label_visibility='collapsed',
+                                key='_theme_choice')
+        _tv = 'light' if theme_choice == '☀️ Light' else 'dark'
         st.html(
-            """<script>
-            (function() {
-                document.documentElement.setAttribute('data-theme', 'dark');
-                if (document.body) document.body.setAttribute('data-theme', 'dark');
-            })();
+            f"""<script>
+            (function() {{
+                var v = "{_tv}";
+                document.documentElement.setAttribute('data-theme', v);
+                if (document.body) document.body.setAttribute('data-theme', v);
+            }})();
             </script>""",
             unsafe_allow_javascript=True,
         )
