@@ -4637,6 +4637,61 @@ def chart_plotly_table(df: pd.DataFrame, col_widths: list[int] | None = None,
     return fig
 
 
+def _modern_table(df, *, numeric_cols=None, status_col=None,
+                  sortable=False, max_height=None):
+    """Theme-aware modern HTML table. Replaces st.dataframe / chart_plotly_table.
+    Uses CSS classes (theme tokens) so it works in light & dark. numeric_cols get
+    tabular-nums + right align + mono. status_col renders semantic pills.
+    sortable adds client-side column sort; max_height adds a scroll region."""
+    import html as _h
+    numeric_cols = set(numeric_cols or [])
+    cols = list(df.columns)
+
+    def _pill(v):
+        s = str(v)
+        key = s.strip().lower()
+        cls = {'live': 'pos', 'paper': 'warn', 'research': 'muted', 'paused': 'neg',
+               'buy': 'pos', 'sell': 'neg', 'hold': 'warn'}.get(key, 'muted')
+        return f'<span class="mtbl-pill mtbl-pill-{cls}">{_h.escape(s)}</span>'
+
+    thead = ''.join(
+        f'<th class="{"mtbl-num" if c in numeric_cols else ""}" '
+        f'{"data-sort=1" if sortable else ""}>{_h.escape(str(c))}</th>'
+        for c in cols)
+    rows = []
+    for _, r in df.iterrows():
+        tds = []
+        for c in cols:
+            v = r[c]
+            if status_col and c == status_col:
+                tds.append(f'<td>{_pill(v)}</td>')
+            elif c in numeric_cols:
+                tds.append(f'<td class="mtbl-num">{_h.escape(str(v))}</td>')
+            else:
+                tds.append(f'<td>{_h.escape(str(v))}</td>')
+        rows.append(f'<tr>{"".join(tds)}</tr>')
+    wrap_style = f'style="max-height:{max_height}px;overflow-y:auto"' if max_height else ''
+    sort_js = _MTBL_SORT_JS if sortable else ''
+    return (f'<div class="mtbl-wrap" {wrap_style}>'
+            f'<table class="mtbl{" mtbl-sortable" if sortable else ""}">'
+            f'<thead><tr>{thead}</tr></thead><tbody>{"".join(rows)}</tbody>'
+            f'</table></div>{sort_js}')
+
+
+_MTBL_SORT_JS = """<script>
+(function(){document.querySelectorAll('table.mtbl-sortable th[data-sort]').forEach(function(th){
+ th.style.cursor='pointer';th.addEventListener('click',function(){
+  var t=th.closest('table'),tb=t.tBodies[0],idx=Array.from(th.parentNode.children).indexOf(th);
+  var asc=th.getAttribute('data-asc')!=='1';th.setAttribute('data-asc',asc?'1':'0');
+  var rows=Array.from(tb.rows);rows.sort(function(a,b){
+   var x=a.cells[idx].innerText.replace(/[₹,%+]/g,''),y=b.cells[idx].innerText.replace(/[₹,%+]/g,'');
+   var nx=parseFloat(x),ny=parseFloat(y);
+   if(!isNaN(nx)&&!isNaN(ny))return asc?nx-ny:ny-nx;
+   return asc?x.localeCompare(y):y.localeCompare(x);});
+  rows.forEach(function(r){tb.appendChild(r);});});});
+})();</script>"""
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  SIDEBAR
 # ═══════════════════════════════════════════════════════════════════════════════
