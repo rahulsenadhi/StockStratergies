@@ -2866,7 +2866,7 @@ def _render_single_ticker_backtest(ticker: str, ath_only: bool = False) -> None:
     df_t_full['Return%'] = df_t_full['Return%'].apply(lambda x: f'{x:+.2f}%')
     df_t_full['EntryPrice'] = df_t_full['EntryPrice'].apply(lambda x: f'₹{x:,.2f}')
     df_t_full['ExitPrice']  = df_t_full['ExitPrice'].apply(lambda x: f'₹{x:,.2f}')
-    st.dataframe(df_t_full, hide_index=True, width='stretch')
+    st.markdown(_modern_table(df_t_full, sortable=True, max_height=560), unsafe_allow_html=True)
 
 
 def _action_from_signal(signal: str, is_bull: bool = True) -> str:
@@ -4671,8 +4671,23 @@ def _modern_table(df, *, numeric_cols=None, status_col=None,
     tabular-nums + right align + mono. status_col renders semantic pills.
     sortable adds client-side column sort; max_height adds a scroll region."""
     import html as _h
-    numeric_cols = set(numeric_cols or [])
+    import re as _re
     cols = list(df.columns)
+    if numeric_cols is None:
+        # Auto-detect numeric columns: values look like numbers (₹/%/commas ok)
+        _pat = _re.compile(r'^[₹$]?[-+]?[\d,]+\.?\d*%?$')
+        numeric_cols = []
+        for c in cols:
+            vals = df[c].astype(str).str.strip()
+            nn = vals[(vals != '') & (vals.str.lower() != 'nan') & (vals != '—')]
+            if len(nn) and nn.str.match(_pat).mean() >= 0.6:
+                numeric_cols.append(c)
+    numeric_cols = set(numeric_cols)
+    if status_col is None:
+        for _cand in ('Status', 'Signal', 'Action', 'Regime'):
+            if _cand in cols:
+                status_col = _cand
+                break
 
     def _pill(v):
         s = str(v)
@@ -6134,10 +6149,8 @@ def render_ipo(i: dict):
 
         n_cols = len(disp.columns)
         widths = ([60, 130, 90, 80, 75, 60, 65, 55, 60, 80, 70, 75, 70, 50, 130, 60, 60])[:n_cols]
-        st.plotly_chart(
-            chart_plotly_table(disp, widths, row_colors, score_col='Score'),
-            width='stretch',
-        )
+        st.markdown(_modern_table(disp, sortable=True, max_height=560),
+                    unsafe_allow_html=True)
         st.caption(
             '📊 *Hist Win%* / *Hist Avg%* — overall historical IPO Edge win rate from closed trades.'
         )
@@ -6168,8 +6181,8 @@ def render_ipo(i: dict):
         else:
             row_colors = ['rgba(0,200,83,0.08)' if p > 0 else 'rgba(255,61,61,0.06)'
                           for p in trades['PnL_Pct']]
-        st.plotly_chart(chart_plotly_table(t, row_colors=row_colors, score_col=None),
-                        width='stretch')
+        st.markdown(_modern_table(t, sortable=True, max_height=560),
+                    unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -6444,11 +6457,8 @@ def render_momentum(mo: dict):
                 d['Hist Avg%'] = d['Hist Avg%'].apply(lambda x: f'{x:+.1f}%')
             n_c = len(d.columns)
             w   = ([60, 130, 90, 70, 80, 70, 80, 70, 70, 70, 70, 75, 70, 70, 65, 55, 60, 60])[:n_c]
-            st.plotly_chart(
-                chart_plotly_table(d, w, colors, score_col='Score'),
-                width='stretch',
-                key=f'me_table_{key_suffix}',
-            )
+            st.markdown(_modern_table(d, sortable=True, max_height=560),
+                        unsafe_allow_html=True)
 
         sig_color_map = {
             'Breakout Today': 'rgba(34,197,94,0.10)',
@@ -6481,8 +6491,8 @@ def render_momentum(mo: dict):
             if recent_bk.empty:
                 st.caption('No recent breakouts in the last 7 days.')
             else:
-                st.dataframe(recent_bk, hide_index=True, width='stretch',
-                             height=min(600, 38 * len(recent_bk) + 40))
+                st.markdown(_modern_table(recent_bk, sortable=True, max_height=560),
+                            unsafe_allow_html=True)
                 st.caption(
                     f'**{len(recent_bk)}** stocks crossed their 52-week close high in the last 7 trading days '
                     'and still hold above their EMA220. **% Off Bk** = how far today\'s close is from the '
@@ -6685,8 +6695,8 @@ def render_momentum(mo: dict):
         })
         row_colors = ['rgba(34,197,94,0.10)' if r == 'Win' else 'rgba(239,68,68,0.08)'
                       for r in view['Result']]
-        st.plotly_chart(chart_plotly_table(t, row_colors=row_colors, score_col=None),
-                        width='stretch')
+        st.markdown(_modern_table(t, sortable=True, max_height=560),
+                    unsafe_allow_html=True)
 
         # Legend for the new BK Margin + Filters columns
         st.markdown(
@@ -6788,7 +6798,7 @@ def render_momentum(mo: dict):
             track = track.sort_values('Total_PnL', ascending=False)
             track.columns = ['Ticker', 'Trades', 'Wins', 'Win %', 'Avg PnL %',
                               'Best %', 'Worst %', 'Total PnL %']
-            st.dataframe(track, hide_index=True, width='stretch', height=min(600, 38 * len(track) + 40))
+            st.markdown(_modern_table(track, sortable=True, max_height=560), unsafe_allow_html=True)
             st.caption(
                 f'**{len(track)}** distinct stocks traded. '
                 f'**{int((track["Total PnL %"] > 0).sum())}** were net-positive contributors; '
@@ -6863,10 +6873,8 @@ def render_momentum(mo: dict):
                     'rgba(34,197,94,0.10)' if r == 'Win' else 'rgba(239,68,68,0.06)'
                     for r in disp['Result']
                 ]
-                st.plotly_chart(
-                    chart_plotly_table(disp, row_colors=row_colors_lfh, score_col=None),
-                    width='stretch',
-                )
+                st.markdown(_modern_table(disp, sortable=True, max_height=560),
+                            unsafe_allow_html=True)
 
     # ── Glossary ───────────────────────────────────────────────────────────────
     st.markdown('<br>', unsafe_allow_html=True)
@@ -7056,7 +7064,7 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
             ]].copy().sort_values('Loss_Free_Days', ascending=False)
             disp['Entry_Price'] = disp['Entry_Price'].apply(lambda x: f'₹{x:,.2f}')
             disp['PnL_Pct']     = disp['PnL_Pct'].apply(lambda x: f'{x:+.2f}%')
-            st.dataframe(disp, hide_index=True, width='stretch')
+            st.markdown(_modern_table(disp), unsafe_allow_html=True)
 
     st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
 
@@ -7176,18 +7184,18 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
         df = report.get('by_entry_type', pd.DataFrame())
         if not df.empty:
             st.markdown('**By Entry Type**')
-            st.dataframe(df, hide_index=True, width='stretch')
+            st.markdown(_modern_table(df), unsafe_allow_html=True)
     with cols[1]:
         df = report.get('by_recovery_speed', pd.DataFrame())
         if not df.empty:
             st.markdown('**By Recovery Speed**')
-            st.dataframe(df, hide_index=True, width='stretch')
+            st.markdown(_modern_table(df), unsafe_allow_html=True)
 
     df = report.get('by_regime', pd.DataFrame())
     if not df.empty and (df['Regime_At_Entry'] != 'Unknown').any():
         st.markdown('**By Market Regime at Entry**')
         st.caption('Bull = all 3 Nifty regime conditions on. Bear = at least one off.')
-        st.dataframe(df, hide_index=True, width='stretch')
+        st.markdown(_modern_table(df), unsafe_allow_html=True)
 
     df = report.get('by_score_bucket', pd.DataFrame())
     if not df.empty:
@@ -7197,7 +7205,7 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
             '(quintiles, Q1 = weakest to Q5 = strongest). Ideal pattern: win rate climbs steadily from Q1 → Q5 '
             '("monotonic ladder"). If it does, the score is genuinely predictive.'
         )
-        st.dataframe(df, hide_index=True, width='stretch')
+        st.markdown(_modern_table(df), unsafe_allow_html=True)
 
     st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
 
@@ -7214,7 +7222,7 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
     )
     df = report.get('partial_levels', pd.DataFrame())
     if not df.empty:
-        st.dataframe(df, hide_index=True, width='stretch')
+        st.markdown(_modern_table(df), unsafe_allow_html=True)
         best = df.loc[df['Fade_Rate'].idxmin()] if len(df) else None
         if best is not None:
             st.success(
@@ -7226,7 +7234,7 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
     st.markdown('**Hold-day Curve** — PnL by holding-period bucket')
     df = report.get('hold_curve', pd.DataFrame())
     if not df.empty:
-        st.dataframe(df, hide_index=True, width='stretch')
+        st.markdown(_modern_table(df), unsafe_allow_html=True)
 
     st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
 
@@ -7355,8 +7363,8 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
 
     # Full curve for transparency
     with st.expander('Full hold-day breakdown'):
-        st.dataframe(report.get('hold_curve', pd.DataFrame()),
-                     hide_index=True, width='stretch')
+        st.markdown(_modern_table(report.get('hold_curve', pd.DataFrame())),
+                    unsafe_allow_html=True)
 
     st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
 
@@ -7369,14 +7377,14 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
         c1, c2 = st.columns(2)
         with c1:
             st.markdown('**🏆 Top 10 winners (by total return)**')
-            st.dataframe(th.head(10), hide_index=True, width='stretch')
+            st.markdown(_modern_table(th.head(10)), unsafe_allow_html=True)
         with c2:
             losers = th.sort_values('Total_PnL').head(10)
             st.markdown('**💀 Top 10 losers**')
-            st.dataframe(losers, hide_index=True, width='stretch')
+            st.markdown(_modern_table(losers), unsafe_allow_html=True)
 
         with st.expander(f'All {len(th)} traded tickers'):
-            st.dataframe(th, hide_index=True, width='stretch')
+            st.markdown(_modern_table(th, sortable=True, max_height=560), unsafe_allow_html=True)
 
     st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
 
@@ -7400,10 +7408,9 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
             'MAE_Pct', 'MFE_Pct', 'Time_To_MAE', 'Time_To_MFE',
             'Holding_Days', 'Exit_Reason', 'Result',
         ] if c in trades_x.columns]
-        st.dataframe(
+        st.markdown(_modern_table(
             trades_x[show_cols].sort_values('Exit_Date', ascending=False),
-            hide_index=True, width='stretch',
-        )
+            sortable=True, max_height=560), unsafe_allow_html=True)
 
 
 @st.cache_data(ttl=3600)
@@ -8827,7 +8834,7 @@ def render_backtest_results(strat_id: str) -> None:
                 df[c] = df[c].astype(float).map(lambda v: f'₹{v:,.2f}')
         if 'return_pct' in df.columns:
             df['return_pct'] = df['return_pct'].astype(float).map(lambda v: f'{v:+.2f}%')
-        st.dataframe(df, use_container_width=True, hide_index=True, height=420)
+        st.markdown(_modern_table(df, sortable=True, max_height=420), unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
