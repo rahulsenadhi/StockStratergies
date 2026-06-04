@@ -195,3 +195,48 @@ def test_analyze_with_buckets_falls_back_below_min_sample():
     assert recs["ALL"].sample_size == 30
     assert "BIG" in recs            # >= MIN_SAMPLE
     assert "small" not in recs      # below MIN_SAMPLE -> dropped
+
+
+# ---------------------------------------------------------------------------
+# Fix 2: build_entry_path NaN/None entry_price guard
+# ---------------------------------------------------------------------------
+
+def test_build_entry_path_nan_price_returns_empty():
+    df = _ohlcv(["2024-01-01", "2024-01-02"], [100, 101], [100, 99], [100, 100.5])
+    assert ea.build_entry_path(df, pd.Timestamp("2024-01-01"), float("nan")).empty
+    assert ea.build_entry_path(df, pd.Timestamp("2024-01-01"), None).empty
+
+
+# ---------------------------------------------------------------------------
+# Fix 3: exit_ladder empty-array guard
+# ---------------------------------------------------------------------------
+
+def test_exit_ladder_empty_arrays():
+    targets, stop = ea.exit_ladder(np.array([]), np.array([]))
+    assert targets == []
+    assert stop == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Fix 4: best_hold_day all-NaN guard
+# ---------------------------------------------------------------------------
+
+def test_best_hold_day_all_nan_returns_zero():
+    curve = pd.DataFrame({
+        "day": [1, 2], "median": [float("nan"), float("nan")],
+        "mae": [float("nan"), float("nan")], "win_rate": [0.0, 0.0], "n": [3, 3],
+    })
+    assert ea.best_hold_day(curve) == (0, 0.0, 0.0)
+
+
+# ---------------------------------------------------------------------------
+# Fix 5: analyze_with_buckets ignores a bucket literally named "ALL"
+# ---------------------------------------------------------------------------
+
+def test_analyze_with_buckets_ignores_literal_all_bucket():
+    entries = _make_entries(25, bucket=["ALL"] * 25)
+    recs = ea.analyze_with_buckets(entries, _rising_ohlcv(), strategy="t",
+                                   data_quality="ohlcv", bucket_col="bucket")
+    # strategy-level ALL is present and not overwritten by the bucket named "ALL"
+    assert recs["ALL"].bucket == "ALL"
+    assert recs["ALL"].sample_size == 25

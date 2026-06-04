@@ -70,7 +70,8 @@ def build_entry_path(
     Returns an empty DataFrame if no forward data or entry_price is invalid.
     """
     cols = ["day", "ret", "mfe", "mae"]
-    if ohlcv is None or ohlcv.empty or not entry_price or entry_price <= 0:
+    if (ohlcv is None or ohlcv.empty or entry_price is None
+            or not np.isfinite(entry_price) or entry_price <= 0):
         return pd.DataFrame(columns=cols)
 
     fwd = ohlcv[ohlcv.index > pd.Timestamp(entry_date)].head(max_horizon)
@@ -129,17 +130,17 @@ def aggregate_curve(paths: list, max_horizon: int = MAX_HORIZON_DAYS) -> pd.Data
     Columns: day, median, mean, p25, p75, mae (avg adverse), win_rate, n.
     Each day aggregates only the entries that have data for that offset.
     """
+    cols = ["day", "median", "mean", "p25", "p75", "mae", "win_rate", "n"]
+    if not paths:
+        return pd.DataFrame(columns=cols)
+    combined = pd.concat(paths, ignore_index=True)
+    combined = combined[combined["day"] <= max_horizon]
     rows = []
-    for d in range(1, max_horizon + 1):
-        rets = [p.loc[p["day"] == d, "ret"].iloc[0]
-                for p in paths if (p["day"] == d).any()]
-        maes = [p.loc[p["day"] == d, "mae"].iloc[0]
-                for p in paths if (p["day"] == d).any()]
-        if not rets:
-            continue
-        arr = np.array(rets, dtype=float)
+    for d, grp in combined.groupby("day", sort=True):
+        arr = grp["ret"].to_numpy(dtype=float)
+        maes = grp["mae"].to_numpy(dtype=float)
         rows.append({
-            "day": d,
+            "day": int(d),
             "median": float(np.median(arr)),
             "mean": float(np.mean(arr)),
             "p25": float(np.percentile(arr, 25)),
@@ -160,6 +161,9 @@ def best_hold_day(curve: pd.DataFrame) -> tuple[int, float, float]:
         return 0, 0.0, 0.0
     denom = np.maximum(np.abs(curve["mae"].to_numpy()), MAE_FLOOR)
     score = curve["median"].to_numpy() / denom
+    score = np.where(np.isfinite(score), score, -np.inf)
+    if not np.isfinite(score).any():
+        return 0, 0.0, 0.0
     idx = int(np.argmax(score))
     row = curve.iloc[idx]
     return int(row["day"]), float(row["median"]), float(row["win_rate"])
@@ -175,6 +179,8 @@ def exit_ladder(mfe_arr: np.ndarray, mae_arr: np.ndarray) -> tuple[list, float]:
       stop_pct - negative %; the (100 - STOP_PERCENTILE)th percentile of MAE,
                  i.e. the level STOP_PERCENTILE% of trades stayed above.
     """
+    if len(mfe_arr) == 0 or len(mae_arr) == 0:
+        return [], 0.0
     targets: list = []
     for pct_rank, book in zip(TARGET_PERCENTILES, BOOK_FRACTIONS):
         tgt = float(np.percentile(mfe_arr, pct_rank))
@@ -240,6 +246,8 @@ def analyze_with_buckets(
 
     if bucket_col and bucket_col in entries.columns:
         for val, grp in entries.groupby(bucket_col):
+            if str(val) == "ALL":
+                continue
             if grp[bucket_col].isna().all() or len(grp) < MIN_SAMPLE:
                 continue
             rec = analyze(grp, ohlcv, strategy, data_quality, str(val), max_horizon)
