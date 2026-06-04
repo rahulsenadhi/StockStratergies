@@ -59,6 +59,18 @@ def test_sync_is_idempotent_and_incremental(tmp_path, monkeypatch):
     assert res2 == {"converted": 1, "skipped": 1}
 
 
+def test_backfill_volume_is_float64(tmp_path, monkeypatch):
+    csv_dir = tmp_path / "ipo_data"
+    pq_root = tmp_path / "parquet"
+    _write_csv(csv_dir / "AAA.NS.csv",
+               pd.bdate_range("2024-01-01", periods=12), list(range(100, 112)))
+    monkeypatch.setattr(cvt, "DATASETS", {"ipo_data": str(csv_dir)})
+    monkeypatch.setattr(cvt, "PARQUET_ROOT", str(pq_root))
+    cvt.backfill("ipo_data")
+    df = pd.read_parquet(pq_root / "ipo_data" / "ticker=AAA.NS" / "bars.parquet")
+    assert str(df["Volume"].dtype) == "float64"
+
+
 def test_cli_backfill_all_runs(tmp_path, monkeypatch, capsys):
     csv_dir = tmp_path / "ipo_data"
     pq_root = tmp_path / "parquet"

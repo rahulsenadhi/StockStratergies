@@ -10,6 +10,8 @@ the CSV loader's dict shape).
 """
 from __future__ import annotations
 
+import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import duckdb
@@ -22,6 +24,7 @@ DATASETS = {
 }
 PARQUET_ROOT = "data/parquet"
 _OHLCV = ["Open", "High", "Low", "Close", "Volume"]
+_DEFAULT_WORKERS = min(32, (os.cpu_count() or 4) * 2)
 
 
 def parquet_dir(dataset: str) -> Path:
@@ -34,6 +37,23 @@ def has_store(dataset: str) -> bool:
     return d.exists() and any(d.glob("ticker=*/bars.parquet"))
 
 
+def _read_partition(args: tuple):
+    part, skip, whitelist, min_bars = args
+    ticker = part.parent.name.split("=", 1)[1]
+    if ticker in skip:
+        return None, None, None
+    if whitelist is not None and ticker not in whitelist:
+        return None, None, None
+    df = pd.read_parquet(part)
+    df["Date"] = pd.to_datetime(df["Date"])
+    df = df.set_index("Date").sort_index()
+    df.index.name = "Date"
+    df = df[_OHLCV].dropna(subset=["Close"])
+    if len(df) < min_bars:
+        return None, None, None
+    return ticker, df, part.stat().st_mtime
+
+
 def load_ohlcv_parquet(
     dataset: str, min_bars: int = 10,
     skip: set | None = None, whitelist: set | None = None,
@@ -41,31 +61,30 @@ def load_ohlcv_parquet(
     """Drop-in equivalent of data_io.load_ohlcv reading the Parquet store.
 
     Returns ({ticker: OHLCV DataFrame with Date index}, {ticker: parquet mtime}).
+    Parallelized per-partition (pyarrow releases the GIL).
     """
     d = parquet_dir(dataset)
     skip = skip or set()
+    parts = sorted(d.glob("ticker=*/bars.parquet"))
+    args = [(p, skip, whitelist, min_bars) for p in parts]
     ohlcv: dict = {}
     mtimes: dict = {}
-    for part in sorted(d.glob("ticker=*/bars.parquet")):
-        ticker = part.parent.name.split("=", 1)[1]
-        if ticker in skip:
-            continue
-        if whitelist is not None and ticker not in whitelist:
-            continue
-        df = pd.read_parquet(part)
-        df["Date"] = pd.to_datetime(df["Date"])
-        df = df.set_index("Date").sort_index()
-        df.index.name = "Date"
-        df = df[_OHLCV].dropna(subset=["Close"])
-        if len(df) < min_bars:
-            continue
-        ohlcv[ticker] = df
-        mtimes[ticker] = part.stat().st_mtime
+    with ThreadPoolExecutor(max_workers=_DEFAULT_WORKERS) as pool:
+        for ticker, df, mt in pool.map(_read_partition, args):
+            if ticker is not None:
+                ohlcv[ticker] = df
+                mtimes[ticker] = mt
     return ohlcv, mtimes
 
 
-def _connect() -> "duckdb.DuckDBPyConnection":
-    return duckdb.connect(database=":memory:")
+_con = None
+
+
+def _connection() -> "duckdb.DuckDBPyConnection":
+    global _con
+    if _con is None:
+        _con = duckdb.connect(database=":memory:")
+    return _con
 
 
 def get_bars(
@@ -75,6 +94,10 @@ def get_bars(
 ) -> pd.DataFrame:
     """Tidy slice query via DuckDB. Columns: ticker, Date, + requested OHLCV
     (all OHLCV when cols is None). Returns an empty DataFrame if no store."""
+    if cols is not None:
+        invalid = set(cols) - set(_OHLCV)
+        if invalid:
+            raise ValueError(f"Invalid column names: {sorted(invalid)}")
     d = parquet_dir(dataset)
     if not has_store(dataset):
         return pd.DataFrame(columns=["ticker", "Date"] + (cols or _OHLCV))
@@ -96,8 +119,5 @@ def get_bars(
     clause = (" WHERE " + " AND ".join(where)) if where else ""
     sql = (f"SELECT {select_cols} FROM read_parquet(?, hive_partitioning=true)"
            f"{clause} ORDER BY ticker, Date")
-    con = _connect()
-    try:
-        return con.execute(sql, [glob, *params]).df()
-    finally:
-        con.close()
+    con = _connection()
+    return con.execute(sql, [glob, *params]).df()

@@ -78,6 +78,13 @@ def test_get_bars_filters(tmp_path, monkeypatch):
     assert rng["Date"].max() <= pd.Timestamp("2024-01-15")
 
 
+def test_get_bars_rejects_invalid_cols(tmp_path, monkeypatch):
+    _make_csv_dataset(tmp_path, monkeypatch)
+    cvt.backfill("nse_bse")
+    with pytest.raises(ValueError):
+        store.get_bars("nse_bse", cols=["(SELECT 99) AS hack"])
+
+
 def test_load_ohlcv_fastpath_uses_store_and_matches(tmp_path, monkeypatch):
     csv_dir = _make_csv_dataset(tmp_path, monkeypatch)
     cvt.backfill("nse_bse")

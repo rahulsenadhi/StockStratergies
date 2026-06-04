@@ -43,6 +43,7 @@ def _write_partition(parquet_dir: Path, ticker: str, df: pd.DataFrame) -> None:
     """Write one ticker's OHLCV DataFrame (Date index) to its partition."""
     out = df.reset_index().rename(columns={df.index.name or "index": "Date"})
     out = out[["Date", "Open", "High", "Low", "Close", "Volume"]]
+    out["Volume"] = pd.to_numeric(out["Volume"], errors="coerce").astype("float64")
     part = parquet_dir / f"ticker={ticker}" / "bars.parquet"
     part.parent.mkdir(parents=True, exist_ok=True)
     out.to_parquet(part, index=False)

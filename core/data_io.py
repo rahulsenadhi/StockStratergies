@@ -10,6 +10,7 @@ API:
     load_benchmark(folder, ticker_candidates)
 """
 
+import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -90,8 +91,8 @@ def load_ohlcv(
             return store.load_ohlcv_parquet(dataset, min_bars=min_bars,
                                             skip=skip, whitelist=whitelist)
     except Exception:
-        import logging
-        logging.warning("Parquet fast-path failed for %s; using CSV", folder.name)
+        logging.warning("Parquet fast-path failed for %s; using CSV",
+                        folder.name, exc_info=True)
     # --- existing CSV glob path continues below unchanged ---
 
     skip_stems = skip or set()
