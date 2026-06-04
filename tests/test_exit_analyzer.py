@@ -240,3 +240,32 @@ def test_analyze_with_buckets_ignores_literal_all_bucket():
     # strategy-level ALL is present and not overwritten by the bucket named "ALL"
     assert recs["ALL"].bucket == "ALL"
     assert recs["ALL"].sample_size == 25
+
+
+def test_load_entries_momentum_normalizes_columns(tmp_path):
+    import precompute_exit_recommendations as pre
+    csv = tmp_path / "trades.csv"
+    pd.DataFrame({
+        "Ticker": ["A.NS", "B.NS"],
+        "Entry_Date": ["2024-01-01", "2024-02-01"],
+        "Entry_Price": [100.0, 50.0],
+        "Entry_Type": ["ATH", "ATH"],
+    }).to_csv(csv, index=False)
+
+    entries = pre.load_entries_generic(
+        str(csv), ticker_col="Ticker", date_col="Entry_Date",
+        price_col="Entry_Price", bucket_col="Entry_Type",
+    )
+    assert list(entries.columns) == ["ticker", "entry_date", "entry_price", "bucket"]
+    assert entries["ticker"].tolist() == ["A.NS", "B.NS"]
+    assert pd.api.types.is_datetime64_any_dtype(entries["entry_date"])
+    assert entries["entry_price"].tolist() == [100.0, 50.0]
+
+
+def test_load_entries_generic_missing_file_returns_empty(tmp_path):
+    import precompute_exit_recommendations as pre
+    entries = pre.load_entries_generic(
+        str(tmp_path / "nope.csv"), ticker_col="Ticker",
+        date_col="Entry_Date", price_col="Entry_Price",
+    )
+    assert entries.empty
