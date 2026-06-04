@@ -28,6 +28,15 @@ def test_last_stored_date_returns_max(tmp_path):
     assert inc.last_stored_date(p) == dt.date(2024, 1, 3)
 
 
+def test_last_stored_date_all_nan_returns_none(tmp_path):
+    p = tmp_path / "nan.csv"
+    pd.DataFrame({
+        "Date": [None, None], "Open": 1.0, "High": 1.0, "Low": 1.0,
+        "Close": 1.0, "Volume": 1,
+    }).to_csv(p, index=False)
+    assert inc.last_stored_date(p) is None
+
+
 def test_trading_days_between_same_day_zero():
     assert inc.trading_days_between(dt.date(2024, 1, 8), dt.date(2024, 1, 8)) == 0
 

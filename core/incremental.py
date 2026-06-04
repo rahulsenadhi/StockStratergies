@@ -30,7 +30,8 @@ def last_stored_date(path) -> dt.date | None:
         return None
     if df.empty:
         return None
-    return pd.to_datetime(df["Date"]).dt.date.max()
+    result = pd.to_datetime(df["Date"]).dt.date.max()
+    return None if pd.isna(result) else result
 
 
 def trading_days_between(last: dt.date, today: dt.date) -> int:
