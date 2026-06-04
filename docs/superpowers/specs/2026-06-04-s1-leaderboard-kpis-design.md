@@ -101,7 +101,7 @@ DEFAULT_WEIGHTS = {"sharpe":0.30, "cagr":0.25, "max_dd":0.20, "alpha":0.15, "win
 ```
 
 Steps:
-1. **Direction normalize** — higher = better. All metrics used as-is except `max_dd` (≤0): use `dd_score = -max_dd`.
+1. **Direction normalize** — higher = better. `max_dd` is ≤0 and already higher-is-better (less-negative = smaller drawdown), so it is used **as-is** (no negation — negating it would perversely reward bigger drawdowns). All metrics pass through unchanged.
 2. **Per-metric z-score across the cohort:** `z = (x − mean)/std` over the N strategies; `std==0` → all z=0 for that metric.
 3. **Missing/None impute → z=0** (cohort-median equivalent); flagged `imputed=True` in components.
 4. **Weighted sum with per-strategy weight renormalization:** imputed metrics' weights are dropped and remaining weights rescaled to sum 1:
