@@ -138,3 +138,60 @@ def test_exit_ladder_targets_and_stop():
     # stop = percentile of MAE leaving STOP_PERCENTILE(75)% of trades above it
     assert stop == pytest.approx(np.percentile(mae, 100 - ea.STOP_PERCENTILE), abs=0.5)
     assert stop < 0
+
+
+def _make_entries(n, ticker="A", price=100.0, bucket=None):
+    data = {
+        "ticker": [ticker] * n,
+        "entry_date": pd.to_datetime(["2024-01-01"] * n),
+        "entry_price": [price] * n,
+    }
+    if bucket is not None:
+        data["bucket"] = bucket
+    return pd.DataFrame(data)
+
+
+def _rising_ohlcv():
+    dates = pd.bdate_range("2024-01-01", periods=40)
+    closes = np.linspace(100, 140, 40)
+    return {"A": pd.DataFrame(
+        {"Open": closes, "High": closes * 1.01, "Low": closes * 0.99,
+         "Close": closes, "Volume": 0}, index=dates)}
+
+
+def test_analyze_returns_none_below_min_sample():
+    entries = _make_entries(5)
+    rec = ea.analyze(entries, _rising_ohlcv(), strategy="t", data_quality="ohlcv")
+    assert rec is None
+
+
+def test_analyze_returns_recommendation():
+    entries = _make_entries(25)
+    rec = ea.analyze(entries, _rising_ohlcv(), strategy="t", data_quality="ohlcv")
+    assert rec is not None
+    assert rec.strategy == "t"
+    assert rec.bucket == "ALL"
+    assert rec.sample_size == 25
+    assert rec.hold_days >= 1
+    assert len(rec.targets) == 3
+    assert rec.stop_pct <= 0
+    assert rec.data_quality == "ohlcv"
+    assert len(rec.curve) >= 1
+    # serializable
+    import json
+    json.dumps(rec.to_dict())
+
+
+def test_analyze_with_buckets_falls_back_below_min_sample():
+    # 25 'BIG' (kept) + 5 'small' (dropped as a bucket, still in ALL)
+    big = _make_entries(25, bucket=["BIG"] * 25)
+    small = _make_entries(5, bucket=["small"] * 5)
+    entries = pd.concat([big, small], ignore_index=True)
+    recs = ea.analyze_with_buckets(
+        entries, _rising_ohlcv(), strategy="t", data_quality="ohlcv",
+        bucket_col="bucket",
+    )
+    assert "ALL" in recs
+    assert recs["ALL"].sample_size == 30
+    assert "BIG" in recs            # >= MIN_SAMPLE
+    assert "small" not in recs      # below MIN_SAMPLE -> dropped

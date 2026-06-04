@@ -183,3 +183,66 @@ def exit_ladder(mfe_arr: np.ndarray, mae_arr: np.ndarray) -> tuple[list, float]:
                               hit_rate=round(hit, 2)))
     stop = float(np.percentile(mae_arr, 100 - STOP_PERCENTILE))
     return targets, round(stop, 1)
+
+
+def analyze(
+    entries: pd.DataFrame,
+    ohlcv: dict,
+    strategy: str,
+    data_quality: str,
+    bucket: str = "ALL",
+    max_horizon: int = MAX_HORIZON_DAYS,
+) -> Recommendation | None:
+    """Compute a single Recommendation, or None if fewer than MIN_SAMPLE usable
+    entries have price data."""
+    paths, mfe_arr, mae_arr, _skipped = build_matrix(entries, ohlcv, max_horizon)
+    if len(paths) < MIN_SAMPLE:
+        return None
+
+    curve = aggregate_curve(paths, max_horizon)
+    hold_days, hold_med, hold_win = best_hold_day(curve)
+    targets, stop = exit_ladder(mfe_arr, mae_arr)
+
+    return Recommendation(
+        strategy=strategy,
+        bucket=bucket,
+        hold_days=hold_days,
+        hold_median_return=round(hold_med, 2),
+        hold_win_rate=round(hold_win, 2),
+        targets=targets,
+        stop_pct=stop,
+        sample_size=len(paths),
+        data_quality=data_quality,
+        curve=[{k: round(float(v), 3) for k, v in row.items()}
+               for row in curve.to_dict("records")],
+    )
+
+
+def analyze_with_buckets(
+    entries: pd.DataFrame,
+    ohlcv: dict,
+    strategy: str,
+    data_quality: str,
+    bucket_col: str | None = None,
+    max_horizon: int = MAX_HORIZON_DAYS,
+) -> dict:
+    """Return {'ALL': Recommendation, <bucket>: Recommendation, ...}.
+
+    The 'ALL' key is always attempted. If bucket_col is given, each bucket value
+    with >= MIN_SAMPLE entries also gets its own recommendation; smaller buckets
+    are skipped (callers fall back to 'ALL'). Buckets that fail the price-data
+    threshold inside analyze() are also skipped.
+    """
+    out: dict = {}
+    all_rec = analyze(entries, ohlcv, strategy, data_quality, "ALL", max_horizon)
+    if all_rec is not None:
+        out["ALL"] = all_rec
+
+    if bucket_col and bucket_col in entries.columns:
+        for val, grp in entries.groupby(bucket_col):
+            if grp[bucket_col].isna().all() or len(grp) < MIN_SAMPLE:
+                continue
+            rec = analyze(grp, ohlcv, strategy, data_quality, str(val), max_horizon)
+            if rec is not None:
+                out[str(val)] = rec
+    return out
