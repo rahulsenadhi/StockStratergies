@@ -76,3 +76,27 @@ def test_get_bars_filters(tmp_path, monkeypatch):
                          start="2024-01-10", end="2024-01-15")
     assert rng["Date"].min() >= pd.Timestamp("2024-01-10")
     assert rng["Date"].max() <= pd.Timestamp("2024-01-15")
+
+
+def test_load_ohlcv_fastpath_uses_store_and_matches(tmp_path, monkeypatch):
+    csv_dir = _make_csv_dataset(tmp_path, monkeypatch)
+    cvt.backfill("nse_bse")
+    via_loader, _ = data_io.load_ohlcv(str(csv_dir))
+    via_store, _ = store.load_ohlcv_parquet("nse_bse")
+    assert set(via_loader) == set(via_store)
+    for t in via_store:
+        np.testing.assert_allclose(
+            via_loader[t]["Close"].to_numpy(),
+            via_store[t]["Close"].to_numpy(), rtol=1e-9)
+
+
+def test_load_ohlcv_falls_back_to_csv_without_store(tmp_path, monkeypatch):
+    csv_dir = tmp_path / "weird_ds"   # basename not a known store dataset
+    csv_dir.mkdir()
+    dates = pd.bdate_range("2024-01-01", periods=15)
+    pd.DataFrame({"Date": dates, "Open": range(15), "High": range(15),
+                  "Low": range(15), "Close": range(1, 16), "Volume": [1]*15}
+                 ).to_csv(csv_dir / "Z.NS.csv", index=False)
+    monkeypatch.setattr(store, "PARQUET_ROOT", str(tmp_path / "parquet"))
+    out, _ = data_io.load_ohlcv(str(csv_dir))
+    assert "Z.NS" in out

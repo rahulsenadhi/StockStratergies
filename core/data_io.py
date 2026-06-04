@@ -81,6 +81,19 @@ def load_ohlcv(
     if not folder.exists():
         raise FileNotFoundError(f"Data folder '{folder}' not found.")
 
+    # Parquet fast-path (transparent CSV fallback). Lazy import avoids any
+    # circular import with the store module.
+    try:
+        from core import store
+        dataset = folder.name
+        if store.has_store(dataset):
+            return store.load_ohlcv_parquet(dataset, min_bars=min_bars,
+                                            skip=skip, whitelist=whitelist)
+    except Exception:
+        import logging
+        logging.warning("Parquet fast-path failed for %s; using CSV", folder.name)
+    # --- existing CSV glob path continues below unchanged ---
+
     skip_stems = skip or set()
     csv_files = sorted(folder.glob('*.csv'))
     total = len(csv_files)
