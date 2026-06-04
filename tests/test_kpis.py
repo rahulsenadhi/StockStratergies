@@ -123,3 +123,9 @@ def test_alpha_from_embedded_benchmark_col(tmp_path):
                      extra={"Benchmark_Value": np.linspace(100, 150, 253)})
     m = K.compute_kpis(str(eq), benchmark_col="Benchmark_Value")
     assert m["alpha"] is not None
+
+
+def test_periods_per_year_handles_degenerate_spacing():
+    import pandas as pd
+    idx = pd.to_datetime(["2024-01-01", "2024-01-01"])   # zero spacing
+    assert K._periods_per_year(idx) == 252.0

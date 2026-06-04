@@ -70,7 +70,7 @@ def _equity_series(df: pd.DataFrame, equity_col: str) -> pd.Series:
 
 def _periods_per_year(idx: pd.DatetimeIndex) -> float:
     spacing = np.median(np.diff(idx.values).astype("timedelta64[D]").astype(float))
-    if spacing <= 0:
+    if np.isnan(spacing) or spacing <= 0:
         return 252.0
     return max(1.0, round(365.25 / spacing))
 
