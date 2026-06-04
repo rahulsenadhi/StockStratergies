@@ -7,6 +7,7 @@ Then run:  python momentum_edge_backtest.py
 Then run:  streamlit run momentum_edge_dashboard.py
 """
 
+import datetime as dt
 import os
 import sys
 import warnings
@@ -15,6 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 import yfinance as yf
+from core import incremental
 
 warnings.filterwarnings('ignore')
 if hasattr(sys.stdout, 'reconfigure'):
@@ -113,45 +115,14 @@ def main():
     print(f'  Output folder   : {DATA_FOLDER}/')
     print(sep() + '\n')
 
-    counts = {'ok': 0, 'skipped': 0, 'failed': 0}
-    summary_rows = []
-
-    for ticker, company in universe.items():
-        df = download_ohlcv(ticker, start, today)
-
-        if df is None or df.empty:
-            print(f'  FAIL   {ticker:<22} {company[:40]:<40}  no data from Yahoo Finance')
-            counts['failed'] += 1
-            continue
-
-        passed, reason = validate(ticker, df)
-        if not passed:
-            print(f'  SKIP   {ticker:<22} {company[:40]:<40}  {reason}')
-            counts['skipped'] += 1
-            continue
-
-        out_path = os.path.join(DATA_FOLDER, f'{ticker}.csv')
-        df.to_csv(out_path)
-
-        latest   = round(float(df['Close'].iloc[-1]), 2)
-        avg_vol  = float(df['Volume'].replace(0, pd.NA).dropna().mean())
-        trading_days = len(df)
-
-        print(
-            f'  OK     {ticker:<22} {company[:40]:<40}  '
-            f'{trading_days}d  Rs{latest:,.2f}'
-        )
-
-        summary_rows.append({
-            'Ticker':        ticker,
-            'Company':       company,
-            'Trading_Days':  trading_days,
-            'Start_Date':    df.index[0].date(),
-            'End_Date':      df.index[-1].date(),
-            'Latest_Close':  latest,
-            'Avg_Vol_000s':  round(avg_vol / 1_000, 1),
-        })
-        counts['ok'] += 1
+    tickers = list(universe.keys())
+    status = incremental.refresh_tickers(
+        tickers, DATA_FOLDER, dt.date.today(), incremental.yf_fetch)
+    counts = {
+        "ok": sum(1 for s in status.values() if not s.startswith("failed")),
+        "fail": sum(1 for s in status.values() if s.startswith("failed")),
+    }
+    print(f'  Saved/current : {counts["ok"]}  ·  Failed : {counts["fail"]}  →  {DATA_FOLDER}/')
 
     # ── Benchmark ─────────────────────────────────────────────────────────────
     print()
@@ -163,17 +134,12 @@ def main():
         print(f'  FAIL   {BENCHMARK}  —  could not download benchmark')
 
     # ── Save summary ──────────────────────────────────────────────────────────
+    summary_rows = []
     if summary_rows:
         pd.DataFrame(summary_rows).to_csv(
             os.path.join(DATA_FOLDER, 'me_summary.csv'), index=False
         )
 
-    print('\n' + sep())
-    print(f'  Saved   : {counts["ok"]} stocks  →  {DATA_FOLDER}/')
-    print(f'  Skipped : {counts["skipped"]}  (insufficient history or liquidity)')
-    print(f'  Failed  : {counts["failed"]}  (no data on Yahoo Finance)')
-    if counts['failed'] > 0:
-        print('  Tip     : Verify ticker symbols at https://finance.yahoo.com (search NSE:<symbol>)')
     print(sep('═') + '\n')
 
 
