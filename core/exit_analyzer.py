@@ -163,3 +163,23 @@ def best_hold_day(curve: pd.DataFrame) -> tuple[int, float, float]:
     idx = int(np.argmax(score))
     row = curve.iloc[idx]
     return int(row["day"]), float(row["median"]), float(row["win_rate"])
+
+
+def exit_ladder(mfe_arr: np.ndarray, mae_arr: np.ndarray) -> tuple[list, float]:
+    """Derive 3 profit targets (from MFE percentiles) + a stop (from MAE).
+
+    Returns (targets, stop_pct):
+      targets  - list[Target] at TARGET_PERCENTILES of the MFE distribution,
+                 each booking BOOK_FRACTIONS of the position, with the historical
+                 hit-rate (fraction of entries whose MFE reached the target).
+      stop_pct - negative %; the (100 - STOP_PERCENTILE)th percentile of MAE,
+                 i.e. the level STOP_PERCENTILE% of trades stayed above.
+    """
+    targets: list = []
+    for pct_rank, book in zip(TARGET_PERCENTILES, BOOK_FRACTIONS):
+        tgt = float(np.percentile(mfe_arr, pct_rank))
+        hit = float(np.mean(mfe_arr >= tgt))
+        targets.append(Target(pct=round(tgt, 1), book_pct=int(book),
+                              hit_rate=round(hit, 2)))
+    stop = float(np.percentile(mae_arr, 100 - STOP_PERCENTILE))
+    return targets, round(stop, 1)

@@ -120,3 +120,21 @@ def test_best_hold_day_is_risk_adjusted():
     assert day == 3            # 6/2=3.0  vs  9/9=1.0
     assert med == pytest.approx(6.0)
     assert win == pytest.approx(0.7)
+
+
+def test_exit_ladder_targets_and_stop():
+    # 10 entries, MFE evenly spread 2..20, MAE spread -1..-10
+    mfe = np.array([2, 4, 6, 8, 10, 12, 14, 16, 18, 20], dtype=float)
+    mae = np.array([-1, -2, -3, -4, -5, -6, -7, -8, -9, -10], dtype=float)
+    targets, stop = ea.exit_ladder(mfe, mae)
+
+    assert [t.book_pct for t in targets] == [40, 35, 25]
+    # percentiles 40/65/85 of mfe
+    assert targets[0].pct == pytest.approx(np.percentile(mfe, 40), abs=0.5)
+    assert targets[2].pct == pytest.approx(np.percentile(mfe, 85), abs=0.5)
+    # hit_rate = fraction of entries whose MFE >= target pct
+    assert 0.0 <= targets[0].hit_rate <= 1.0
+    assert targets[0].hit_rate >= targets[2].hit_rate
+    # stop = percentile of MAE leaving STOP_PERCENTILE(75)% of trades above it
+    assert stop == pytest.approx(np.percentile(mae, 100 - ea.STOP_PERCENTILE), abs=0.5)
+    assert stop < 0
