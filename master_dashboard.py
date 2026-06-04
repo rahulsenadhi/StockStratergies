@@ -5714,8 +5714,10 @@ def render_home(m: dict, i: dict, mo: dict):
                 'Trades': int(k.get('num_trades', 0)),
                 'Last run': _human_time_ago(s.get('last_run', '')),
             })
-        st.dataframe(pd.DataFrame(rec_rows), use_container_width=True,
-                      hide_index=True, height=240)
+        st.markdown(_modern_table(
+            pd.DataFrame(rec_rows),
+            numeric_cols=['CAGR', 'Sharpe', 'Max DD', 'Trades'],
+            status_col='Status'), unsafe_allow_html=True)
     else:
         st.info('No strategies yet — head to **Builder** to create one.')
 
@@ -5983,13 +5985,10 @@ def render_monthly(m: dict):
         tbl['Return_%']      = tbl['Return_%'].apply(lambda x: f'{x:+.2f}%')
         tbl['RS_Score']      = tbl['RS_Score'].apply(lambda x: f'{x:+.2f}%')
         tbl['Signal']        = tbl['Signal'].str.replace('🟢 ', '').str.replace('🔴 ', '')
-        row_colors = [
-            'rgba(124,156,255,0.10)' if i < 5 else 'rgba(15,21,40,0.8)'
-            for i in range(len(tbl))
-        ]
-        st.plotly_chart(chart_plotly_table(tbl, [30, 80, 170, 80, 70, 70, 80],
-                                           row_colors, score_col=None),
-                        width='stretch')
+        st.markdown(_modern_table(
+            tbl, numeric_cols=['Rank', 'Current_Price', 'Return_%', 'RS_Score'],
+            status_col='Signal', sortable=True, max_height=520),
+            unsafe_allow_html=True)
 
     if reb is not None and not reb.empty:
         st.markdown(f'<div class="sec-hdr" style="color:{color}">Rebalance Log — What Changed Each Month</div>', unsafe_allow_html=True)
@@ -5997,7 +5996,8 @@ def render_monthly(m: dict):
         r = reb[['Date', 'Top5_Stocks', 'Stocks_Bought', 'Stocks_Sold', 'Portfolio_Value']].copy()
         r['Date']            = r['Date'].astype(str).str[:10]
         r['Portfolio_Value'] = r['Portfolio_Value'].apply(lambda x: f'₹{x:,.0f}')
-        st.plotly_chart(chart_plotly_table(r.tail(12), score_col=None), width='stretch')
+        st.markdown(_modern_table(r.tail(12), numeric_cols=['Portfolio_Value']),
+                    unsafe_allow_html=True)
 
     st.markdown('<br>', unsafe_allow_html=True)
     _glossary_expander()
