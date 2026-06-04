@@ -5270,22 +5270,22 @@ def render_history(m: dict, i: dict, mo: dict):
 
     if all_years:
         hdr_html = (
-            '<th style="background:#1a1f35;color:#8892a4;padding:9px 14px;font-size:12px;text-align:left;">Year</th>'
+            '<th style="background:var(--mtbl-surface-2);color:#8892a4;padding:9px 14px;font-size:12px;text-align:left;">Year</th>'
         )
         for strat in [S_MONTHLY, S_IPO, S_MOMENTUM]:
             th = THEME[strat]
             hdr_html += (
-                f'<th style="background:#1a1f35;color:{th["color"]};padding:9px 14px;'
+                f'<th style="background:var(--mtbl-surface-2);color:{th["color"]};padding:9px 14px;'
                 f'font-size:12px;text-align:center;">{th["icon"]} {strat}</th>'
-                f'<th style="background:#1a1f35;color:{th["color"]}88;padding:9px 10px;'
+                f'<th style="background:var(--mtbl-surface-2);color:{th["color"]}88;padding:9px 10px;'
                 f'font-size:11px;text-align:center;">Beat Nifty?</th>'
             )
-        hdr_html += ('<th style="background:#1a1f35;color:#ff9800;padding:9px 14px;'
+        hdr_html += ('<th style="background:var(--mtbl-surface-2);color:#ff9800;padding:9px 14px;'
                      'font-size:12px;text-align:center;">📊 Nifty</th>')
 
         rows_html = ''
         for yr in all_years:
-            row = f'<td style="background:#12172a;color:#8892a4;padding:7px 14px;font-weight:700;font-size:13px;">{yr}</td>'
+            row = f'<td style="background:var(--mtbl-surface);color:#8892a4;padding:7px 14px;font-weight:700;font-size:13px;">{yr}</td>'
             for strat in [S_MONTHLY, S_IPO, S_MOMENTUM]:
                 val = ann_data.get(strat, {}).get(yr)
                 bv  = bench_ann.get(yr)
@@ -5299,13 +5299,13 @@ def render_history(m: dict, i: dict, mo: dict):
                     if bv is not None:
                         beat = '✅' if val > bv else '❌'
                         bc   = '#00c853' if val > bv else '#ff3d3d'
-                        row += (f'<td style="background:#12172a;color:{bc};padding:7px 10px;'
+                        row += (f'<td style="background:var(--mtbl-surface);color:{bc};padding:7px 10px;'
                                 f'text-align:center;font-size:14px;">{beat}</td>')
                     else:
-                        row += '<td style="background:#12172a;color:#3a4060;text-align:center;">—</td>'
+                        row += '<td style="background:var(--mtbl-surface);color:#3a4060;text-align:center;">—</td>'
                 else:
-                    row += '<td style="background:#0e1117;color:#3a4060;text-align:center;padding:7px 14px;">—</td>'
-                    row += '<td style="background:#0e1117;color:#3a4060;text-align:center;">—</td>'
+                    row += '<td style="background:var(--mtbl-surface-2);color:#3a4060;text-align:center;padding:7px 14px;">—</td>'
+                    row += '<td style="background:var(--mtbl-surface-2);color:#3a4060;text-align:center;">—</td>'
             # Nifty column
             if bv is not None:
                 bg   = _color_ret(bv)
@@ -5313,7 +5313,7 @@ def render_history(m: dict, i: dict, mo: dict):
                 row += (f'<td style="background:{bg};color:#ff9800;padding:7px 14px;'
                         f'text-align:center;font-size:13px;font-weight:700;">{sign}{bv:.1f}%</td>')
             else:
-                row += '<td style="background:#0e1117;color:#3a4060;text-align:center;padding:7px 14px;">—</td>'
+                row += '<td style="background:var(--mtbl-surface-2);color:#3a4060;text-align:center;padding:7px 14px;">—</td>'
             rows_html += f'<tr>{row}</tr>'
 
         st.markdown(f"""
@@ -5375,7 +5375,7 @@ def render_history(m: dict, i: dict, mo: dict):
             exp_col = '#00c853' if exp > 0 else '#ff3d3d'
 
             st.markdown(f"""
-            <div style="background:#12172a;border:1px solid #1e2235;border-radius:10px;padding:16px;">
+            <div style="background:var(--mtbl-surface);border:1px solid var(--mtbl-border);border-radius:10px;padding:16px;">
               <!-- Win/Loss bar -->
               <div style="display:flex;gap:0;border-radius:6px;overflow:hidden;
                    margin-bottom:6px;height:18px;">
@@ -5389,17 +5389,17 @@ def render_history(m: dict, i: dict, mo: dict):
 
               <!-- Key numbers in plain english -->
               <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:12px;">
-                <div style="background:#0e1117;border-radius:6px;padding:8px;text-align:center;">
+                <div style="background:var(--mtbl-surface-2);border-radius:6px;padding:8px;text-align:center;">
                   <div style="color:#6e7891;font-size:10px;margin-bottom:2px;">When it wins</div>
                   <div style="color:#00c853;font-weight:800;font-size:16px;">{avg_g:+.1f}%</div>
                   <div style="color:#555;font-size:10px;">avg profit</div>
                 </div>
-                <div style="background:#0e1117;border-radius:6px;padding:8px;text-align:center;">
+                <div style="background:var(--mtbl-surface-2);border-radius:6px;padding:8px;text-align:center;">
                   <div style="color:#6e7891;font-size:10px;margin-bottom:2px;">When it loses</div>
                   <div style="color:#ff3d3d;font-weight:800;font-size:16px;">{avg_l:+.1f}%</div>
                   <div style="color:#555;font-size:10px;">avg loss</div>
                 </div>
-                <div style="background:#0e1117;border-radius:6px;padding:8px;text-align:center;">
+                <div style="background:var(--mtbl-surface-2);border-radius:6px;padding:8px;text-align:center;">
                   <div style="color:#6e7891;font-size:10px;margin-bottom:2px;">Per trade avg</div>
                   <div style="color:{exp_col};font-weight:800;font-size:16px;">{exp:+.1f}%</div>
                   <div style="color:#555;font-size:10px;">expected gain</div>
@@ -5420,7 +5420,7 @@ def render_history(m: dict, i: dict, mo: dict):
                         hd   = f" · {int(r[hold_col])} days" if hold_col and pd.notna(r.get(hold_col)) else ''
                         html += (
                             f'<div style="display:flex;justify-content:space-between;'
-                            f'font-size:12px;padding:4px 0;border-bottom:1px solid #1e2235;">'
+                            f'font-size:12px;padding:4px 0;border-bottom:1px solid var(--mtbl-border);">'
                             f'<span style="color:#c0c0c0;">'
                             f'  {r["Ticker"].replace(".NS","")}'
                             f'  <span style="color:#555;font-size:10px;">{hd}</span>'
@@ -5435,7 +5435,7 @@ def render_history(m: dict, i: dict, mo: dict):
                 with lc:
                     st.markdown(
                         f'<div style="font-size:11px;color:#5a6480;margin:10px 0 4px;">🏆 Best 3 trades</div>'
-                        f'<div style="background:#0b1a10;border:1px solid #1a3520;'
+                        f'<div style="background:color-mix(in srgb,var(--mtbl-pos) 12%,transparent);border:1px solid #1a3520;'
                         f'border-radius:8px;padding:8px 12px;">'
                         f'{_trade_rows(best3, "#00c853")}</div>',
                         unsafe_allow_html=True,
@@ -5443,7 +5443,7 @@ def render_history(m: dict, i: dict, mo: dict):
                 with rc:
                     st.markdown(
                         f'<div style="font-size:11px;color:#5a6480;margin:10px 0 4px;">📉 Worst 3 trades</div>'
-                        f'<div style="background:#1a0b0b;border:1px solid #3a1515;'
+                        f'<div style="background:color-mix(in srgb,var(--mtbl-neg) 12%,transparent);border:1px solid #3a1515;'
                         f'border-radius:8px;padding:8px 12px;">'
                         f'{_trade_rows(worst3, "#ff3d3d")}</div>',
                         unsafe_allow_html=True,
@@ -5511,7 +5511,7 @@ def render_history(m: dict, i: dict, mo: dict):
                 icon, ic = '⚪', '#888'
             crit_html += (
                 f'<div style="display:flex;justify-content:space-between;'
-                f'font-size:11px;padding:3px 0;border-bottom:1px solid #1e2235;">'
+                f'font-size:11px;padding:3px 0;border-bottom:1px solid var(--mtbl-border);">'
                 f'<span style="color:#a0a8bf;">{icon} {c["label"]}</span>'
                 f'<span style="color:{ic};font-weight:600;">{c["value"]}</span>'
                 f'</div>'
@@ -5542,7 +5542,7 @@ def render_history(m: dict, i: dict, mo: dict):
             """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div style="margin-top:24px;background:#12172a;border:1px solid #1e2235;
+    <div style="margin-top:24px;background:var(--mtbl-surface);border:1px solid var(--mtbl-border);
          border-left:4px solid #f9c200;border-radius:8px;padding:14px 18px;
          font-size:11px;color:#8892a4;line-height:1.9;">
       <b style="color:#f9c200;">⚠️ Important:</b>
@@ -6379,16 +6379,16 @@ def render_momentum(mo: dict):
     # Column guide chips
     st.markdown("""
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;">
-      <span style="background:#1e2235;border-radius:4px;padding:3px 10px;color:#7c9cff;">
+      <span style="background:var(--mtbl-surface-2);border-radius:4px;padding:3px 10px;color:#7c9cff;">
         📊 Score = overall signal quality rank
       </span>
-      <span style="background:#1e2235;border-radius:4px;padding:3px 10px;color:#00bfa5;">
+      <span style="background:var(--mtbl-surface-2);border-radius:4px;padding:3px 10px;color:#00bfa5;">
         🎯 Entry Type: ATH = all-time high breakout (best) | 52W = 52-week high
       </span>
-      <span style="background:#1e2235;border-radius:4px;padding:3px 10px;color:#f9c200;">
+      <span style="background:var(--mtbl-surface-2);border-radius:4px;padding:3px 10px;color:#f9c200;">
         📉 Chart Qual: Clean ✅ = no big sideways chop in chart
       </span>
-      <span style="background:#1e2235;border-radius:4px;padding:3px 10px;color:#c0c0c0;">
+      <span style="background:var(--mtbl-surface-2);border-radius:4px;padding:3px 10px;color:#c0c0c0;">
         ⚡ Recovery: Fast = bounced quickly after the dip
       </span>
     </div>
