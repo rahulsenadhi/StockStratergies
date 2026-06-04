@@ -204,6 +204,14 @@ def test_refresh_tickers_empty_return_is_skip_noop(tmp_path):
     assert not (folder / "BRAND_NEW.csv").exists()
 
 
+def test_merge_save_corrupt_existing_overwrites(tmp_path):
+    p = tmp_path / "t.csv"
+    p.write_text("not,a,valid\nohlcv,csv,@@@\n")     # garbage existing file
+    added = inc.merge_save(_raw(["2024-01-01", "2024-01-02"]), p)
+    assert added == 2
+    assert inc.last_stored_date(p) == dt.date(2024, 1, 2)
+
+
 def test_merge_save_crash_before_replace_keeps_original(tmp_path, monkeypatch):
     p = tmp_path / "t.csv"
     inc.merge_save(_raw(["2024-01-01", "2024-01-02"]), p)

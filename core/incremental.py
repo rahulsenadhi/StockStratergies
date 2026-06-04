@@ -7,6 +7,7 @@ the incremental logic that previously lived inside nse_bse_downloader.py.
 from __future__ import annotations
 
 import datetime as dt
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -66,9 +67,6 @@ def plan_fetch(path, today: dt.date, full_lookback_days: int = FULL_LOOKBACK_DAY
     return FetchPlan("gap", last + dt.timedelta(days=1), today + dt.timedelta(days=1))
 
 
-import os
-
-
 def standardize(df: pd.DataFrame | None) -> pd.DataFrame | None:
     """Normalize a raw yfinance frame to Date,O,H,L,C,V. None if empty/invalid.
 
@@ -107,19 +105,22 @@ def merge_save(new_df: pd.DataFrame | None, path) -> int:
     if std is None:
         return -1
     p = Path(path)
+    before = 0
+    merged = std
     if p.exists():
-        existing = pd.read_csv(p)
-        existing["Date"] = pd.to_datetime(existing["Date"]).dt.date
-        before = len(existing)
-        merged = (pd.concat([existing, std], ignore_index=True)
-                    .drop_duplicates(subset="Date")
-                    .sort_values("Date")
-                    .reset_index(drop=True))
-        if len(merged) == before:
-            return 0                          # nothing new -> don't touch the file
-    else:
-        before = 0
-        merged = std
+        try:
+            existing = pd.read_csv(p)
+            existing["Date"] = pd.to_datetime(existing["Date"]).dt.date
+            before = len(existing)
+            merged = (pd.concat([existing, std], ignore_index=True)
+                        .drop_duplicates(subset="Date")
+                        .sort_values("Date")
+                        .reset_index(drop=True))
+            if len(merged) == before:
+                return 0                      # nothing new -> don't touch the file
+        except Exception:
+            before = 0
+            merged = std    # corrupt/unreadable existing CSV -> overwrite with fresh data
     tmp = p.with_suffix(".csv.tmp")
     merged.to_csv(tmp, index=False)
     os.replace(tmp, p)                        # atomic; crash before this keeps old CSV
@@ -164,21 +165,21 @@ def refresh_tickers(
         existed = path.exists()
         try:
             raw = fetch_fn(ticker, plan.start, plan.end)
+            added = merge_save(raw, path)
+            if added < 0:
+                # Empty/invalid fetch: no-op for existing files (e.g. holiday),
+                # genuine failure only when there was no prior CSV at all.
+                if existed:
+                    return ticker, "skipped"
+                return ticker, "failed(empty)"
+            if not existed and plan.kind == "full":
+                if added < min_rows_new:
+                    path.unlink(missing_ok=True)
+                    return ticker, "failed(min_rows)"
+                return ticker, f"full({added})"
+            return ticker, (f"gap_appended({added})" if plan.kind == "gap" else f"full({added})")
         except Exception as e:
             return ticker, f"failed({type(e).__name__})"
-        added = merge_save(raw, path)
-        if added < 0:
-            # Empty/invalid fetch: no-op for existing files (e.g. holiday),
-            # genuine failure only when there was no prior CSV at all.
-            if existed:
-                return ticker, "skipped"
-            return ticker, "failed(empty)"
-        if not existed and plan.kind == "full":
-            if len(pd.read_csv(path)) < min_rows_new:
-                path.unlink(missing_ok=True)
-                return ticker, "failed(min_rows)"
-            return ticker, f"full({added})"
-        return ticker, (f"gap_appended({added})" if plan.kind == "gap" else f"full({added})")
 
     if to_fetch:
         with ThreadPoolExecutor(max_workers=max_workers) as ex:
