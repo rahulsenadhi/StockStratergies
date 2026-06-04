@@ -2327,11 +2327,43 @@ def load_momentum():
         except Exception:
             pass
 
-    sig_df, funnel = _compute_momentum_signals()
-    out['signals'] = sig_df
-    out['funnel']  = funnel
-    out['recent_breakouts'] = _scan_recent_breakouts()
+    # Prefer precomputed signals (written by precompute_momentum_signals.py in the
+    # pipeline) — reading them is ~0.1s vs ~52s for the live full-universe scan.
+    # Falls back to live compute if the precomputed files are absent/unreadable.
+    pre = _read_precomputed_momentum()
+    if pre is not None:
+        sig_df, funnel, bk_df = pre
+        out['signals']          = sig_df
+        out['funnel']           = funnel
+        out['recent_breakouts'] = bk_df
+    else:
+        sig_df, funnel = _compute_momentum_signals()
+        out['signals']          = sig_df
+        out['funnel']           = funnel
+        out['recent_breakouts'] = _scan_recent_breakouts()
     return out
+
+
+def _read_precomputed_momentum():
+    """Read precomputed momentum outputs written by precompute_momentum_signals.py.
+
+    Returns (signals_df, funnel_dict, breakouts_df) or None when the precompute
+    files are missing or unreadable (caller then falls back to live compute).
+    """
+    import json
+    sig_p = Path(BASE_DIR) / 'momentum_edge_signals.csv'
+    fun_p = Path(BASE_DIR) / 'momentum_edge_funnel.json'
+    bk_p  = Path(BASE_DIR) / 'momentum_edge_recent_breakouts.csv'
+    if not sig_p.exists() or not fun_p.exists():
+        return None
+    try:
+        sig_df = pd.read_csv(sig_p)
+        with open(fun_p, encoding='utf-8') as fh:
+            funnel = json.load(fh)
+        bk_df = pd.read_csv(bk_p) if bk_p.exists() else pd.DataFrame()
+        return sig_df, funnel, bk_df
+    except Exception:
+        return None
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -4460,6 +4492,22 @@ def _run_strategy(commands: list[list[str]]):
 #  CHART BUILDERS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _downsample_series(s: pd.Series, max_points: int = 400) -> pd.Series:
+    """Thin a long series to ~max_points for fast browser-side plotting.
+
+    Uses a uniform stride and always keeps the final point, so the curve looks
+    identical at dashboard chart heights but renders much faster in Plotly.
+    """
+    n = len(s)
+    if n <= max_points:
+        return s
+    step = max(1, n // max_points)
+    out = s.iloc[::step]
+    if len(out) and out.index[-1] != s.index[-1]:
+        out = pd.concat([out, s.iloc[[-1]]])
+    return out
+
+
 def chart_combined_equity(m: dict, i: dict, mo: dict) -> go.Figure:
     """Overlay all three equity curves normalized to % return."""
     fig = go.Figure()
@@ -4472,7 +4520,7 @@ def chart_combined_equity(m: dict, i: dict, mo: dict) -> go.Figure:
         eq = data.get('equity')
         if eq is None or col not in eq.columns:
             continue
-        s = eq[col].dropna()
+        s = _downsample_series(eq[col].dropna())
         ret = (s / s.iloc[0] - 1) * 100
         fig.add_trace(go.Scatter(
             x=ret.index, y=ret.values,
@@ -4496,7 +4544,7 @@ def chart_equity(eq_df: pd.DataFrame, col: str, name: str,
                  color: str, bench_col: str | None = None) -> go.Figure:
     """Single strategy equity curve with optional benchmark."""
     fig = go.Figure()
-    s = eq_df[col].dropna()
+    s = _downsample_series(eq_df[col].dropna())
     ret = (s / s.iloc[0] - 1) * 100
     fig.add_trace(go.Scatter(
         x=ret.index, y=ret.values, name=name,
@@ -4504,7 +4552,7 @@ def chart_equity(eq_df: pd.DataFrame, col: str, name: str,
         fill='tozeroy', fillcolor=_hex_rgba(color, 0.07),
     ))
     if bench_col and bench_col in eq_df.columns:
-        b = eq_df[bench_col].dropna()
+        b = _downsample_series(eq_df[bench_col].dropna())
         if not b.empty:
             b_ret = (b / b.iloc[0] - 1) * 100
             fig.add_trace(go.Scatter(
