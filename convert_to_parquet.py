@@ -82,6 +82,31 @@ def backfill(dataset: str) -> int:
     return written
 
 
+def sync(dataset: str) -> dict:
+    """Convert only CSVs whose mtime changed since the last manifest entry.
+
+    Returns {'converted': int, 'skipped': int}.
+    """
+    csv_dir, parquet_dir = dataset_paths(dataset)
+    manifest = _read_manifest(parquet_dir)
+    converted = skipped = 0
+    for csv in sorted(csv_dir.glob("*.csv")):
+        ticker = csv.stem
+        mtime = csv.stat().st_mtime
+        if manifest.get(ticker) == mtime:
+            skipped += 1
+            continue
+        df = load_single(csv)
+        if df is None:
+            skipped += 1
+            continue
+        _write_partition(parquet_dir, ticker, df)
+        manifest[ticker] = mtime
+        converted += 1
+    _write_manifest(parquet_dir, manifest)
+    return {"converted": converted, "skipped": skipped}
+
+
 def _build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="CSV -> Parquet converter")
     grp = p.add_mutually_exclusive_group(required=True)
