@@ -97,6 +97,26 @@ IPO_UNIVERSE = {
 PLOTLY_BASE = dict(paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
                    font=dict(color='#fafafa', size=12, family='Inter'))
 
+
+def _is_light_theme() -> bool:
+    """True when the user picked Light mode (sidebar radio key '_theme_choice')."""
+    try:
+        import streamlit as _st
+        return _st.session_state.get('_theme_choice') == '☀️ Light'
+    except Exception:
+        return False
+
+
+def _plotly_base() -> dict:
+    """Theme-aware Plotly layout base. Light mode: transparent bg + dark font so
+    charts blend into the white page instead of showing as black rectangles.
+    Dark/Auto: original dark panel + light font."""
+    if _is_light_theme():
+        return dict(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color='#1a1a1a', size=12, family='Inter'))
+    return dict(paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
+                font=dict(color='#fafafa', size=12, family='Inter'))
+
 # Choppiness constants
 CHOPPINESS_P     = 14
 CHOPPINESS_THRESH = 61.8
@@ -4528,7 +4548,7 @@ def chart_combined_equity(m: dict, i: dict, mo: dict) -> go.Figure:
         ))
     fig.add_hline(y=0, line=dict(color='#333', dash='dash', width=1))
     fig.update_layout(
-        **PLOTLY_BASE,
+        **_plotly_base(),
         title=dict(text='All Strategies — Normalised Return (%)',
                    font=dict(color='#e0e0e0', size=13)),
         yaxis=dict(ticksuffix='%', gridcolor='#1a1f35', title='Return'),
@@ -4561,7 +4581,7 @@ def chart_equity(eq_df: pd.DataFrame, col: str, name: str,
             ))
     fig.add_hline(y=0, line=dict(color='#333', dash='dash', width=1))
     fig.update_layout(
-        **PLOTLY_BASE,
+        **_plotly_base(),
         yaxis=dict(ticksuffix='%', gridcolor='#1a1f35'),
         xaxis=dict(gridcolor='#1a1f35'),
         legend=dict(orientation='h', x=0, y=1.08, bgcolor='rgba(0,0,0,0)'),
@@ -4583,24 +4603,34 @@ def chart_plotly_table(df: pd.DataFrame, col_widths: list[int] | None = None,
 
     vals   = [disp[c].tolist() for c in disp.columns]
     n_rows = len(disp)
-    fill   = row_colors if row_colors else ['#12172a'] * n_rows
+    light  = _is_light_theme()
+    header_fill = '#eef1f6' if light else '#1a1f35'
+    header_font = '#5b6472' if light else '#8892a4'
+    cell_font   = '#1a1a1a' if light else '#d8dde8'
+    if row_colors:
+        # In light mode, flip dark-navy row fills to white but keep light tints
+        # (e.g. the blue top-5 highlight).
+        fill = ([('#ffffff' if rc.startswith(('rgba(15', '#0', '#12', '#1a', '#1e')) else rc)
+                 for rc in row_colors] if light else row_colors)
+    else:
+        fill = ['#ffffff' if light else '#12172a'] * n_rows
     fig = go.Figure(go.Table(
         columnwidth=col_widths,
         header=dict(
             values=[f'<b>{c}</b>' for c in disp.columns],
-            fill_color='#1a1f35', align='center',
-            font=dict(color='#8892a4', size=11), height=30,
+            fill_color=header_fill, align='center',
+            font=dict(color=header_font, size=11), height=30,
         ),
         cells=dict(
             values=vals,
             fill_color=[fill] * len(disp.columns),
             align='left',
-            font=dict(color='#d8dde8', size=11),
+            font=dict(color=cell_font, size=11),
             height=26,
         ),
     ))
     fig.update_layout(
-        **PLOTLY_BASE,
+        **_plotly_base(),
         height=min(56 + n_rows * 28, 680),
         margin=dict(l=0, r=0, t=0, b=0),
     )
@@ -4805,7 +4835,7 @@ def chart_bar_comparison(strategies: dict[str, dict]) -> go.Figure:
     ))
     fig.add_hline(y=0, line=dict(color='#444', width=1))
     fig.update_layout(
-        **PLOTLY_BASE,
+        **_plotly_base(),
         barmode='group',
         title=dict(text='Strategy CAGR vs NiftyBees Benchmark',
                    font=dict(color='#e0e0e0', size=13)),
@@ -4834,7 +4864,7 @@ def chart_drawdown_comparison(data_map: dict[str, tuple[pd.DataFrame, str]]) -> 
         ))
     fig.add_hline(y=0, line=dict(color='#444', dash='dash', width=1))
     fig.update_layout(
-        **PLOTLY_BASE,
+        **_plotly_base(),
         title=dict(text='Drawdown — All Strategies',
                    font=dict(color='#e0e0e0', size=13)),
         yaxis=dict(ticksuffix='%', gridcolor='#1a1f35', title='Drawdown %'),
@@ -4893,7 +4923,7 @@ def _chart_yearly_bars(ann_data: dict[str, dict[int, float]],
 
     fig.add_hline(y=0, line=dict(color='#555', width=1))
     fig.update_layout(
-        **PLOTLY_BASE,
+        **_plotly_base(),
         barmode='group',
         title=dict(text='Yearly Returns — Strategy vs Nifty',
                    font=dict(color='#e0e0e0', size=13)),
@@ -4944,7 +4974,7 @@ def _chart_growth_of_1L(data_map: dict[str, tuple[pd.DataFrame, str]],
                   annotation_text='₹1 lakh invested',
                   annotation_font=dict(color='#888', size=10))
     fig.update_layout(
-        **PLOTLY_BASE,
+        **_plotly_base(),
         title=dict(text='Growth of ₹1 Lakh — If You Had Invested from Day 1',
                    font=dict(color='#e0e0e0', size=13)),
         yaxis=dict(
@@ -5465,32 +5495,16 @@ def render_sidebar() -> str:
             label_visibility='collapsed',
         )
 
-        st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
-        theme_choice = st.radio(
-            'Theme',
-            ['🌙 Dark', '☀️ Light', '🖥️ Auto (OS)'],
-            horizontal=True,
-            label_visibility='collapsed',
-            key='_theme_choice',
-        )
-        _theme_map = {'🌙 Dark': 'dark', '☀️ Light': 'light', '🖥️ Auto (OS)': 'auto'}
-        _theme_val = _theme_map.get(theme_choice, 'dark')
-        # st.html with unsafe_allow_javascript=True runs JS in the main doc scope.
-        # Sets data-theme on <html> AND <body>; CSS selectors target either.
+        # Dark-only theme. Light/Auto removed: Streamlit's native dataframes render
+        # in a canvas locked to the config theme.base (dark) and cannot be rethemed
+        # by our CSS overlay, so light mode showed dark boxes. Force data-theme=dark
+        # so any OS auto-light CSS (html:not([data-theme="dark"])) never applies.
         st.html(
-            f"""<script>
-            (function() {{
-                const v = "{_theme_val}";
-                const root = document.documentElement;
-                const body = document.body;
-                if (v === 'auto') {{
-                    root.removeAttribute('data-theme');
-                    if (body) body.removeAttribute('data-theme');
-                }} else {{
-                    root.setAttribute('data-theme', v);
-                    if (body) body.setAttribute('data-theme', v);
-                }}
-            }})();
+            """<script>
+            (function() {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                if (document.body) document.body.setAttribute('data-theme', 'dark');
+            })();
             </script>""",
             unsafe_allow_javascript=True,
         )
