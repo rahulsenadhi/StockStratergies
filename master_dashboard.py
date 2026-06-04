@@ -20,7 +20,7 @@ from plotly.subplots import make_subplots
 
 # ── FINTECH-V2 Plotly Theme ─────────────────────────────────────────────
 FINTECH_PLOTLY = dict(
-    font=dict(family='Inter, -apple-system, sans-serif', size=12, color='#94a3b8'),
+    font=dict(family='IBM Plex Sans, -apple-system, sans-serif', size=12, color='#94a3b8'),
     paper_bgcolor='rgba(0,0,0,0)',
     plot_bgcolor='rgba(0,0,0,0)',
     xaxis=dict(
@@ -38,7 +38,7 @@ FINTECH_PLOTLY = dict(
     hoverlabel=dict(
         bgcolor='rgba(15,23,42,0.95)',
         bordercolor='rgba(148,163,184,0.25)',
-        font=dict(color='#f1f5f9', family='JetBrains Mono, monospace', size=11),
+        font=dict(color='#f1f5f9', family='IBM Plex Mono, monospace', size=11),
     ),
     colorway=['#3b82f6', '#10b981', '#f59e0b', '#ef4444',
               '#8b5cf6', '#06b6d4', '#ec4899'],
@@ -95,7 +95,7 @@ IPO_UNIVERSE = {
 }
 
 PLOTLY_BASE = dict(paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
-                   font=dict(color='#fafafa', size=12, family='Inter'))
+                   font=dict(color='#fafafa', size=12, family='IBM Plex Sans'))
 
 
 def _is_light_theme() -> bool:
@@ -113,9 +113,9 @@ def _plotly_base() -> dict:
     Dark/Auto: original dark panel + light font."""
     if _is_light_theme():
         return dict(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color='#1a1a1a', size=12, family='Inter'))
+                    font=dict(color='#1a1a1a', size=12, family='IBM Plex Sans'))
     return dict(paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
-                font=dict(color='#fafafa', size=12, family='Inter'))
+                font=dict(color='#fafafa', size=12, family='IBM Plex Sans'))
 
 # Choppiness constants
 CHOPPINESS_P     = 14
@@ -170,7 +170,7 @@ st.markdown("""
    CSS BUILD v8 — 2026-06-01 fintech-v2
    If you don't see "v8" via DevTools → Elements → <style>, the server is stale.
    ════════════════════════════════════════════════════════════════════════ */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 /* ── Design tokens — SuperDesign "Modern Dark" (Linear/Vercel inspired) ─────
    Semantic token system with OKLCH colors, derived from SuperDesign theme spec
@@ -222,8 +222,8 @@ st.markdown("""
     --sidebar-ring:               oklch(0.439 0 0);
 
     /* Typography */
-    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
     /* Geometry */
     --radius:    0.625rem;
@@ -2823,7 +2823,7 @@ def _render_single_ticker_backtest(ticker: str, ath_only: bool = False) -> None:
         fig.add_hline(y=0, line_color='#334155', line_width=1)
         fig.update_layout(
             height=260, paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
-            font=dict(color='#fafafa', family='Inter', size=11),
+            font=dict(color='#fafafa', family='IBM Plex Sans', size=11),
             margin=dict(l=60, r=30, t=30, b=30),
             hovermode='x unified',
             xaxis=dict(gridcolor='#1E293B', tickformat='%b %y'),
@@ -3058,7 +3058,7 @@ def _chart_monthly_heatmap(trades: pd.DataFrame) -> go.Figure:
     fig.update_layout(
         height=max(180, 38 * len(years) + 80),
         paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
-        font=dict(color='#fafafa', family='Inter', size=11),
+        font=dict(color='#fafafa', family='IBM Plex Sans', size=11),
         margin=dict(l=60, r=60, t=40, b=20),
         xaxis=dict(side='top', tickfont=dict(size=11)),
         yaxis=dict(tickfont=dict(size=11), autorange='reversed'),
@@ -3665,7 +3665,7 @@ def _render_me_detail(ticker: str, trades: pd.DataFrame | None) -> None:
     fig.update_layout(
         height=180 + 380 * heights[0] + sum(180 * h for h in heights[1:]),
         paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
-        font=dict(color='#F1F5F9', family='Inter'),
+        font=dict(color='#F1F5F9', family='IBM Plex Sans'),
         legend=dict(orientation='h', y=1.04, x=0,
                     font=dict(size=11, color='#94A3B8'),
                     bgcolor='rgba(0,0,0,0)'),
@@ -5222,7 +5222,7 @@ def render_history(m: dict, i: dict, mo: dict):
         st.markdown(f"""
         <div style="overflow-x:auto;margin-bottom:16px;">
         <table style="width:100%;border-collapse:collapse;
-               font-family:'Inter','Segoe UI',sans-serif;">
+               font-family:'IBM Plex Sans','Segoe UI',sans-serif;">
           <thead><tr>{hdr_html}</tr></thead>
           <tbody>{rows_html}</tbody>
         </table>
@@ -6111,7 +6111,7 @@ def _chart_me_funnel(funnel: dict, is_bull: bool) -> go.Figure:
     fig.update_layout(
         height=360, margin=dict(l=10, r=10, t=10, b=10),
         paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
-        font=dict(color='#e0e0e0', family='Inter'),
+        font=dict(color='#e0e0e0', family='IBM Plex Sans'),
     )
     return fig
 
@@ -6952,7 +6952,7 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
         fig_h.update_layout(
             height=240, margin=dict(l=40, r=20, t=30, b=30),
             paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
-            font=dict(color='#F1F5F9', family='Inter'),
+            font=dict(color='#F1F5F9', family='IBM Plex Sans'),
             title=dict(text='Distribution — how long signals stayed loss-free',
                        font=dict(size=12, color='#94A3B8')),
             xaxis=dict(showgrid=False, tickfont=dict(size=11)),
