@@ -25,9 +25,8 @@ def _universe_from_folder(folder: str):
 STRATEGY_CFG: dict[str, dict] = {
     "nifty50": {
         "folder": "data",
-        "dataset": None,                         # Nifty-50 stays CSV (per S0a deferral)
-        "tickers_fn": lambda: _universe_from_folder("data"),
-        "precompute": [],
+        "dataset": None,
+        "script": "step1_download_data.py",   # close-only schema -> full download, not OHLCV engine
     },
     "momentum": {
         "folder": "momentum_edge_data",
@@ -60,6 +59,11 @@ def refresh_strategy(name: str, st_status=None) -> dict[str, str]:
     def log(msg: str):
         if st_status is not None:
             st_status.write(msg)
+
+    if cfg.get("script"):
+        log(f"Running {cfg['script']} (full download)…")
+        subprocess.run([PY, str(_REPO_ROOT / cfg["script"])], check=True)
+        return {}
 
     tickers = cfg["tickers_fn"]()
     log(f"Fetching gaps for {len(tickers)} tickers…")

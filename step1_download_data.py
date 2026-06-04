@@ -4,13 +4,11 @@ Saves each stock as a separate CSV file in the /data folder.
 """
 
 import sys
-import datetime as dt
 import yfinance as yf
 import pandas as pd
 from datetime import datetime, timedelta
 import os
 from pathlib import Path
-from core import incremental
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
@@ -151,30 +149,45 @@ def main():
     )
     print()
     
-    # Download all Nifty 50 stocks (gap-aware: only fetches missing days)
-    tickers = list(NIFTY_50_STOCKS.keys())
-    print(f"Refreshing Nifty 50 Stocks ({len(tickers)})...\n")
-
-    status = incremental.refresh_tickers(
-        tickers, "data", dt.date.today(), incremental.yf_fetch)
-    successful = [t for t, s in status.items() if not s.startswith("failed")]
-    failed = [(t, s) for t, s in status.items() if s.startswith("failed")]
-    print(f"  Updated/current: {len(successful)}   Failed: {len(failed)}")
-    for t, s in failed:
-        print(f"    {t}: {s}")
-
+    # Download all Nifty 50 stocks
+    print(f"Downloading Nifty 50 Stocks ({len(NIFTY_50_STOCKS)})...\n")
+    
+    successful = []
+    failed = []
+    
+    for ticker, company_name in NIFTY_50_STOCKS.items():
+        success, ticker_symbol, message = download_stock_data(
+            ticker, start_date, end_date, data_folder
+        )
+        
+        if success:
+            successful.append((ticker, company_name))
+        else:
+            failed.append((ticker, company_name, message))
+    
     # Print Summary
     print(f"\n{'='*70}")
     print(f"DOWNLOAD SUMMARY")
     print(f"{'='*70}")
     print(f"Benchmark: {'✓ SUCCESS' if benchmark_success else '✗ FAILED'} ({BENCHMARK})")
-    print(f"Stocks Updated/Current: {len(successful)}/{len(NIFTY_50_STOCKS)}")
+    print(f"Stocks Downloaded Successfully: {len(successful)}/{len(NIFTY_50_STOCKS)}")
     print(f"Stocks Failed: {len(failed)}/{len(NIFTY_50_STOCKS)}")
     print(f"{'='*70}\n")
-
+    
+    if successful:
+        print("✓ SUCCESSFUL STOCKS:")
+        for ticker, name in sorted(successful):
+            print(f"  - {ticker:20s} ({name})")
+    
+    if failed:
+        print(f"\n✗ FAILED STOCKS:")
+        for ticker, name, message in sorted(failed):
+            print(f"  - {ticker:20s} ({name})")
+            print(f"    Error: {message}")
+    
     print(f"\n{'='*70}")
     print(f"All data saved to: {data_folder.absolute()}")
-    print(f"Total files in folder: {len(list(data_folder.glob('*.csv')))}")
+    print(f"Total files created: {len(list(data_folder.glob('*.csv')))}")
     print(f"{'='*70}\n")
 
 if __name__ == "__main__":

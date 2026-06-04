@@ -69,6 +69,22 @@ def test_refresh_strategy_all_failed_raises(tmp_path, monkeypatch):
     assert ran == []          # no sync/precompute after all-failed
 
 
+def test_refresh_strategy_script_mode_runs_script_only(monkeypatch):
+    monkeypatch.setitem(refresh.STRATEGY_CFG, "scripted", {
+        "folder": "data", "dataset": None, "script": "step1_download_data.py",
+    })
+    called = []
+    monkeypatch.setattr(refresh.subprocess, "run",
+                        lambda cmd, **k: called.append(cmd))
+    # incremental must NOT be invoked in script mode
+    monkeypatch.setattr(refresh.incremental, "refresh_tickers",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not fetch")))
+    result = refresh.refresh_strategy("scripted")
+    assert result == {}
+    assert len(called) == 1
+    assert "step1_download_data.py" in " ".join(called[0])
+
+
 def test_refresh_strategy_no_dataset_skips_sync(tmp_path, monkeypatch):
     folder = tmp_path / "ds"
     _seed(folder)
