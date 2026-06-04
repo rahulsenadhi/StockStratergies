@@ -107,23 +107,25 @@ def sync(dataset: str) -> dict:
     return {"converted": converted, "skipped": skipped}
 
 
-def _build_arg_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="CSV -> Parquet converter")
-    grp = p.add_mutually_exclusive_group(required=True)
-    grp.add_argument("--backfill", metavar="DATASET")
-    grp.add_argument("--backfill-all", action="store_true")
-    return p
-
-
 def main() -> None:
-    args = _build_arg_parser().parse_args()
-    if args.backfill_all:
+    ap = argparse.ArgumentParser(description="CSV -> Parquet converter")
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--backfill", metavar="DATASET")
+    g.add_argument("--sync", metavar="DATASET")
+    g.add_argument("--backfill-all", action="store_true")
+    g.add_argument("--sync-all", action="store_true")
+    args = ap.parse_args()
+
+    if args.backfill:
+        print(f"  {args.backfill}: backfilled {backfill(args.backfill)} tickers")
+    elif args.sync:
+        print(f"  {args.sync}: {sync(args.sync)}")
+    elif args.backfill_all:
         for ds in DATASETS:
-            n = backfill(ds)
-            print(f"  {ds}: wrote {n} partitions")
-    else:
-        n = backfill(args.backfill)
-        print(f"  {args.backfill}: wrote {n} partitions")
+            print(f"  {ds}: backfilled {backfill(ds)} tickers")
+    elif args.sync_all:
+        for ds in DATASETS:
+            print(f"  {ds}: {sync(ds)}")
 
 
 if __name__ == "__main__":

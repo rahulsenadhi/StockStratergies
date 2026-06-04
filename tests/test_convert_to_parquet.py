@@ -57,3 +57,18 @@ def test_sync_is_idempotent_and_incremental(tmp_path, monkeypatch):
     os.utime(p, (future, future))
     res2 = cvt.sync("ipo_data")
     assert res2 == {"converted": 1, "skipped": 1}
+
+
+def test_cli_backfill_all_runs(tmp_path, monkeypatch, capsys):
+    csv_dir = tmp_path / "ipo_data"
+    pq_root = tmp_path / "parquet"
+    _write_csv(csv_dir / "AAA.NS.csv",
+               pd.bdate_range("2024-01-01", periods=15), list(range(100, 115)))
+    monkeypatch.setattr(cvt, "DATASETS", {"ipo_data": str(csv_dir)})
+    monkeypatch.setattr(cvt, "PARQUET_ROOT", str(pq_root))
+    monkeypatch.setattr("sys.argv", ["convert_to_parquet.py", "--backfill-all"])
+
+    cvt.main()
+    out = capsys.readouterr().out
+    assert "ipo_data" in out
+    assert (pq_root / "ipo_data" / "ticker=AAA.NS" / "bars.parquet").exists()
