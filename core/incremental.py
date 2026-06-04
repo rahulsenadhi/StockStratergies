@@ -41,3 +41,26 @@ def trading_days_between(last: dt.date, today: dt.date) -> int:
     if today <= last:
         return 0
     return int(np.busday_count(last + dt.timedelta(days=1), today + dt.timedelta(days=1)))
+
+
+@dataclass(frozen=True)
+class FetchPlan:
+    kind: str                       # "full" | "gap" | "skip"
+    start: dt.date | None = None
+    end: dt.date | None = None      # exclusive (yfinance convention)
+
+
+def plan_fetch(path, today: dt.date, full_lookback_days: int = FULL_LOOKBACK_DAYS) -> FetchPlan:
+    """Decide what to fetch for one ticker.
+
+    - No CSV yet            -> FULL (initial backfill).
+    - Already current       -> SKIP.
+    - Otherwise             -> GAP (always gap, any size; never auto-full an existing ticker).
+    """
+    last = last_stored_date(path)
+    if last is None:
+        start = today - dt.timedelta(days=full_lookback_days)
+        return FetchPlan("full", start, today + dt.timedelta(days=1))
+    if trading_days_between(last, today) <= 0:
+        return FetchPlan("skip")
+    return FetchPlan("gap", last + dt.timedelta(days=1), today + dt.timedelta(days=1))

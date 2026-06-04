@@ -40,3 +40,33 @@ def test_trading_days_between_weekend_zero():
 def test_trading_days_between_counts_business_days():
     # Mon stored, Thu today -> Tue, Wed, Thu = 3
     assert inc.trading_days_between(dt.date(2024, 1, 8), dt.date(2024, 1, 11)) == 3
+
+
+def test_plan_fetch_no_file_is_full(tmp_path):
+    plan = inc.plan_fetch(tmp_path / "new.csv", dt.date(2024, 6, 4))
+    assert plan.kind == "full"
+    assert plan.end == dt.date(2024, 6, 5)          # today + 1 (exclusive)
+    assert plan.start == dt.date(2024, 6, 4) - dt.timedelta(days=inc.FULL_LOOKBACK_DAYS)
+
+
+def test_plan_fetch_current_is_skip(tmp_path):
+    p = tmp_path / "t.csv"
+    _write_csv(p, ["2024-06-04"])
+    plan = inc.plan_fetch(p, dt.date(2024, 6, 4))
+    assert plan.kind == "skip"
+
+
+def test_plan_fetch_gap(tmp_path):
+    p = tmp_path / "t.csv"
+    _write_csv(p, ["2024-05-30"])                   # Thu
+    plan = inc.plan_fetch(p, dt.date(2024, 6, 4))   # Tue (gap exists)
+    assert plan.kind == "gap"
+    assert plan.start == dt.date(2024, 5, 31)       # last + 1
+    assert plan.end == dt.date(2024, 6, 5)          # today + 1
+
+
+def test_plan_fetch_weekend_is_skip(tmp_path):
+    p = tmp_path / "t.csv"
+    _write_csv(p, ["2024-06-07"])                   # Fri
+    plan = inc.plan_fetch(p, dt.date(2024, 6, 8))   # Sat -> 0 trading days -> skip
+    assert plan.kind == "skip"
