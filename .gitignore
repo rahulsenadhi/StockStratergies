@@ -24,3 +24,11 @@ momentum_edge_chart.png
 
 # Activity log (grows automatically)
 MEMORY.md
+
+# Regenerated caches & logs (not source data)
+data/indicator_cache/
+pead_data/yf_cache/
+pead_data/nse_announce_raw/
+*_log.txt
+data/downloader_log.txt
+.coverage

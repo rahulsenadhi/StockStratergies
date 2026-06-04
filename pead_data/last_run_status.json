@@ -1,10 +1,9 @@
 {
-  "run_date": "2026-05-27",
-  "declared_count": 20,
-  "rows_written": 521,
-  "qualified_long": 10,
-  "qualified_short": 6,
-  "universe_size": 54,
-  "error": null,
-  "note": "Generated from historical_events backfill \u2014 live NSE downloader pending result-season"
+  "run_date": "2026-06-03",
+  "declared_count": 0,
+  "rows_written": 0,
+  "qualified_long": 0,
+  "qualified_short": 0,
+  "universe_size": 0,
+  "error": null
 }
