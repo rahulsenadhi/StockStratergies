@@ -14,6 +14,7 @@ from pathlib import Path
 from core import incremental
 
 PY = sys.executable
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _universe_from_folder(folder: str):
@@ -75,10 +76,10 @@ def refresh_strategy(name: str, st_status=None) -> dict[str, str]:
 
     if cfg.get("dataset"):
         log("Syncing Parquet store…")
-        subprocess.run([PY, "convert_to_parquet.py", "--sync", cfg["dataset"]], check=True)
+        subprocess.run([PY, str(_REPO_ROOT / "convert_to_parquet.py"), "--sync", cfg["dataset"]], check=True)
 
     for script in cfg.get("precompute", []):
         log(f"Precomputing ({script})…")
-        subprocess.run([PY, script], check=True)
+        subprocess.run([PY, str(_REPO_ROOT / script)], check=True)
 
     return status

@@ -50,3 +50,36 @@ def test_refresh_strategy_runs_fetch_sync_precompute(tmp_path, monkeypatch):
 def test_refresh_strategy_unknown_name_raises():
     with pytest.raises(KeyError):
         refresh.refresh_strategy("does-not-exist")
+
+
+def test_refresh_strategy_all_failed_raises(tmp_path, monkeypatch):
+    folder = tmp_path / "ds"
+    _seed(folder)
+    monkeypatch.setitem(refresh.STRATEGY_CFG, "test", {
+        "folder": str(folder), "dataset": "test_ds",
+        "tickers_fn": lambda: ["AAA"], "precompute": [],
+    })
+    monkeypatch.setattr(refresh.incremental, "refresh_tickers",
+                        lambda *a, **k: {"AAA": "failed(Timeout)"})
+    ran = []
+    monkeypatch.setattr(refresh.subprocess, "run",
+                        lambda cmd, **k: ran.append(cmd))
+    with pytest.raises(RuntimeError):
+        refresh.refresh_strategy("test")
+    assert ran == []          # no sync/precompute after all-failed
+
+
+def test_refresh_strategy_no_dataset_skips_sync(tmp_path, monkeypatch):
+    folder = tmp_path / "ds"
+    _seed(folder)
+    monkeypatch.setitem(refresh.STRATEGY_CFG, "test", {
+        "folder": str(folder), "dataset": None,        # no parquet store
+        "tickers_fn": lambda: ["AAA"], "precompute": [],
+    })
+    monkeypatch.setattr(refresh.incremental, "refresh_tickers",
+                        lambda *a, **k: {"AAA": "gap_appended(1)"})
+    ran = []
+    monkeypatch.setattr(refresh.subprocess, "run",
+                        lambda cmd, **k: ran.append(cmd))
+    refresh.refresh_strategy("test")
+    assert ran == []          # dataset None -> no convert_to_parquet call
