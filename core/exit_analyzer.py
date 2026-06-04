@@ -17,6 +17,7 @@ core.rotation_trades.build_pseudo_ohlcv (close-only -> High==Low==Close).
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -24,6 +25,7 @@ import pandas as pd
 MAX_HORIZON_DAYS = 90          # trading days of post-entry path to study
 TARGET_PERCENTILES = (40, 65, 85)   # MFE percentiles -> profit targets
 BOOK_FRACTIONS = (40, 35, 25)       # % of position booked at each target
+assert sum(BOOK_FRACTIONS) == 100, "BOOK_FRACTIONS must sum to 100"
 STOP_PERCENTILE = 75           # % of trades that should stay above the stop
 MIN_SAMPLE = 20                # min entries for a recommendation / bucket
 MAE_FLOOR = 0.5                # % floor on denominator of risk-adjusted score
@@ -43,11 +45,11 @@ class Recommendation:
     hold_days: int
     hold_median_return: float
     hold_win_rate: float
-    targets: list          # list[Target]
+    targets: list[Target]
     stop_pct: float
     sample_size: int
-    data_quality: str      # 'ohlcv' | 'close'
-    curve: list            # list[dict]
+    data_quality: Literal["ohlcv", "close"]
+    curve: list[dict]
 
     def to_dict(self) -> dict:
         d = asdict(self)
