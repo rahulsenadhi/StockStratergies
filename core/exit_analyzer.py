@@ -121,3 +121,45 @@ def build_matrix(
         maes.append(float(path["mae"].iloc[-1]))
 
     return paths, np.array(mfes), np.array(maes), skipped
+
+
+def aggregate_curve(paths: list, max_horizon: int = MAX_HORIZON_DAYS) -> pd.DataFrame:
+    """Aggregate per-entry paths into a return-by-day curve.
+
+    Columns: day, median, mean, p25, p75, mae (avg adverse), win_rate, n.
+    Each day aggregates only the entries that have data for that offset.
+    """
+    rows = []
+    for d in range(1, max_horizon + 1):
+        rets = [p.loc[p["day"] == d, "ret"].iloc[0]
+                for p in paths if (p["day"] == d).any()]
+        maes = [p.loc[p["day"] == d, "mae"].iloc[0]
+                for p in paths if (p["day"] == d).any()]
+        if not rets:
+            continue
+        arr = np.array(rets, dtype=float)
+        rows.append({
+            "day": d,
+            "median": float(np.median(arr)),
+            "mean": float(np.mean(arr)),
+            "p25": float(np.percentile(arr, 25)),
+            "p75": float(np.percentile(arr, 75)),
+            "mae": float(np.mean(maes)),
+            "win_rate": float(np.mean(arr > 0)),
+            "n": int(len(arr)),
+        })
+    return pd.DataFrame(rows)
+
+
+def best_hold_day(curve: pd.DataFrame) -> tuple[int, float, float]:
+    """Pick the day maximizing median_return / max(|avg_MAE|, MAE_FLOOR).
+
+    Returns (day, median_return, win_rate). Returns (0, 0.0, 0.0) on empty curve.
+    """
+    if curve is None or curve.empty:
+        return 0, 0.0, 0.0
+    denom = np.maximum(np.abs(curve["mae"].to_numpy()), MAE_FLOOR)
+    score = curve["median"].to_numpy() / denom
+    idx = int(np.argmax(score))
+    row = curve.iloc[idx]
+    return int(row["day"]), float(row["median"]), float(row["win_rate"])

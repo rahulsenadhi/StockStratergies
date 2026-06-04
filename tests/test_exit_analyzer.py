@@ -88,3 +88,35 @@ def test_build_matrix_collects_paths_and_excursions():
     #   A: lows over 2 fwd days [99, 95] -> running min [-1, -5] -> -5.0
     #   B: lows over 2 fwd days [45, 48] -> running min [-10, -10] -> -10.0
     assert sorted(np.round(mae_arr, 2).tolist()) == [-10.0, -5.0]
+
+
+def test_aggregate_curve_handles_ragged_paths():
+    p1 = pd.DataFrame({"day": [1, 2, 3], "ret": [2.0, 4.0, 6.0],
+                       "mfe": [2, 4, 6], "mae": [-1.0, -1.0, -2.0]})
+    p2 = pd.DataFrame({"day": [1, 2], "ret": [0.0, 8.0],
+                       "mfe": [0, 8], "mae": [-3.0, -3.0]})
+    curve = ea.aggregate_curve([p1, p2], max_horizon=3)
+    # day 1: ret median of [2,0] = 1.0 ; n=2
+    row1 = curve[curve["day"] == 1].iloc[0]
+    assert row1["median"] == pytest.approx(1.0)
+    assert row1["n"] == 2
+    assert row1["mae"] == pytest.approx(-2.0)   # avg of [-1,-3]
+    # day 3: only p1 contributes
+    row3 = curve[curve["day"] == 3].iloc[0]
+    assert row3["median"] == pytest.approx(6.0)
+    assert row3["n"] == 1
+
+
+def test_best_hold_day_is_risk_adjusted():
+    # day 5 has higher raw return but huge MAE; day 3 wins on risk-adjusted score
+    curve = pd.DataFrame({
+        "day": [3, 5],
+        "median": [6.0, 9.0],
+        "mae": [-2.0, -9.0],
+        "win_rate": [0.7, 0.55],
+        "n": [40, 40],
+    })
+    day, med, win = ea.best_hold_day(curve)
+    assert day == 3            # 6/2=3.0  vs  9/9=1.0
+    assert med == pytest.approx(6.0)
+    assert win == pytest.approx(0.7)
