@@ -3,15 +3,16 @@ import { summarizeStrategies } from "@/lib/summary";
 import type { Strategy } from "@/lib/data/strategies";
 
 function mk(over: Partial<Strategy> & { id: string }): Strategy {
+  const { kpis: kpisOver, ...rest } = over;
   return {
-    id: over.id, name: over.id, type: "Quant", status: over.status ?? "Live",
+    name: over.id, type: "Quant", status: "Live",
+    rank: null, rankScore: null, equityCsv: null, tradesCsv: null, lastRun: null,
+    ...rest,
     kpis: {
       cagr: 0.2, totalReturn: 0, volatility: 0, sharpe: 1, maxDd: -0.1,
       calmar: null, winRate: 0.5, numTrades: 10, alpha: null, finalEquity: 0,
-      ...(over.kpis ?? {}),
+      ...(kpisOver ?? {}),
     },
-    rank: null, rankScore: null, equityCsv: null, tradesCsv: null, lastRun: null,
-    ...over,
   } as Strategy;
 }
 
