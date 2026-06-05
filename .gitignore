@@ -35,3 +35,4 @@ pead_data/nse_announce_raw/
 *_log.txt
 data/downloader_log.txt
 .coverage
+.superpowers/
