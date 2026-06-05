@@ -117,6 +117,33 @@ export function computeDrawdown(curve: EquityPoint[]): EquityPoint[] {
   });
 }
 
+export type TradesData = { columns: string[]; rows: Record<string, string>[] };
+const MAX_TRADE_COLS = 8;
+
+export async function getTrades(
+  csv: string | null,
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<TradesData> {
+  if (!csv) return { columns: [], rows: [] };
+  try {
+    const txt = await fs.readFile(path.join(dataDir, csv), "utf-8");
+    const lines = txt.trim().split(/\r?\n/);
+    if (lines.length < 2) return { columns: [], rows: [] };
+    const columns = lines[0].split(",").map((h) => h.trim()).slice(0, MAX_TRADE_COLS);
+    const rows = lines.slice(1).map((l) => {
+      const cells = l.split(",");
+      const row: Record<string, string> = {};
+      columns.forEach((c, i) => {
+        row[c] = (cells[i] ?? "").trim();
+      });
+      return row;
+    });
+    return { columns, rows };
+  } catch {
+    return { columns: [], rows: [] };
+  }
+}
+
 const MAX_POINTS = 80;
 
 export async function getEquitySeries(

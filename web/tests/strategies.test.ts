@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades } from "@/lib/data/strategies";
 import path from "path";
 import os from "os";
 import { promises as fsp } from "fs";
@@ -107,5 +107,23 @@ describe("computeDrawdown", () => {
   });
   it("[] -> []", () => {
     expect(computeDrawdown([])).toEqual([]);
+  });
+});
+
+describe("getTrades", () => {
+  it("generic columns + rows", async () => {
+    const t = await getTrades("tr_a.csv", FIX);
+    expect(t.columns).toEqual(["Ticker", "Entry_Date", "Exit_Date", "PnL_Pct", "Result"]);
+    expect(t.rows[0].Ticker).toBe("AAA.NS");
+    expect(t.rows[1].Result).toBe("LOSS");
+  });
+  it("works on rebalance-log shape (no PnL)", async () => {
+    const t = await getTrades("tr_rebal.csv", FIX);
+    expect(t.columns).toContain("Top5_Stocks");
+    expect(t.rows.length).toBe(2);
+  });
+  it("missing/null -> empty", async () => {
+    expect(await getTrades("nope.csv", FIX)).toEqual({ columns: [], rows: [] });
+    expect(await getTrades(null, FIX)).toEqual({ columns: [], rows: [] });
   });
 });
