@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals } from "@/lib/data/strategies";
 import path from "path";
 import os from "os";
 import { promises as fsp } from "fs";
@@ -174,5 +174,28 @@ describe("lastRun mapping", () => {
     // fixture strategy "a" needs a last_run value (added in Step 3)
     const s = await getStrategy("a", FIX);
     expect(s?.lastRun).toBe("2026-06-01T12:00:00");
+  });
+});
+
+describe("getLiveSignals", () => {
+  it("reads live_rankings shape -> ticker/company/signal", async () => {
+    const r = await getLiveSignals("live_rank.csv", FIX);
+    expect(r[0]).toEqual({ ticker: "ZEEL.NS", company: "Zee Entertainment", signal: "Strong BUY" });
+    expect(r.length).toBe(2);
+  });
+  it("reads momentum shape", async () => {
+    const r = await getLiveSignals("live_mom.csv", FIX);
+    expect(r[1]).toEqual({ ticker: "TATASTEEL", company: "Tata Steel", signal: "Breakout" });
+  });
+  it("limit caps rows", async () => {
+    expect((await getLiveSignals("live_rank.csv", FIX, 1)).length).toBe(1);
+  });
+  it("missing/null -> []", async () => {
+    expect(await getLiveSignals("nope.csv", FIX)).toEqual([]);
+    expect(await getLiveSignals(null, FIX)).toEqual([]);
+  });
+  it("liveSignalsCsv mapped on Strategy", async () => {
+    const s = await getStrategy("a", FIX);
+    expect(s?.liveSignalsCsv).toBe("live_rank.csv");
   });
 });

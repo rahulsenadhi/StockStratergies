@@ -3,7 +3,7 @@
     {"id": "a", "name": "Alpha", "type": "Quant", "status": "Live",
      "kpis_inline": {"cagr": 0.21, "total_return": 0.8, "volatility": 0.15, "sharpe": 1.5,
         "max_dd": -0.11, "calmar": 1.9, "win_rate": null, "num_trades": 35, "alpha": 0.14, "final_equity": 180},
-     "rank": 2, "rank_score": 0.4, "equity_csv": "eq_a.csv", "trades_csv": "tr_a.csv", "last_run": "2026-06-01T12:00:00"},
+     "rank": 2, "rank_score": 0.4, "equity_csv": "eq_a.csv", "trades_csv": "tr_a.csv", "last_run": "2026-06-01T12:00:00", "live_signals_csv": "live_rank.csv"},
     {"id": "b", "name": "Bravo", "type": "Earnings", "status": "Paper",
      "kpis_inline": {"cagr": 0.26, "total_return": 1.0, "volatility": 0.1, "sharpe": 2.4,
         "max_dd": -0.03, "calmar": 8.4, "win_rate": 1.0, "num_trades": 12, "alpha": 0.2, "final_equity": 200},

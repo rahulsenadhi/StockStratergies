@@ -12,7 +12,7 @@ export type Kpis = {
 export type Strategy = {
   id: string; name: string; type: string; status: string;
   kpis: Kpis; rank: number | null; rankScore: number | null;
-  equityCsv: string | null; tradesCsv: string | null; lastRun: string | null; kpisError?: string;
+  equityCsv: string | null; tradesCsv: string | null; lastRun: string | null; liveSignalsCsv: string | null; kpisError?: string;
 };
 
 const numOrNull = (v: unknown): number | null =>
@@ -38,6 +38,7 @@ export function mapStrategy(raw: any): Strategy {
     equityCsv: raw.equity_csv ?? null,
     tradesCsv: raw.trades_csv ?? null,
     lastRun: raw.last_run ?? null,
+    liveSignalsCsv: raw.live_signals_csv ?? null,
   };
   if (raw.kpis_error) s.kpisError = raw.kpis_error;
   return s;
@@ -161,6 +162,41 @@ export async function getTrades(
     return { columns, rows };
   } catch {
     return { columns: [], rows: [] };
+  }
+}
+
+export type LiveSignal = { ticker: string; company: string; signal: string };
+const LIVE_LIMIT = 5;
+
+export async function getLiveSignals(
+  csv: string | null,
+  dataDir: string = DEFAULT_DATA_DIR,
+  limit: number = LIVE_LIMIT,
+): Promise<LiveSignal[]> {
+  if (!csv) return [];
+  try {
+    const txt = await fs.readFile(path.join(dataDir, csv), "utf-8");
+    const lines = txt.trim().split(/\r?\n/);
+    if (lines.length < 2) return [];
+    const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const ti = header.indexOf("ticker");
+    const ci = header.indexOf("company");
+    const si = header.indexOf("signal");
+    if (ti < 0 || si < 0) return [];
+    return lines
+      .slice(1, 1 + limit)
+      .map((l) => {
+        const cells = l.split(",");
+        const ticker = (cells[ti] ?? "").trim();
+        return {
+          ticker,
+          company: ci >= 0 ? (cells[ci] ?? "").trim() : ticker,
+          signal: (cells[si] ?? "").trim(),
+        };
+      })
+      .filter((r) => r.ticker !== "");
+  } catch {
+    return [];
   }
 }
 
