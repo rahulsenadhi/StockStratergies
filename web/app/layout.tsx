@@ -3,8 +3,8 @@ import "./globals.css";
 import { Nav } from "@/components/nav";
 
 export const metadata: Metadata = {
-  title: "Strategy Leaderboard",
-  description: "NSE strategy hub",
+  title: "NSE Strategy Hub",
+  description: "Backtested NSE strategy leaderboard, detail, and portfolio",
 };
 
 export default function RootLayout({
