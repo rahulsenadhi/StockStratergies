@@ -13,16 +13,23 @@
       "equity_csv": "backtest_results.csv",
       "live_signals_csv": "live_rankings.csv",
       "kpis_inline": {
-        "cagr": 0.2249,
-        "sharpe": 1.54,
-        "max_dd": -0.1143,
-        "total_return": 0.8075,
-        "alpha": 0.1391,
-        "num_trades": 35
+        "cagr": 0.2160199156633329,
+        "total_return": 0.798374773891138,
+        "volatility": 0.1392460501925541,
+        "sharpe": 1.4830465320352835,
+        "max_dd": -0.11433567324304608,
+        "calmar": 1.889348350659852,
+        "win_rate": null,
+        "num_trades": 36,
+        "alpha": 0.14758304355191076,
+        "final_equity": 89918.7386945569
       },
       "last_run": "2026-06-01T12:42:00",
       "created": "2025-12-01",
-      "page_key": "Monthly"
+      "page_key": "Monthly",
+      "kpis_updated": "2026-06-05T00:13:43",
+      "rank": 2,
+      "rank_score": 0.21170693856087483
     },
     {
       "id": "ipo_edge",
@@ -36,16 +43,23 @@
       "trades_csv": "ipo_edge_trades.csv",
       "equity_csv": "ipo_edge_equity.csv",
       "kpis_inline": {
-        "cagr": 0.1019,
-        "sharpe": 1.39,
-        "max_dd": -0.0568,
-        "total_return": 0.2204,
-        "win_rate": 0.562,
-        "num_trades": 64
+        "cagr": 0.08961446234649162,
+        "total_return": 0.1946755548388437,
+        "volatility": 0.0843340047247838,
+        "sharpe": 1.5370440912701875,
+        "max_dd": -0.055582636998932504,
+        "calmar": 1.6122743933184156,
+        "win_rate": 0.5633802816901409,
+        "num_trades": 71,
+        "alpha": 0.06604779736940336,
+        "final_equity": 597337.7774194218
       },
       "last_run": "2026-05-29T22:00:00",
       "created": "2025-08-01",
-      "page_key": "IPO"
+      "page_key": "IPO",
+      "kpis_updated": "2026-06-05T00:13:43",
+      "rank": 3,
+      "rank_score": -0.2397979495325368
     },
     {
       "id": "momentum_edge",
@@ -59,16 +73,23 @@
       "trades_csv": "momentum_edge_trades.csv",
       "equity_csv": "momentum_edge_equity.csv",
       "kpis_inline": {
-        "cagr": 0.1216,
-        "sharpe": 0.84,
-        "max_dd": -0.2635,
-        "total_return": 1.9471,
-        "win_rate": 0.292,
-        "num_trades": 137
+        "cagr": 0.10100839807659012,
+        "total_return": 1.4724933999999998,
+        "volatility": 0.17415176239898436,
+        "sharpe": 0.8657010866212532,
+        "max_dd": -0.260372565468283,
+        "calmar": 0.3879379453627358,
+        "win_rate": 0.30656934306569344,
+        "num_trades": 137,
+        "alpha": -0.015873031349694644,
+        "final_equity": 2472493.4
       },
       "last_run": "2026-06-01T13:55:00",
       "created": "2016-12-30",
-      "page_key": "Momentum"
+      "page_key": "Momentum",
+      "kpis_updated": "2026-06-05T00:13:43",
+      "rank": 4,
+      "rank_score": -1.2467138740797354
     },
     {
       "id": "pead",
@@ -83,15 +104,23 @@
       "equity_csv": "pead_equity.csv",
       "kpis_csv": "pead_kpis.csv",
       "kpis_inline": {
-        "cagr": 0.261,
-        "sharpe": 15.26,
-        "max_dd": -0.0312,
+        "cagr": 0.26096073323615965,
+        "total_return": 0.35624705857620986,
+        "volatility": 0.14608496509845775,
+        "sharpe": 2.4534779180932667,
+        "max_dd": -0.03119064845214803,
+        "calmar": 8.366633788858849,
         "win_rate": 1.0,
-        "num_trades": 4
+        "num_trades": 4,
+        "alpha": 0.2177604559120332,
+        "final_equity": 1316680.1719074682
       },
       "last_run": "2026-05-27T00:27:00",
       "created": "2026-05-25",
-      "page_key": "PEAD"
+      "page_key": "PEAD",
+      "kpis_updated": "2026-06-05T00:13:43",
+      "rank": 1,
+      "rank_score": 1.2959755789074845
     }
   ]
 }
