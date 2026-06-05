@@ -8099,7 +8099,7 @@ def _status_chip_html(status: str) -> str:
     return chip_map.get(status, f'<span class="chip">{status}</span>')
 
 
-def _render_sparkline(equity_csv: str, color: str = 'oklch(0.696 0.170 162.480)') -> None:
+def _render_sparkline(equity_csv: str, color: str = 'rgb(34,197,94)') -> None:
     """Tiny inline sparkline from equity curve CSV."""
     import plotly.graph_objects as go
     p = Path(equity_csv) if equity_csv else None
@@ -8722,7 +8722,7 @@ def _equity_curve_chart(equity: pd.DataFrame) -> 'go.Figure':
     eq[date_col] = pd.to_datetime(eq[date_col])
     fig = go.Figure(go.Scatter(
         x=eq[date_col], y=eq[val_col],
-        mode='lines', line=dict(color='oklch(0.696 0.170 162.480)', width=2),
+        mode='lines', line=dict(color='rgb(34,197,94)', width=2),
         fill='tozeroy', fillcolor='rgba(34,197,94,0.08)',
         name='Equity', hovertemplate='%{x|%Y-%m-%d}<br>₹%{y:,.0f}<extra></extra>',
     ))
