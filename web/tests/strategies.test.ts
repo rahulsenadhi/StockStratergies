@@ -95,6 +95,29 @@ describe("getEquityCurve", () => {
     expect(await getEquityCurve("nope.csv", FIX)).toEqual([]);
     expect(await getEquityCurve(null, FIX)).toEqual([]);
   });
+  it("getEquityCurve caps at <=2000 and keeps last point", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "eqc-"));
+    const rows = ["Date,equity"];
+    for (let i = 0; i < 5000; i++) {
+      const d = new Date(Date.UTC(2010, 0, 1));
+      d.setUTCDate(d.getUTCDate() + i);
+      rows.push(`${d.toISOString().slice(0, 10)},${100 + i}`);
+    }
+    await fsp.writeFile(path.join(dir, "big.csv"), rows.join("\n"));
+    const c = await getEquityCurve("big.csv", dir);
+    expect(c.length).toBeLessThanOrEqual(2000);
+    expect(c[c.length - 1].value).toBe(100 + 4999);   // final point preserved
+  });
+  it("getEquityCurve dedups duplicate dates keeping last", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "eqd-"));
+    await fsp.writeFile(path.join(dir, "dup.csv"),
+      "Date,equity\n2024-01-01,100\n2024-01-01,150\n2024-01-02,200\n");
+    const c = await getEquityCurve("dup.csv", dir);
+    expect(c).toEqual([
+      { time: "2024-01-01", value: 150 },
+      { time: "2024-01-02", value: 200 },
+    ]);
+  });
 });
 
 describe("computeDrawdown", () => {

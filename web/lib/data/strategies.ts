@@ -98,9 +98,21 @@ export async function getEquityCurve(
       })
       .filter((p) => p.time !== "" && !Number.isNaN(p.value));
     pts.sort((a, b) => a.time.localeCompare(b.time));
+    const deduped: EquityPoint[] = [];
+    for (const p of pts) {
+      if (deduped.length && deduped[deduped.length - 1].time === p.time) {
+        deduped[deduped.length - 1] = p;   // keep last value for a repeated date
+      } else {
+        deduped.push(p);
+      }
+    }
+    pts = deduped;
     if (pts.length > MAX_CURVE_POINTS) {
       const step = Math.ceil(pts.length / MAX_CURVE_POINTS);
-      pts = pts.filter((_, i) => i % step === 0);
+      const sampled = pts.filter((_, i) => i % step === 0);
+      const last = pts[pts.length - 1];
+      if (sampled[sampled.length - 1] !== last) sampled.push(last);
+      pts = sampled;
     }
     return pts;
   } catch {
