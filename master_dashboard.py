@@ -8242,10 +8242,14 @@ def render_strategy_library(m: dict, i: dict, mo: dict) -> None:
         if st.button('↻ Recompute', use_container_width=True, key='lib_recompute_btn',
                      help='Recompute KPIs + rank from each strategy\'s equity/trades CSVs'):
             from core.leaderboard import refresh_all
-            with st.spinner('Recomputing leaderboard…'):
-                refresh_all()
-            st.cache_data.clear()
-            st.rerun()
+            try:
+                with st.spinner('Recomputing leaderboard…'):
+                    refresh_all()
+            except Exception as e:
+                st.error(f"Recompute failed: {e}")
+            else:
+                st.cache_data.clear()
+                st.rerun()
 
     # Filters
     f1, f2, f3, f4 = st.columns([2, 2, 2, 4])
