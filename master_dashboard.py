@@ -5728,8 +5728,8 @@ def render_home(m: dict, i: dict, mo: dict):
     cagrs = [s.get('kpis_inline', {}).get('cagr', 0) for s in _strats]
     avg_cagr = (sum(cagrs) / len(cagrs)) if cagrs else 0
     best_cagr = max(cagrs) if cagrs else 0
-    win_rates = [s.get('kpis_inline', {}).get('win_rate', 0) for s in _strats
-                  if s.get('kpis_inline', {}).get('win_rate', 0) > 0]
+    win_rates = [wr for s in _strats
+                  if (wr := s.get('kpis_inline', {}).get('win_rate')) is not None and wr > 0]
     avg_win = (sum(win_rates) / len(win_rates)) if win_rates else 0
     n_trades = sum(s.get('kpis_inline', {}).get('num_trades', 0) for s in _strats)
 
@@ -8831,7 +8831,7 @@ def render_backtest_results(strat_id: str) -> None:
     cagr_str = f"{k.get('cagr', 0)*100:+.2f}%"
     sharpe_str = f"{k.get('sharpe', 0):.2f}"
     mdd_str = f"{k.get('max_dd', 0)*100:+.2f}%"
-    win_str = f"{k.get('win_rate', 0)*100:.1f}%"
+    win_str = f"{k.get('win_rate')*100:.1f}%" if k.get('win_rate') is not None else "—"
     trades_str = str(k.get('num_trades', 0))
 
     # Header
