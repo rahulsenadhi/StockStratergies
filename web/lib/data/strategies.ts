@@ -4,9 +4,9 @@ import path from "path";
 const DEFAULT_DATA_DIR = process.env.DATA_DIR ?? "..";
 
 export type Kpis = {
-  cagr: number; totalReturn: number; volatility: number; sharpe: number; maxDd: number;
-  calmar: number | null; winRate: number | null; numTrades: number;
-  alpha: number | null; finalEquity: number;
+  cagr: number | null; totalReturn: number | null; volatility: number | null; sharpe: number | null; maxDd: number | null;
+  calmar: number | null; winRate: number | null; numTrades: number | null;
+  alpha: number | null; finalEquity: number | null;
 };
 
 export type Strategy = {
@@ -15,22 +15,23 @@ export type Strategy = {
   equityCsv: string | null; kpisError?: string;
 };
 
-const num = (v: unknown): number => (typeof v === "number" && !Number.isNaN(v) ? v : 0);
 const numOrNull = (v: unknown): number | null =>
   typeof v === "number" && !Number.isNaN(v) ? v : null;
 
 export function mapStrategy(raw: any): Strategy {
   const k = raw.kpis_inline ?? {};
+  const errored = Boolean(raw.kpis_error);
+  const kv = (v: unknown) => (errored ? null : numOrNull(v));
   const s: Strategy = {
     id: raw.id,
     name: raw.name ?? raw.id,
     type: raw.type ?? "—",
     status: raw.status ?? "—",
     kpis: {
-      cagr: num(k.cagr), totalReturn: num(k.total_return), volatility: num(k.volatility),
-      sharpe: num(k.sharpe), maxDd: num(k.max_dd), calmar: numOrNull(k.calmar),
-      winRate: numOrNull(k.win_rate), numTrades: num(k.num_trades),
-      alpha: numOrNull(k.alpha), finalEquity: num(k.final_equity),
+      cagr: kv(k.cagr), totalReturn: kv(k.total_return), volatility: kv(k.volatility),
+      sharpe: kv(k.sharpe), maxDd: kv(k.max_dd), calmar: kv(k.calmar),
+      winRate: kv(k.win_rate), numTrades: kv(k.num_trades),
+      alpha: kv(k.alpha), finalEquity: kv(k.final_equity),
     },
     rank: numOrNull(raw.rank),
     rankScore: numOrNull(raw.rank_score),
@@ -79,7 +80,7 @@ export async function getEquitySeries(
       .slice(1)
       .map((l) => Number(l.split(",")[idx]))
       .filter((v) => !Number.isNaN(v));
-    const step = Math.max(1, Math.floor(vals.length / MAX_POINTS));
+    const step = Math.max(1, Math.ceil(vals.length / MAX_POINTS));
     return vals.filter((_, i) => i % step === 0);
   } catch {
     return [];

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { getStrategies, mapStrategy, getEquitySeries } from "@/lib/data/strategies";
 import path from "path";
+import os from "os";
+import { promises as fsp } from "fs";
 
 const FIX = path.join(import.meta.dirname, "fixtures");
 
@@ -20,6 +22,8 @@ describe("getStrategies", () => {
     const s = await getStrategies(FIX);
     const c = s.find((x) => x.id === "c")!;
     expect(c.kpisError).toBe("missing CSV: x");
+    expect(c.kpis.cagr).toBeNull();
+    expect(c.kpis.sharpe).toBeNull();
     expect(c.kpis.winRate).toBeNull();
     expect(c.rank).toBeNull();
   });
@@ -29,9 +33,9 @@ describe("getStrategies", () => {
 });
 
 describe("mapStrategy", () => {
-  it("null kpis_inline -> numeric defaults 0, nullables null", () => {
+  it("null kpis_inline -> all kpis null", () => {
     const m = mapStrategy({ id: "z", name: "Z" });
-    expect(m.kpis.cagr).toBe(0);
+    expect(m.kpis.cagr).toBeNull();
     expect(m.kpis.winRate).toBeNull();
     expect(m.kpis.alpha).toBeNull();
   });
@@ -49,5 +53,13 @@ describe("getEquitySeries", () => {
   });
   it("null path -> []", async () => {
     expect(await getEquitySeries(null, FIX)).toEqual([]);
+  });
+  it("downsamples to <= 80 points", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "eq-"));
+    const rows = ["Date,equity", ...Array.from({ length: 200 }, (_, i) => `2024-01-${i},${100 + i}`)];
+    await fsp.writeFile(path.join(dir, "big.csv"), rows.join("\n"));
+    const series = await getEquitySeries("big.csv", dir);
+    expect(series.length).toBeLessThanOrEqual(80);
+    expect(series.length).toBeGreaterThan(1);
   });
 });
