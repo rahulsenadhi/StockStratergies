@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn } from "@/lib/data/strategies";
 import path from "path";
 import os from "os";
 import { promises as fsp } from "fs";
@@ -148,5 +148,31 @@ describe("getTrades", () => {
   it("missing/null -> empty", async () => {
     expect(await getTrades("nope.csv", FIX)).toEqual({ columns: [], rows: [] });
     expect(await getTrades(null, FIX)).toEqual({ columns: [], rows: [] });
+  });
+});
+
+describe("rebaseToReturn", () => {
+  it("normalizes to 0% at start", () => {
+    const r = rebaseToReturn([
+      { time: "1", value: 100 }, { time: "2", value: 110 }, { time: "3", value: 90 },
+    ]);
+    expect(r).toHaveLength(3);
+    expect(r[0]).toEqual({ time: "1", value: 0 });
+    expect(r[1].time).toBe("2");
+    expect(r[1].value).toBeCloseTo(0.1);
+    expect(r[2].time).toBe("3");
+    expect(r[2].value).toBeCloseTo(-0.1);
+  });
+  it("[] -> []", () => expect(rebaseToReturn([])).toEqual([]));
+  it("v0<=0 -> []", () => {
+    expect(rebaseToReturn([{ time: "1", value: 0 }, { time: "2", value: 5 }])).toEqual([]);
+  });
+});
+
+describe("lastRun mapping", () => {
+  it("maps raw.last_run", async () => {
+    // fixture strategy "a" needs a last_run value (added in Step 3)
+    const s = await getStrategy("a", FIX);
+    expect(s?.lastRun).toBe("2026-06-01T12:00:00");
   });
 });

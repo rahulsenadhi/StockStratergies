@@ -12,7 +12,7 @@ export type Kpis = {
 export type Strategy = {
   id: string; name: string; type: string; status: string;
   kpis: Kpis; rank: number | null; rankScore: number | null;
-  equityCsv: string | null; tradesCsv: string | null; kpisError?: string;
+  equityCsv: string | null; tradesCsv: string | null; lastRun: string | null; kpisError?: string;
 };
 
 const numOrNull = (v: unknown): number | null =>
@@ -37,6 +37,7 @@ export function mapStrategy(raw: any): Strategy {
     rankScore: numOrNull(raw.rank_score),
     equityCsv: raw.equity_csv ?? null,
     tradesCsv: raw.trades_csv ?? null,
+    lastRun: raw.last_run ?? null,
   };
   if (raw.kpis_error) s.kpisError = raw.kpis_error;
   return s;
@@ -127,6 +128,13 @@ export function computeDrawdown(curve: EquityPoint[]): EquityPoint[] {
     const value = peak > 0 ? p.value / peak - 1 : 0;
     return { time: p.time, value };
   });
+}
+
+export function rebaseToReturn(curve: EquityPoint[]): EquityPoint[] {
+  if (curve.length === 0) return [];
+  const v0 = curve[0].value;
+  if (v0 <= 0) return [];
+  return curve.map((p) => ({ time: p.time, value: p.value / v0 - 1 }));
 }
 
 export type TradesData = { columns: string[]; rows: Record<string, string>[] };
