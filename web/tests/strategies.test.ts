@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy, getEquitySeries } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries, getStrategy } from "@/lib/data/strategies";
 import path from "path";
 import os from "os";
 import { promises as fsp } from "fs";
@@ -38,6 +38,20 @@ describe("mapStrategy", () => {
     expect(m.kpis.cagr).toBeNull();
     expect(m.kpis.winRate).toBeNull();
     expect(m.kpis.alpha).toBeNull();
+  });
+});
+
+describe("getStrategy", () => {
+  it("returns the matching strategy", async () => {
+    const s = await getStrategy("b", FIX);
+    expect(s?.id).toBe("b");
+  });
+  it("maps tradesCsv", async () => {
+    const s = await getStrategy("a", FIX);
+    expect(s?.tradesCsv).toBe("tr_a.csv");
+  });
+  it("unknown id -> null", async () => {
+    expect(await getStrategy("nope", FIX)).toBeNull();
   });
 });
 

@@ -12,7 +12,7 @@ export type Kpis = {
 export type Strategy = {
   id: string; name: string; type: string; status: string;
   kpis: Kpis; rank: number | null; rankScore: number | null;
-  equityCsv: string | null; kpisError?: string;
+  equityCsv: string | null; tradesCsv: string | null; kpisError?: string;
 };
 
 const numOrNull = (v: unknown): number | null =>
@@ -36,6 +36,7 @@ export function mapStrategy(raw: any): Strategy {
     rank: numOrNull(raw.rank),
     rankScore: numOrNull(raw.rank_score),
     equityCsv: raw.equity_csv ?? null,
+    tradesCsv: raw.trades_csv ?? null,
   };
   if (raw.kpis_error) s.kpisError = raw.kpis_error;
   return s;
@@ -51,6 +52,14 @@ export async function getStrategies(dataDir: string = DEFAULT_DATA_DIR): Promise
   } catch {
     return [];
   }
+}
+
+export async function getStrategy(
+  id: string,
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<Strategy | null> {
+  const all = await getStrategies(dataDir);
+  return all.find((s) => s.id === id) ?? null;
 }
 
 const EQUITY_COLS = ["Portfolio_Value", "Equity", "equity"];
