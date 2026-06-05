@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries } from "@/lib/data/strategies";
 import path from "path";
 
 const FIX = path.join(import.meta.dirname, "fixtures");
@@ -34,5 +34,20 @@ describe("mapStrategy", () => {
     expect(m.kpis.cagr).toBe(0);
     expect(m.kpis.winRate).toBeNull();
     expect(m.kpis.alpha).toBeNull();
+  });
+});
+
+describe("getEquitySeries", () => {
+  it("reads Portfolio_Value column", async () => {
+    expect(await getEquitySeries("eq_a.csv", FIX)).toEqual([100, 110, 120]);
+  });
+  it("reads Equity column", async () => {
+    expect(await getEquitySeries("eq_b.csv", FIX)).toEqual([100, 90, 130]);
+  });
+  it("missing file -> []", async () => {
+    expect(await getEquitySeries("nope.csv", FIX)).toEqual([]);
+  });
+  it("null path -> []", async () => {
+    expect(await getEquitySeries(null, FIX)).toEqual([]);
   });
 });
