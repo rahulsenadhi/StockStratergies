@@ -63,6 +63,60 @@ export async function getStrategy(
 }
 
 const EQUITY_COLS = ["Portfolio_Value", "Equity", "equity"];
+
+export type EquityPoint = { time: string; value: number };
+const MAX_CURVE_POINTS = 2000;
+const DATE_COLS = ["Date", "date", "Datetime"];
+
+export async function getEquityCurve(
+  csv: string | null,
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<EquityPoint[]> {
+  if (!csv) return [];
+  try {
+    const txt = await fs.readFile(path.join(dataDir, csv), "utf-8");
+    const lines = txt.trim().split(/\r?\n/);
+    if (lines.length < 2) return [];
+    const header = lines[0].split(",").map((h) => h.trim());
+    const dateIdx = header.findIndex((h) => DATE_COLS.includes(h));
+    const di = dateIdx >= 0 ? dateIdx : 0;
+    let vi = -1;
+    for (const c of EQUITY_COLS) {
+      vi = header.indexOf(c);
+      if (vi >= 0) break;
+    }
+    if (vi < 0) {
+      const first = lines[1].split(",");
+      vi = header.findIndex((_, i) => i !== di && !Number.isNaN(Number(first[i])));
+    }
+    if (vi < 0) return [];
+    let pts: EquityPoint[] = lines
+      .slice(1)
+      .map((l) => {
+        const cells = l.split(",");
+        return { time: String(cells[di] ?? "").slice(0, 10), value: Number(cells[vi]) };
+      })
+      .filter((p) => p.time !== "" && !Number.isNaN(p.value));
+    pts.sort((a, b) => a.time.localeCompare(b.time));
+    if (pts.length > MAX_CURVE_POINTS) {
+      const step = Math.ceil(pts.length / MAX_CURVE_POINTS);
+      pts = pts.filter((_, i) => i % step === 0);
+    }
+    return pts;
+  } catch {
+    return [];
+  }
+}
+
+export function computeDrawdown(curve: EquityPoint[]): EquityPoint[] {
+  let peak = -Infinity;
+  return curve.map((p) => {
+    peak = Math.max(peak, p.value);
+    const value = peak > 0 ? p.value / peak - 1 : 0;
+    return { time: p.time, value };
+  });
+}
+
 const MAX_POINTS = 80;
 
 export async function getEquitySeries(

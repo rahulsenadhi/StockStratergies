@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy, getEquitySeries, getStrategy } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown } from "@/lib/data/strategies";
 import path from "path";
 import os from "os";
 import { promises as fsp } from "fs";
@@ -75,5 +75,37 @@ describe("getEquitySeries", () => {
     const series = await getEquitySeries("big.csv", dir);
     expect(series.length).toBeLessThanOrEqual(80);
     expect(series.length).toBeGreaterThan(1);
+  });
+});
+
+describe("getEquityCurve", () => {
+  it("returns dated points sorted, Portfolio_Value column", async () => {
+    const c = await getEquityCurve("eq_a.csv", FIX);
+    expect(c).toEqual([
+      { time: "2024-01-01", value: 100 },
+      { time: "2024-01-02", value: 110 },
+      { time: "2024-01-03", value: 120 },
+    ]);
+  });
+  it("Equity column variant", async () => {
+    const c = await getEquityCurve("eq_b.csv", FIX);
+    expect(c.map((p) => p.value)).toEqual([100, 90, 130]);
+  });
+  it("missing/null -> []", async () => {
+    expect(await getEquityCurve("nope.csv", FIX)).toEqual([]);
+    expect(await getEquityCurve(null, FIX)).toEqual([]);
+  });
+});
+
+describe("computeDrawdown", () => {
+  it("running-peak drawdown <= 0", () => {
+    const dd = computeDrawdown([
+      { time: "1", value: 100 }, { time: "2", value: 120 },
+      { time: "3", value: 60 }, { time: "4", value: 90 },
+    ]);
+    expect(dd.map((p) => p.value)).toEqual([0, 0, -0.5, -0.25]);
+  });
+  it("[] -> []", () => {
+    expect(computeDrawdown([])).toEqual([]);
   });
 });
