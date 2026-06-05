@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import Link from "next/link";
 import { Sparkline } from "@/components/sparkline";
 import { KpiCell } from "@/components/kpi-cell";
 import type { Strategy } from "@/lib/data/strategies";
@@ -37,12 +38,12 @@ const columns: ColumnDef<Row>[] = [
     accessorKey: "name",
     header: "Strategy",
     cell: (c) => (
-      <div>
+      <Link href={`/strategy/${c.row.original.id}`} className="block hover:underline">
         <div className="font-medium">{c.row.original.name}</div>
         <div className="text-xs text-muted-foreground">
           {c.row.original.type} · {c.row.original.status}
         </div>
-      </div>
+      </Link>
     ),
   },
   {
