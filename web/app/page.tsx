@@ -1,4 +1,5 @@
-import { getStrategies, getEquityCurve, rebaseToReturn } from "@/lib/data/strategies";
+import { getStrategies, getEquityCurve, rebaseToReturn, getLiveSignals } from "@/lib/data/strategies";
+import { LiveSignals, type LivePanel } from "@/components/live-signals";
 import { summarizeStrategies } from "@/lib/summary";
 import { HomeKpiStrip } from "@/components/home-kpi-strip";
 import { MultiLineChart, type Series } from "@/components/multi-line-chart";
@@ -18,6 +19,15 @@ export default async function Home() {
   const recent = [...strategies]
     .sort((a, b) => (b.lastRun ?? "").localeCompare(a.lastRun ?? ""))
     .slice(0, 5);
+  const panels: LivePanel[] = (
+    await Promise.all(
+      strategies.map(async (s) => ({
+        name: s.name,
+        picks: s.liveSignalsCsv ? await getLiveSignals(s.liveSignalsCsv) : [],
+      })),
+    )
+  ).filter((p) => p.picks.length > 0);
+
   const series: Series[] = (
     await Promise.all(
       strategies.map(async (s, i) => ({
@@ -43,6 +53,10 @@ export default async function Home() {
       <section>
         <h2 className="mb-2 text-lg font-semibold">Recent Backtests</h2>
         <RecentBacktests items={recent} />
+      </section>
+      <section>
+        <h2 className="mb-2 text-lg font-semibold">Live Signals</h2>
+        <LiveSignals panels={panels} />
       </section>
     </main>
   );

@@ -72,6 +72,7 @@
       "exit_rule": "15% Hard Stop OR 220 EMA Break OR ATH trail",
       "trades_csv": "momentum_edge_trades.csv",
       "equity_csv": "momentum_edge_equity.csv",
+      "live_signals_csv": "momentum_edge_signals.csv",
       "kpis_inline": {
         "cagr": 0.10100839807659012,
         "total_return": 1.4724933999999998,
