@@ -30,8 +30,10 @@ def refresh_all(index_path: str = "strategies_index.json", benchmark_loader=None
             s["kpis_inline"] = {k: kp[k] for k in _CANONICAL}
             s["kpis_updated"] = datetime.now().isoformat(timespec="seconds")
             s.pop("kpis_error", None)
-        except KpiError as e:
+        except Exception as e:        # isolate ANY per-strategy failure (missing key, bad CSV, etc.)
             s["kpis_error"] = str(e)
+            s.pop("rank", None)
+            s.pop("rank_score", None)
 
     cohort = [{"id": s["id"], **s["kpis_inline"]}
               for s in strategies if "kpis_error" not in s and "kpis_inline" in s]
@@ -42,7 +44,7 @@ def refresh_all(index_path: str = "strategies_index.json", benchmark_loader=None
             s["rank"] = r["rank"]
             s["rank_score"] = r["score"]
 
-    tmp = p.with_suffix(".json.tmp")
+    tmp = p.with_suffix(f".json.{os.getpid()}.tmp")
     tmp.write_text(json.dumps(idx, indent=2, default=str))
     os.replace(tmp, p)
     return strategies

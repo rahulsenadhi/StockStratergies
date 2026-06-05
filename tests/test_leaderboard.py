@@ -55,3 +55,17 @@ def test_refresh_all_isolates_bad_strategy(tmp_path):
     saved = {s["id"]: s for s in json.loads(idx_path.read_text())["strategies"]}
     assert "kpis_inline" in saved["good"]
     assert "kpis_error" in saved["bad"]          # bad one flagged, batch survived
+
+
+def test_refresh_all_isolates_missing_equity_csv_key(tmp_path):
+    import json
+    good = _mk(tmp_path, "good", np.linspace(100, 200, 253), [0.1, -0.05])
+    broken = {"id": "broken", "name": "broken"}        # NO equity_csv key
+    idx_path = tmp_path / "idx2.json"
+    idx_path.write_text(json.dumps({"strategies": [good, broken]}))
+
+    LB.refresh_all(str(idx_path), benchmark_loader=lambda: None)   # must not raise
+    saved = {s["id"]: s for s in json.loads(idx_path.read_text())["strategies"]}
+    assert "kpis_inline" in saved["good"]
+    assert "kpis_error" in saved["broken"]
+    assert "rank" not in saved["broken"]               # no stale/blank rank
