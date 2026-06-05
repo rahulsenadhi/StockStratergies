@@ -32,6 +32,7 @@ import numpy as np
 import pandas as pd
 
 from core.data_io import load_ohlcv
+from core.kpis import compute_kpis as _core_kpis
 
 DATA_FOLDER_NIFTY50 = 'data'
 DATA_FOLDER_WIDE = 'data/nse_bse'
@@ -297,8 +298,8 @@ def run_backtest(spec: dict) -> dict[str, Any]:
     trades_df.to_csv(trades_path, index=False)
     equity_df.to_csv(equity_path, index=False)
 
-    # KPIs
-    kpis = _compute_kpis(equity_df, trades_df)
+    # KPIs — delegate to canonical core.kpis (reads the written CSVs)
+    kpis = _core_kpis(equity_path, trades_path)
     (out_dir / f"{sid}_kpis.csv").write_text(
         '\n'.join(f"{k},{v}" for k, v in kpis.items())
     )
@@ -349,11 +350,11 @@ def _update_strategies_index(sid: str, kpis: dict, trades_path: str, equity_path
     for strat in idx['strategies']:
         if strat['id'] == sid:
             strat['kpis_inline'] = {
-                'cagr': kpis['cagr'],
-                'sharpe': kpis['sharpe'],
-                'max_dd': kpis['max_dd'],
-                'win_rate': kpis['win_rate'],
-                'num_trades': kpis['num_trades'],
+                'cagr': kpis.get('cagr'),
+                'sharpe': kpis.get('sharpe'),
+                'max_dd': kpis.get('max_dd'),
+                'win_rate': kpis.get('win_rate'),   # may be None (JSON null) — do not coerce
+                'num_trades': kpis.get('num_trades'),
             }
             strat['trades_csv'] = trades_path
             strat['equity_csv'] = equity_path
@@ -377,6 +378,11 @@ def main():
     result = run_backtest(spec)
     _update_strategies_index(spec['_strategy_id'], result['kpis'],
                               result['trades_path'], result['equity_path'])
+    try:
+        from core.leaderboard import refresh_all
+        refresh_all()
+    except Exception as e:
+        print(f"WARN: leaderboard refresh failed: {e}")
     print('DONE')
 
 
