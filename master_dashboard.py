@@ -8150,9 +8150,12 @@ def _render_sparkline(equity_csv: str, color: str = 'oklch(0.696 0.170 162.480)'
 
 def _render_strategy_card(strat: dict) -> None:
     k = strat.get('kpis_inline', {})
-    cagr = k.get('cagr', 0) * 100
-    sharpe = k.get('sharpe', 0)
-    max_dd = k.get('max_dd', 0) * 100
+    cagr = (k.get('cagr') or 0) * 100
+    sharpe = k.get('sharpe') or 0
+    max_dd = (k.get('max_dd') or 0) * 100
+    rank = strat.get('rank')
+    score = strat.get('rank_score')
+    rank_badge = f"#{rank}" if rank else "—"
     delta_arrow = '↗' if cagr > 0 else '↘'
     delta_class = 'pos' if cagr > 0 else 'neg'
     status = strat.get('status', 'Research')
@@ -8165,7 +8168,10 @@ def _render_strategy_card(strat: dict) -> None:
                   <div class="strat-name">{strat['name']}</div>
                   <div class="strat-subtype">{strat.get('type', '—')} · {status}</div>
                 </div>
-                <div>{_status_chip_html(status)}</div>
+                <div style="text-align:right">
+                  <div style="font-weight:700">{rank_badge}</div>
+                  {_status_chip_html(status)}
+                </div>
               </div>
               <div class="strat-kpis">
                 <div class="kpi"><span class="kpi-label">CAGR</span>
@@ -8180,10 +8186,12 @@ def _render_strategy_card(strat: dict) -> None:
 
         _render_sparkline(strat.get('equity_csv', ''))
 
+        score_disp = f"{score:+.2f}" if isinstance(score, (int, float)) else "—"
         st.markdown(f"""
             <div class="strat-footer">
               <span>Last run: {_human_time_ago(strat.get('last_run', ''))}</span>
-              <span>{k.get('num_trades', '—')} trades</span>
+              <span>{(k.get('num_trades') or 0)} trades</span>
+              <span>Score {score_disp}</span>
             </div>
         """, unsafe_allow_html=True)
 
@@ -8225,10 +8233,18 @@ def render_strategy_library(m: dict, i: dict, mo: dict) -> None:
     """, unsafe_allow_html=True)
 
     # Action row
-    a1, a2 = st.columns([1, 5])
+    a1, a2, a3 = st.columns([1, 1, 4])
     with a1:
         if st.button('+ New strategy', type='primary', use_container_width=True, key='lib_new_btn'):
             st.session_state['_page_override'] = 'add_strategy'
+            st.rerun()
+    with a2:
+        if st.button('↻ Recompute', use_container_width=True, key='lib_recompute_btn',
+                     help='Recompute KPIs + rank from each strategy\'s equity/trades CSVs'):
+            from core.leaderboard import refresh_all
+            with st.spinner('Recomputing leaderboard…'):
+                refresh_all()
+            st.cache_data.clear()
             st.rerun()
 
     # Filters
@@ -8240,7 +8256,7 @@ def render_strategy_library(m: dict, i: dict, mo: dict) -> None:
         status_filter = st.selectbox('Status', ['All', 'Live', 'Paper', 'Research', 'Paused'],
                                       key='lib_status_filter', label_visibility='collapsed')
     with f3:
-        sort_by = st.selectbox('Sort', ['Last run', 'CAGR', 'Sharpe', 'Name'],
+        sort_by = st.selectbox('Sort', ['Rank', 'Last run', 'CAGR', 'Sharpe', 'Name'],
                                 key='lib_sort_by', label_visibility='collapsed')
     with f4:
         search = st.text_input('Search', placeholder='🔍  Search strategies...',
@@ -8258,8 +8274,9 @@ def render_strategy_library(m: dict, i: dict, mo: dict) -> None:
                   or s_lower in s.get('description', '').lower()]
 
     sort_keys = {
-        'CAGR':     lambda s: -(s.get('kpis_inline', {}).get('cagr', 0)),
-        'Sharpe':   lambda s: -(s.get('kpis_inline', {}).get('sharpe', 0)),
+        'Rank':     lambda s: s.get('rank', 9999),
+        'CAGR':     lambda s: -((s.get('kpis_inline', {}).get('cagr') or 0)),
+        'Sharpe':   lambda s: -((s.get('kpis_inline', {}).get('sharpe') or 0)),
         'Name':     lambda s: s.get('name', ''),
         'Last run': lambda s: s.get('last_run', ''),
     }
