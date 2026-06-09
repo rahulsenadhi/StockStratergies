@@ -4,6 +4,7 @@ import { getStrategy, getEquityCurve, computeDrawdown, getTrades } from "@/lib/d
 import { LineChart } from "@/components/line-chart";
 import { KpiStrip } from "@/components/kpi-strip";
 import { TradesTable } from "@/components/trades-table";
+import { StrategySection } from "@/components/strategy-sections";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,7 @@ export default async function StrategyPage({ params }: { params: Promise<{ id: s
         <h2 className="mb-2 text-lg font-semibold">Trade History ({trades.rows.length})</h2>
         <TradesTable {...trades} />
       </section>
+      <StrategySection strategy={s} />
     </main>
   );
 }
