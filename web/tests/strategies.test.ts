@@ -381,3 +381,18 @@ describe("getDecileSpread", () => {
     expect(await getDecileSpread(null, FIX)).toEqual([]);
   });
 });
+
+describe("parity field mapping", () => {
+  it("maps funnelJson / recentBreakoutsCsv / decileSpreadCsv", async () => {
+    const s = await getStrategy("a", FIX);
+    expect(s?.funnelJson).toBe("funnel.json");
+    expect(s?.recentBreakoutsCsv).toBe("breakouts.csv");
+    expect(s?.decileSpreadCsv).toBe("decile.csv");
+  });
+  it("defaults missing parity keys to null", () => {
+    const m = mapStrategy({ id: "z", name: "Z" });
+    expect(m.funnelJson).toBeNull();
+    expect(m.recentBreakoutsCsv).toBeNull();
+    expect(m.decileSpreadCsv).toBeNull();
+  });
+});

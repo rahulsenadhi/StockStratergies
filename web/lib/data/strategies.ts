@@ -12,7 +12,8 @@ export type Kpis = {
 export type Strategy = {
   id: string; name: string; type: string; status: string;
   kpis: Kpis; rank: number | null; rankScore: number | null;
-  equityCsv: string | null; tradesCsv: string | null; lastRun: string | null; liveSignalsCsv: string | null; kpisError?: string;
+  equityCsv: string | null; tradesCsv: string | null; lastRun: string | null; liveSignalsCsv: string | null;
+  funnelJson: string | null; recentBreakoutsCsv: string | null; decileSpreadCsv: string | null; kpisError?: string;
 };
 
 const numOrNull = (v: unknown): number | null =>
@@ -74,6 +75,9 @@ export function mapStrategy(raw: any): Strategy {
     tradesCsv: raw.trades_csv ?? null,
     lastRun: raw.last_run ?? null,
     liveSignalsCsv: raw.live_signals_csv ?? null,
+    funnelJson: raw.funnel_json ?? null,
+    recentBreakoutsCsv: raw.recent_breakouts_csv ?? null,
+    decileSpreadCsv: raw.decile_spread_csv ?? null,
   };
   if (raw.kpis_error) s.kpisError = raw.kpis_error;
   return s;
