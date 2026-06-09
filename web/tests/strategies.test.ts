@@ -226,3 +226,27 @@ describe("getEquityWithBenchmark", () => {
     expect(r).toEqual({ strategy: [], benchmark: [], benchmarkCagr: null });
   });
 });
+
+describe("annualizedReturn", () => {
+  it("computes CAGR from first/last point", () => {
+    const r = annualizedReturn([
+      { time: "2024-01-01", value: 100 },
+      { time: "2026-01-01", value: 121 },
+    ]);
+    // Implementation uses days/365.25; 2024-01-01->2026-01-01 = 731 days (2024 is a leap year)
+    const days = (new Date("2026-01-01").getTime() - new Date("2024-01-01").getTime()) / 86_400_000;
+    const years = days / 365.25;
+    const expected = Math.pow(1.21, 1 / years) - 1;
+    expect(r).toBeCloseTo(expected, 4);
+  });
+  it("< 2 points -> null", () => {
+    expect(annualizedReturn([])).toBeNull();
+    expect(annualizedReturn([{ time: "2024-01-01", value: 100 }])).toBeNull();
+  });
+  it("non-positive first value -> null", () => {
+    expect(annualizedReturn([
+      { time: "2024-01-01", value: 0 },
+      { time: "2025-01-01", value: 100 },
+    ])).toBeNull();
+  });
+});
