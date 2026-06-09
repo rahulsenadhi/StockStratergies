@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel, getRecentBreakouts } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel, getRecentBreakouts, getDecileSpread } from "@/lib/data/strategies";
 import path from "path";
 import os from "os";
 import { promises as fsp } from "fs";
@@ -361,5 +361,23 @@ describe("getRecentBreakouts", () => {
   it("missing/null -> empty", async () => {
     expect(await getRecentBreakouts("nope.csv", FIX)).toEqual({ columns: [], rows: [] });
     expect(await getRecentBreakouts(null, FIX)).toEqual({ columns: [], rows: [] });
+  });
+});
+
+describe("getDecileSpread", () => {
+  it("parses, drops bad/empty rows, sorts by decile asc", async () => {
+    const r = await getDecileSpread("decile.csv", FIX);
+    expect(r.map((p) => p.decile)).toEqual([1, 2, 10]); // 'bad' and empty fwd dropped
+    expect(r[0]).toEqual({ decile: 1, fwdReturn: 4.12 });
+    expect(r[2]).toEqual({ decile: 10, fwdReturn: 2.83 });
+  });
+  it("missing required column -> []", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "dec-"));
+    await fsp.writeFile(path.join(dir, "x.csv"), "foo,bar\n1,2");
+    expect(await getDecileSpread("x.csv", dir)).toEqual([]);
+  });
+  it("missing/null -> []", async () => {
+    expect(await getDecileSpread("nope.csv", FIX)).toEqual([]);
+    expect(await getDecileSpread(null, FIX)).toEqual([]);
   });
 });

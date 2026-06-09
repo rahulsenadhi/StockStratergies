@@ -317,6 +317,29 @@ export async function getEquitySeries(
   }
 }
 
+export type DecilePoint = { decile: number; fwdReturn: number };
+
+/** PEAD SUE-decile -> forward 60d return. Case-insensitive header, bad rows skipped, sorted by decile asc. */
+export async function getDecileSpread(
+  csv: string | null,
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<DecilePoint[]> {
+  const { header, rows } = await parseCsvLines(csv, dataDir, true);
+  if (header.length === 0) return [];
+  const di = header.indexOf("sue_decile");
+  const fi = header.indexOf("fwd_60d_return");
+  if (di < 0 || fi < 0) return [];
+  const out: DecilePoint[] = [];
+  for (const cells of rows) {
+    const decile = numCell(cells, di);
+    const fwdReturn = numCell(cells, fi);
+    if (decile == null || fwdReturn == null) continue;
+    out.push({ decile, fwdReturn });
+  }
+  out.sort((a, b) => a.decile - b.decile);
+  return out;
+}
+
 const BREAKOUTS_LIMIT = 10;
 
 /** Live breakout watchlist. Full column set (TradesData shape, no col cap). Top-N rows. */
