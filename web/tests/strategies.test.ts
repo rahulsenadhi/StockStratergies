@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines } from "@/lib/data/strategies";
 import path from "path";
 import os from "os";
 import { promises as fsp } from "fs";
@@ -281,5 +281,29 @@ describe("getRankings", () => {
   });
   it("null path -> []", async () => {
     expect(await getRankings(null, FIX)).toEqual([]);
+  });
+});
+
+describe("parseCsvLines", () => {
+  it("splits header + rows, trims header", async () => {
+    const r = await parseCsvLines("ranks_a.csv", FIX);
+    expect(r.header[0]).toBe("Rank");
+    expect(r.rows.length).toBeGreaterThan(0);
+    expect(Array.isArray(r.rows[0])).toBe(true);
+  });
+  it("lowercaseHeader flag lowercases the header", async () => {
+    const r = await parseCsvLines("ranks_a.csv", FIX, true);
+    expect(r.header).toContain("ticker");
+  });
+  it("missing file -> empty", async () => {
+    expect(await parseCsvLines("nope.csv", FIX)).toEqual({ header: [], rows: [] });
+  });
+  it("null path -> empty", async () => {
+    expect(await parseCsvLines(null, FIX)).toEqual({ header: [], rows: [] });
+  });
+  it("header-only file -> empty", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "pcl-"));
+    await fsp.writeFile(path.join(dir, "h.csv"), "a,b,c");
+    expect(await parseCsvLines("h.csv", dir)).toEqual({ header: [], rows: [] });
   });
 });

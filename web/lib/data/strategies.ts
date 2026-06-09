@@ -18,6 +18,41 @@ export type Strategy = {
 const numOrNull = (v: unknown): number | null =>
   typeof v === "number" && !Number.isNaN(v) ? v : null;
 
+export type ParsedCsv = { header: string[]; rows: string[][] };
+
+/** Read a CSV: trim, split on newlines, require >=1 data row, return header + raw row cells.
+ *  Missing/unreadable/header-only -> { header: [], rows: [] }. Best-effort, never throws. */
+export async function parseCsvLines(
+  csv: string | null,
+  dataDir: string = DEFAULT_DATA_DIR,
+  lowercaseHeader = false,
+): Promise<ParsedCsv> {
+  if (!csv) return { header: [], rows: [] };
+  try {
+    const txt = await fs.readFile(path.join(dataDir, csv), "utf-8");
+    const lines = txt.trim().split(/\r?\n/);
+    if (lines.length < 2) return { header: [], rows: [] };
+    const header = lines[0].split(",").map((h) => {
+      const t = h.trim();
+      return lowercaseHeader ? t.toLowerCase() : t;
+    });
+    const rows = lines.slice(1).map((l) => l.split(","));
+    return { header, rows };
+  } catch {
+    return { header: [], rows: [] };
+  }
+}
+
+const cell = (cells: string[], i: number): string =>
+  i >= 0 ? (cells[i] ?? "").trim() : "";
+
+const numCell = (cells: string[], i: number): number | null => {
+  const v = cell(cells, i);
+  if (v === "") return null;
+  const n = Number(v);
+  return Number.isNaN(n) ? null : n;
+};
+
 export function mapStrategy(raw: any): Strategy {
   const k = raw.kpis_inline ?? {};
   const errored = Boolean(raw.kpis_error);
@@ -230,31 +265,23 @@ export async function getLiveSignals(
   dataDir: string = DEFAULT_DATA_DIR,
   limit: number = LIVE_LIMIT,
 ): Promise<LiveSignal[]> {
-  if (!csv) return [];
-  try {
-    const txt = await fs.readFile(path.join(dataDir, csv), "utf-8");
-    const lines = txt.trim().split(/\r?\n/);
-    if (lines.length < 2) return [];
-    const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
-    const ti = header.indexOf("ticker");
-    const ci = header.indexOf("company");
-    const si = header.indexOf("signal");
-    if (ti < 0 || si < 0) return [];
-    return lines
-      .slice(1, 1 + limit)
-      .map((l) => {
-        const cells = l.split(",");
-        const ticker = (cells[ti] ?? "").trim();
-        return {
-          ticker,
-          company: ci >= 0 ? (cells[ci] ?? "").trim() : ticker,
-          signal: (cells[si] ?? "").trim(),
-        };
-      })
-      .filter((r) => r.ticker !== "");
-  } catch {
-    return [];
-  }
+  const { header, rows } = await parseCsvLines(csv, dataDir, true);
+  if (header.length === 0) return [];
+  const ti = header.indexOf("ticker");
+  const ci = header.indexOf("company");
+  const si = header.indexOf("signal");
+  if (ti < 0 || si < 0) return [];
+  return rows
+    .slice(0, limit)
+    .map((cells) => {
+      const ticker = cell(cells, ti);
+      return {
+        ticker,
+        company: ci >= 0 && cell(cells, ci) !== "" ? cell(cells, ci) : ticker,
+        signal: cell(cells, si),
+      };
+    })
+    .filter((r) => r.ticker !== "");
 }
 
 const MAX_POINTS = 80;
@@ -307,47 +334,30 @@ export async function getRankings(
   csv: string | null,
   dataDir: string = DEFAULT_DATA_DIR,
 ): Promise<RankingRow[]> {
-  if (!csv) return [];
-  try {
-    const txt = await fs.readFile(path.join(dataDir, csv), "utf-8");
-    const lines = txt.trim().split(/\r?\n/);
-    if (lines.length < 2) return [];
-    const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
-    const idx = (name: string) => header.indexOf(name);
-    const ti = idx("ticker");
-    const si = idx("signal");
-    if (ti < 0) return [];
-    const ri = idx("rank");
-    const ci = idx("company");
-    const pi = idx("current_price");
-    const reti = idx("return_%");
-    const rsi = idx("rs_score");
-    const cell = (cells: string[], i: number): string =>
-      i >= 0 ? (cells[i] ?? "").trim() : "";
-    const numCell = (cells: string[], i: number): number | null => {
-      const v = cell(cells, i);
-      if (v === "") return null;
-      const n = Number(v);
-      return Number.isNaN(n) ? null : n;
-    };
-    return lines
-      .slice(1)
-      .map((l) => {
-        const cells = l.split(",");
-        const ticker = cell(cells, ti).replace(/\.NS$/, "");
-        const company = ci >= 0 && cell(cells, ci) !== "" ? cell(cells, ci) : ticker;
-        return {
-          rank: numCell(cells, ri),
-          ticker,
-          company,
-          price: numCell(cells, pi),
-          returnPct: numCell(cells, reti),
-          rsScore: numCell(cells, rsi),
-          signal: si >= 0 ? stripSignal(cell(cells, si)) : "",
-        };
-      })
-      .filter((r) => r.ticker !== "");
-  } catch {
-    return [];
-  }
+  const { header, rows } = await parseCsvLines(csv, dataDir, true);
+  if (header.length === 0) return [];
+  const idx = (name: string) => header.indexOf(name);
+  const ti = idx("ticker");
+  if (ti < 0) return [];
+  const si = idx("signal");
+  const ri = idx("rank");
+  const ci = idx("company");
+  const pi = idx("current_price");
+  const reti = idx("return_%");
+  const rsi = idx("rs_score");
+  return rows
+    .map((cells) => {
+      const ticker = cell(cells, ti).replace(/\.NS$/, "");
+      const company = ci >= 0 && cell(cells, ci) !== "" ? cell(cells, ci) : ticker;
+      return {
+        rank: numCell(cells, ri),
+        ticker,
+        company,
+        price: numCell(cells, pi),
+        returnPct: numCell(cells, reti),
+        rsScore: numCell(cells, rsi),
+        signal: si >= 0 ? stripSignal(cell(cells, si)) : "",
+      };
+    })
+    .filter((r) => r.ticker !== "");
 }
