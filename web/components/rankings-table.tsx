@@ -31,11 +31,11 @@ export function RankingsTable({ rows }: { rows: RankingRow[] }) {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {rows.map((r) => {
+        {rows.map((r, i) => {
           const held = r.rank != null && r.rank <= 5;
           return (
             <TableRow
-              key={`${r.rank}-${r.ticker}`}
+              key={i}
               className={held ? "border-l-2 border-l-green-500 bg-green-500/5" : ""}
             >
               <TableCell className="font-bold text-green-500">{r.rank ?? "—"}</TableCell>
