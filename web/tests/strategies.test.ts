@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, readEquityCurveRaw, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel, getRecentBreakouts, getDecileSpread } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, readEquityCurveRaw, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel, getRecentBreakouts, getDecileSpread, getMonthlyReturns } from "@/lib/data/strategies";
 import { barWidthPct } from "@/components/horizontal-bars";
 import path from "path";
 import os from "os";
@@ -438,5 +438,77 @@ describe("readEquityCurveRaw", () => {
   it("missing/null -> []", async () => {
     expect(await readEquityCurveRaw("nope.csv", FIX)).toEqual([]);
     expect(await readEquityCurveRaw(null, FIX)).toEqual([]);
+  });
+});
+
+describe("getMonthlyReturns", () => {
+  async function write(rows: string[]): Promise<[string, string]> {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "mr-"));
+    await fsp.writeFile(path.join(dir, "eq.csv"), ["Date,equity", ...rows].join("\n"));
+    return ["eq.csv", dir];
+  }
+
+  it("month-end value wins; first month anchors on opening value", async () => {
+    const [csv, dir] = await write([
+      "2024-01-05,100",
+      "2024-01-20,105",
+      "2024-01-31,110",
+      "2024-02-28,121",
+    ]);
+    const r = await getMonthlyReturns(csv, dir);
+    expect(r.length).toBe(1);
+    expect(r[0].year).toBe(2024);
+    expect(r[0].months[0]).toBeCloseTo(0.10, 6); // Jan: 110/100 - 1
+    expect(r[0].months[1]).toBeCloseTo(0.10, 6); // Feb: 121/110 - 1
+    expect(r[0].months[2]).toBeNull();           // Mar absent
+    expect(r[0].annual).toBeCloseTo(0.21, 6);    // (1.1*1.1)-1
+  });
+
+  it("gap month is null; next present month compounds from last month-end", async () => {
+    const [csv, dir] = await write([
+      "2024-01-31,100",
+      "2024-01-31,110",
+      "2024-03-31,132",
+    ]);
+    const r = await getMonthlyReturns(csv, dir);
+    expect(r[0].months[0]).toBeCloseTo(0.10, 6); // Jan vs opening 100
+    expect(r[0].months[1]).toBeNull();           // Feb gap
+    expect(r[0].months[2]).toBeCloseTo(0.20, 6); // Mar vs Jan-end 110
+  });
+
+  it("annual compounds only displayed months across multiple years", async () => {
+    const [csv, dir] = await write([
+      "2023-12-29,100",
+      "2024-06-28,110",
+      "2024-12-31,121",
+    ]);
+    const r = await getMonthlyReturns(csv, dir);
+    expect(r.map((x) => x.year)).toEqual([2023, 2024]);
+    expect(r[0].months[11]).toBeCloseTo(0, 6);
+    expect(r[0].annual).toBeCloseTo(0, 6);
+    expect(r[1].months[5]).toBeCloseTo(0.10, 6);
+    expect(r[1].months[11]).toBeCloseTo(0.10, 6);
+    expect(r[1].annual).toBeCloseTo(0.21, 6);
+  });
+
+  it("empty/missing csv -> []", async () => {
+    expect(await getMonthlyReturns("nope.csv", FIX)).toEqual([]);
+    expect(await getMonthlyReturns(null, FIX)).toEqual([]);
+  });
+
+  it("single data point (<2) -> []", async () => {
+    const [csv, dir] = await write(["2024-01-31,100"]);
+    expect(await getMonthlyReturns(csv, dir)).toEqual([]);
+  });
+
+  it("non-positive prior anchor -> null return guard", async () => {
+    const [csv, dir] = await write([
+      "2024-01-31,0",
+      "2024-02-28,50",
+    ]);
+    const r = await getMonthlyReturns(csv, dir);
+    expect(r[0].months[0]).toBeNull();
+    expect(r[0].months[1]).toBeNull();
+    expect(r[0].annual).toBeNull();
   });
 });
