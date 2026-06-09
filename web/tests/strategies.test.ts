@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, readEquityCurveRaw, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel, getRecentBreakouts, getDecileSpread, getMonthlyReturns } from "@/lib/data/strategies";
 import { barWidthPct } from "@/components/horizontal-bars";
 import { cellColor } from "@/components/monthly-heatmap";
+import { compareCells } from "@/components/trades-table";
 import path from "path";
 import os from "os";
 import { promises as fsp } from "fs";
@@ -532,5 +533,28 @@ describe("cellColor", () => {
     expect(cellColor(-0.05)).toBe("rgba(239,68,68,0.5)");
     expect(cellColor(-0.10)).toBe("rgba(239,68,68,1)");
     expect(cellColor(-0.25)).toBe("rgba(239,68,68,1)");
+  });
+});
+
+describe("compareCells", () => {
+  it("numeric, not lexical: 2 before 10", () => {
+    expect(compareCells("2", "10")).toBeLessThan(0);
+    expect(compareCells("10", "2")).toBeGreaterThan(0);
+  });
+  it("handles negative numbers", () => {
+    expect(compareCells("-2.3", "0")).toBeLessThan(0);
+  });
+  it("equal numbers -> 0", () => {
+    expect(compareCells("100.5", "100.5")).toBe(0);
+  });
+  it("text compares lexically", () => {
+    expect(compareCells("RELIANCE", "TCS")).toBeLessThan(0);
+    expect(compareCells("TCS", "RELIANCE")).toBeGreaterThan(0);
+  });
+  it("ISO dates sort lexically (chronological)", () => {
+    expect(compareCells("2024-01-05", "2024-02-01")).toBeLessThan(0);
+  });
+  it("mixed numeric/non-numeric falls back to string compare", () => {
+    expect(compareCells("abc", "5")).toBe("abc".localeCompare("5"));
   });
 });
