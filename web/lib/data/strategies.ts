@@ -317,6 +317,39 @@ export async function getEquitySeries(
   }
 }
 
+export type FunnelStage = { label: string; value: number };
+
+const FUNNEL_STAGES: { key: string; label: string }[] = [
+  { key: "total", label: "Universe" },
+  { key: "sufficient_data", label: "Has Data" },
+  { key: "f1", label: "F1 Trend" },
+  { key: "f2", label: "F2 Price > SMA50" },
+  { key: "f3", label: "F3 MA Align" },
+  { key: "f4", label: "F4 vs 52W Low" },
+  { key: "f5", label: "F5 Dip Recovered" },
+  { key: "f6", label: "F6 Clean Chart" },
+  { key: "vol_bk", label: "Vol + Breakout" },
+];
+
+/** Momentum filter funnel: fixed key->label map. Missing key -> 0. Unreadable/bad JSON -> []. */
+export async function getFunnel(
+  jsonPath: string | null,
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<FunnelStage[]> {
+  if (!jsonPath) return [];
+  try {
+    const txt = await fs.readFile(path.join(dataDir, jsonPath), "utf-8");
+    const data = JSON.parse(txt);
+    return FUNNEL_STAGES.map(({ key, label }) => ({
+      label,
+      value:
+        typeof data?.[key] === "number" && !Number.isNaN(data[key]) ? data[key] : 0,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export type RankingRow = {
   rank: number | null;
   ticker: string;

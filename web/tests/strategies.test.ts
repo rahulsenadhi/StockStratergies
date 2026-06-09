@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel } from "@/lib/data/strategies";
 import path from "path";
 import os from "os";
 import { promises as fsp } from "fs";
@@ -305,5 +305,30 @@ describe("parseCsvLines", () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "pcl-"));
     await fsp.writeFile(path.join(dir, "h.csv"), "a,b,c");
     expect(await parseCsvLines("h.csv", dir)).toEqual({ header: [], rows: [] });
+  });
+});
+
+describe("getFunnel", () => {
+  it("maps fixed keys to ordered labelled stages", async () => {
+    const f = await getFunnel("funnel.json", FIX);
+    expect(f.length).toBe(9);
+    expect(f[0]).toEqual({ label: "Universe", value: 100 });
+    expect(f[2]).toEqual({ label: "F1 Trend", value: 50 });
+    expect(f[8]).toEqual({ label: "Vol + Breakout", value: 8 });
+  });
+  it("missing key -> 0", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "fun-"));
+    await fsp.writeFile(path.join(dir, "p.json"), JSON.stringify({ total: 5 }));
+    const f = await getFunnel("p.json", dir);
+    expect(f[0].value).toBe(5);
+    expect(f[1].value).toBe(0);
+    expect(f[8].value).toBe(0);
+  });
+  it("missing/null/bad file -> []", async () => {
+    expect(await getFunnel("nope.json", FIX)).toEqual([]);
+    expect(await getFunnel(null, FIX)).toEqual([]);
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "fun2-"));
+    await fsp.writeFile(path.join(dir, "bad.json"), "{not json");
+    expect(await getFunnel("bad.json", dir)).toEqual([]);
   });
 });
