@@ -309,12 +309,19 @@ describe("parseCsvLines", () => {
 });
 
 describe("getFunnel", () => {
-  it("maps fixed keys to ordered labelled stages", async () => {
+  it("maps fixed keys to ordered labelled stages (ignores extra 'final' key)", async () => {
     const f = await getFunnel("funnel.json", FIX);
-    expect(f.length).toBe(9);
-    expect(f[0]).toEqual({ label: "Universe", value: 100 });
-    expect(f[2]).toEqual({ label: "F1 Trend", value: 50 });
-    expect(f[8]).toEqual({ label: "Vol + Breakout", value: 8 });
+    expect(f).toEqual([
+      { label: "Universe", value: 100 },
+      { label: "Has Data", value: 100 },
+      { label: "F1 Trend", value: 50 },
+      { label: "F2 Price > SMA50", value: 40 },
+      { label: "F3 MA Align", value: 30 },
+      { label: "F4 vs 52W Low", value: 20 },
+      { label: "F5 Dip Recovered", value: 15 },
+      { label: "F6 Clean Chart", value: 12 },
+      { label: "Vol + Breakout", value: 8 },
+    ]);
   });
   it("missing key -> 0", async () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "fun-"));
@@ -330,5 +337,10 @@ describe("getFunnel", () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "fun2-"));
     await fsp.writeFile(path.join(dir, "bad.json"), "{not json");
     expect(await getFunnel("bad.json", dir)).toEqual([]);
+  });
+  it("non-object JSON root (array) -> []", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "fun3-"));
+    await fsp.writeFile(path.join(dir, "arr.json"), "[1,2,3]");
+    expect(await getFunnel("arr.json", dir)).toEqual([]);
   });
 });

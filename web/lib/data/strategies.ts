@@ -339,12 +339,16 @@ export async function getFunnel(
   if (!jsonPath) return [];
   try {
     const txt = await fs.readFile(path.join(dataDir, jsonPath), "utf-8");
-    const data = JSON.parse(txt);
-    return FUNNEL_STAGES.map(({ key, label }) => ({
-      label,
-      value:
-        typeof data?.[key] === "number" && !Number.isNaN(data[key]) ? data[key] : 0,
-    }));
+    const raw: unknown = JSON.parse(txt);
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return [];
+    const data = raw as Record<string, unknown>;
+    return FUNNEL_STAGES.map(({ key, label }) => {
+      const v = data[key];
+      return {
+        label,
+        value: typeof v === "number" && !Number.isNaN(v) ? v : 0,
+      };
+    });
   } catch {
     return [];
   }
