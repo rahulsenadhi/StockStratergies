@@ -290,5 +290,64 @@ export async function getEquitySeries(
   }
 }
 
-// Stub — will be implemented in a later task
-export const getRankings = undefined;
+export type RankingRow = {
+  rank: number | null;
+  ticker: string;
+  company: string;
+  price: number | null;
+  returnPct: number | null;
+  rsScore: number | null;
+  signal: string;
+};
+
+const stripSignal = (s: string): string =>
+  s.replace(/^[🟢🔴]\s*/u, "").trim();
+
+export async function getRankings(
+  csv: string | null,
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<RankingRow[]> {
+  if (!csv) return [];
+  try {
+    const txt = await fs.readFile(path.join(dataDir, csv), "utf-8");
+    const lines = txt.trim().split(/\r?\n/);
+    if (lines.length < 2) return [];
+    const header = lines[0].split(",").map((h) => h.trim().toLowerCase());
+    const idx = (name: string) => header.indexOf(name);
+    const ti = idx("ticker");
+    const si = idx("signal");
+    if (ti < 0) return [];
+    const ri = idx("rank");
+    const ci = idx("company");
+    const pi = idx("current_price");
+    const reti = idx("return_%");
+    const rsi = idx("rs_score");
+    const cell = (cells: string[], i: number): string =>
+      i >= 0 ? (cells[i] ?? "").trim() : "";
+    const numCell = (cells: string[], i: number): number | null => {
+      const v = cell(cells, i);
+      if (v === "") return null;
+      const n = Number(v);
+      return Number.isNaN(n) ? null : n;
+    };
+    return lines
+      .slice(1)
+      .map((l) => {
+        const cells = l.split(",");
+        const ticker = cell(cells, ti).replace(/\.NS$/, "");
+        const company = ci >= 0 && cell(cells, ci) !== "" ? cell(cells, ci) : ticker;
+        return {
+          rank: numCell(cells, ri),
+          ticker,
+          company,
+          price: numCell(cells, pi),
+          returnPct: numCell(cells, reti),
+          rsScore: numCell(cells, rsi),
+          signal: si >= 0 ? stripSignal(cell(cells, si)) : "",
+        };
+      })
+      .filter((r) => r.ticker !== "");
+  } catch {
+    return [];
+  }
+}

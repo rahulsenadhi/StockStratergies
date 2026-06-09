@@ -250,3 +250,36 @@ describe("annualizedReturn", () => {
     ])).toBeNull();
   });
 });
+
+describe("getRankings", () => {
+  it("parses rows, strips .NS and emoji, keeps nulls not zero", async () => {
+    const r = await getRankings("ranks_a.csv", FIX);
+    expect(r.length).toBe(2); // third row skipped (no ticker)
+    expect(r[0]).toEqual({
+      rank: 1,
+      ticker: "ZEEL",
+      company: "Zee Entertainment",
+      price: 104.42,
+      returnPct: 12.14,
+      rsScore: 12.96,
+      signal: "Strong BUY",
+    });
+    expect(r[1].ticker).toBe("COALINDIA");
+    expect(r[1].signal).toBe("Strong BUY");
+  });
+  it("company falls back to ticker when column absent", async () => {
+    const r = await getRankings("ranks_noco.csv", FIX);
+    expect(r[0].company).toBe(r[0].ticker);
+  });
+  it("missing numeric cells -> null (not 0)", async () => {
+    const r = await getRankings("ranks_partial.csv", FIX);
+    expect(r[0].rsScore).toBeNull();
+    expect(r[0].price).toBeNull();
+  });
+  it("missing file -> []", async () => {
+    expect(await getRankings("nope.csv", FIX)).toEqual([]);
+  });
+  it("null path -> []", async () => {
+    expect(await getRankings(null, FIX)).toEqual([]);
+  });
+});
