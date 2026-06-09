@@ -73,6 +73,8 @@
       "trades_csv": "momentum_edge_trades.csv",
       "equity_csv": "momentum_edge_equity.csv",
       "live_signals_csv": "momentum_edge_signals.csv",
+      "funnel_json": "momentum_edge_funnel.json",
+      "recent_breakouts_csv": "momentum_edge_recent_breakouts.csv",
       "kpis_inline": {
         "cagr": 0.10100839807659012,
         "total_return": 1.4724933999999998,
@@ -102,6 +104,7 @@
       "entry_rule": "SUE decile=10 AND Piotroski>=7 AND PB<=sector_median",
       "exit_rule": "60d hold OR day-before-next-earnings",
       "trades_csv": "pead_trades.csv",
+      "decile_spread_csv": "pead_decile_spread.csv",
       "equity_csv": "pead_equity.csv",
       "kpis_csv": "pead_kpis.csv",
       "kpis_inline": {
