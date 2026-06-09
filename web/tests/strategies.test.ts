@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings } from "@/lib/data/strategies";
 import path from "path";
 import os from "os";
 import { promises as fsp } from "fs";
@@ -197,5 +197,32 @@ describe("getLiveSignals", () => {
   it("liveSignalsCsv mapped on Strategy", async () => {
     const s = await getStrategy("a", FIX);
     expect(s?.liveSignalsCsv).toBe("live_rank.csv");
+  });
+});
+
+describe("getEquityWithBenchmark", () => {
+  it("returns rebased strategy + benchmark series and benchmark CAGR", async () => {
+    const r = await getEquityWithBenchmark("bench_a.csv", FIX);
+    expect(r.strategy.length).toBe(3);
+    expect(r.benchmark.length).toBe(3);
+    expect(r.strategy[0].value).toBeCloseTo(0, 6);
+    expect(r.benchmark[0].value).toBeCloseTo(0, 6);
+    expect(r.strategy[2].value).toBeCloseTo(0.2, 6);
+    const expected = Math.pow(235 / 210, 1 / 2) - 1;
+    expect(r.benchmarkCagr).toBeCloseTo(expected, 4);
+  });
+  it("missing Benchmark_Value column -> empty benchmark, null cagr", async () => {
+    const r = await getEquityWithBenchmark("eq_b.csv", FIX);
+    expect(r.strategy.length).toBeGreaterThan(0);
+    expect(r.benchmark).toEqual([]);
+    expect(r.benchmarkCagr).toBeNull();
+  });
+  it("missing file -> empty everything", async () => {
+    const r = await getEquityWithBenchmark("nope.csv", FIX);
+    expect(r).toEqual({ strategy: [], benchmark: [], benchmarkCagr: null });
+  });
+  it("null path -> empty everything", async () => {
+    const r = await getEquityWithBenchmark(null, FIX);
+    expect(r).toEqual({ strategy: [], benchmark: [], benchmarkCagr: null });
   });
 });

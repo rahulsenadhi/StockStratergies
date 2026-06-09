@@ -138,6 +138,60 @@ export function rebaseToReturn(curve: EquityPoint[]): EquityPoint[] {
   return curve.map((p) => ({ time: p.time, value: p.value / v0 - 1 }));
 }
 
+export function annualizedReturn(curve: EquityPoint[]): number | null {
+  if (curve.length < 2) return null;
+  const first = curve[0];
+  const last = curve[curve.length - 1];
+  if (first.value <= 0) return null;
+  const days =
+    (new Date(last.time).getTime() - new Date(first.time).getTime()) / 86_400_000;
+  const years = Math.max(days / 365.25, 0.01);
+  return Math.pow(last.value / first.value, 1 / years) - 1;
+}
+
+const BENCHMARK_COL = "Benchmark_Value";
+
+export type EquityWithBenchmark = {
+  strategy: EquityPoint[];
+  benchmark: EquityPoint[];
+  benchmarkCagr: number | null;
+};
+
+export async function getEquityWithBenchmark(
+  csv: string | null,
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<EquityWithBenchmark> {
+  const empty: EquityWithBenchmark = { strategy: [], benchmark: [], benchmarkCagr: null };
+  if (!csv) return empty;
+  try {
+    const rawStrategy = await getEquityCurve(csv, dataDir);
+    const strategy = rebaseToReturn(rawStrategy);
+    const txt = await fs.readFile(path.join(dataDir, csv), "utf-8");
+    const lines = txt.trim().split(/\r?\n/);
+    if (lines.length < 2) return { strategy, benchmark: [], benchmarkCagr: null };
+    const header = lines[0].split(",").map((h) => h.trim());
+    const dateIdx = header.findIndex((h) => DATE_COLS.includes(h));
+    const di = dateIdx >= 0 ? dateIdx : 0;
+    const bi = header.indexOf(BENCHMARK_COL);
+    if (bi < 0) return { strategy, benchmark: [], benchmarkCagr: null };
+    const rawBench: EquityPoint[] = lines
+      .slice(1)
+      .map((l) => {
+        const cells = l.split(",");
+        return { time: String(cells[di] ?? "").slice(0, 10), value: Number(cells[bi]) };
+      })
+      .filter((p) => p.time !== "" && !Number.isNaN(p.value));
+    rawBench.sort((a, b) => a.time.localeCompare(b.time));
+    return {
+      strategy,
+      benchmark: rebaseToReturn(rawBench),
+      benchmarkCagr: annualizedReturn(rawBench),
+    };
+  } catch {
+    return empty;
+  }
+}
+
 export type TradesData = { columns: string[]; rows: Record<string, string>[] };
 const MAX_TRADE_COLS = 8;
 
@@ -232,3 +286,6 @@ export async function getEquitySeries(
     return [];
   }
 }
+
+// Stub — will be implemented in a later task
+export const getRankings = undefined;
