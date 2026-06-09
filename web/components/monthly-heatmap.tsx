@@ -37,7 +37,7 @@ export function MonthlyHeatmap({ rows }: MonthlyHeatmapProps): ReactNode {
               <td className="px-2 py-1 text-left font-medium">{row.year}</td>
               {row.months.map((r, i) => (
                 <td
-                  key={i}
+                  key={`${row.year}-${i}`}
                   className="px-2 py-1 tabular-nums"
                   style={{ backgroundColor: cellColor(r) }}
                 >
