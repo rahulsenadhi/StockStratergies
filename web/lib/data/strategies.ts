@@ -317,6 +317,26 @@ export async function getEquitySeries(
   }
 }
 
+const BREAKOUTS_LIMIT = 10;
+
+/** Live breakout watchlist. Full column set (TradesData shape, no col cap). Top-N rows. */
+export async function getRecentBreakouts(
+  csv: string | null,
+  dataDir: string = DEFAULT_DATA_DIR,
+  limit: number = BREAKOUTS_LIMIT,
+): Promise<TradesData> {
+  const { header, rows } = await parseCsvLines(csv, dataDir);
+  if (header.length === 0) return { columns: [], rows: [] };
+  const out = rows.slice(0, limit).map((cells) => {
+    const row: Record<string, string> = {};
+    header.forEach((c, i) => {
+      row[c] = (cells[i] ?? "").trim();
+    });
+    return row;
+  });
+  return { columns: header, rows: out };
+}
+
 export type FunnelStage = { label: string; value: number };
 
 const FUNNEL_STAGES: { key: string; label: string }[] = [

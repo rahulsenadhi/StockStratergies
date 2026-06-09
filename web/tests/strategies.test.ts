@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel, getRecentBreakouts } from "@/lib/data/strategies";
 import path from "path";
 import os from "os";
 import { promises as fsp } from "fs";
@@ -342,5 +342,24 @@ describe("getFunnel", () => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "fun3-"));
     await fsp.writeFile(path.join(dir, "arr.json"), "[1,2,3]");
     expect(await getFunnel("arr.json", dir)).toEqual([]);
+  });
+});
+
+describe("getRecentBreakouts", () => {
+  it("returns all 9 columns + rows (no 8-col cap)", async () => {
+    const r = await getRecentBreakouts("breakouts.csv", FIX);
+    expect(r.columns.length).toBe(9);
+    expect(r.columns[8]).toBe("Stop (₹)");
+    expect(r.rows.length).toBe(3);
+    expect(r.rows[0]["Ticker"]).toBe("APOLLOHOSP");
+    expect(r.rows[0]["Stop (₹)"]).toBe("7230.1");
+  });
+  it("limit caps rows", async () => {
+    const r = await getRecentBreakouts("breakouts.csv", FIX, 2);
+    expect(r.rows.length).toBe(2);
+  });
+  it("missing/null -> empty", async () => {
+    expect(await getRecentBreakouts("nope.csv", FIX)).toEqual({ columns: [], rows: [] });
+    expect(await getRecentBreakouts(null, FIX)).toEqual({ columns: [], rows: [] });
   });
 });
