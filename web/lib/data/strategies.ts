@@ -109,7 +109,7 @@ export type EquityPoint = { time: string; value: number };
 const MAX_CURVE_POINTS = 2000;
 const DATE_COLS = ["Date", "date", "Datetime"];
 
-export async function getEquityCurve(
+export async function readEquityCurveRaw(
   csv: string | null,
   dataDir: string = DEFAULT_DATA_DIR,
 ): Promise<EquityPoint[]> {
@@ -142,23 +142,30 @@ export async function getEquityCurve(
     const deduped: EquityPoint[] = [];
     for (const p of pts) {
       if (deduped.length && deduped[deduped.length - 1].time === p.time) {
-        deduped[deduped.length - 1] = p;   // keep last value for a repeated date
+        deduped[deduped.length - 1] = p; // keep last value for a repeated date
       } else {
         deduped.push(p);
       }
     }
-    pts = deduped;
-    if (pts.length > MAX_CURVE_POINTS) {
-      const step = Math.ceil(pts.length / MAX_CURVE_POINTS);
-      const sampled = pts.filter((_, i) => i % step === 0);
-      const last = pts[pts.length - 1];
-      if (sampled[sampled.length - 1] !== last) sampled.push(last);
-      pts = sampled;
-    }
-    return pts;
+    return deduped;
   } catch {
     return [];
   }
+}
+
+export async function getEquityCurve(
+  csv: string | null,
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<EquityPoint[]> {
+  let pts = await readEquityCurveRaw(csv, dataDir);
+  if (pts.length > MAX_CURVE_POINTS) {
+    const step = Math.ceil(pts.length / MAX_CURVE_POINTS);
+    const sampled = pts.filter((_, i) => i % step === 0);
+    const last = pts[pts.length - 1];
+    if (sampled[sampled.length - 1] !== last) sampled.push(last);
+    pts = sampled;
+  }
+  return pts;
 }
 
 export function computeDrawdown(curve: EquityPoint[]): EquityPoint[] {

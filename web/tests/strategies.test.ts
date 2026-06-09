@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel, getRecentBreakouts, getDecileSpread } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, readEquityCurveRaw, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel, getRecentBreakouts, getDecileSpread } from "@/lib/data/strategies";
 import { barWidthPct } from "@/components/horizontal-bars";
 import path from "path";
 import os from "os";
@@ -417,5 +417,26 @@ describe("barWidthPct", () => {
   it("clamps to [0, 100]", () => {
     expect(barWidthPct(-2, 100)).toBe(0);
     expect(barWidthPct(150, 100)).toBe(100);
+  });
+});
+
+describe("readEquityCurveRaw", () => {
+  it("returns full-resolution sorted/deduped curve (no downsample)", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "raw-"));
+    const rows = ["Date,equity"];
+    for (let i = 0; i < 5000; i++) {
+      const d = new Date(Date.UTC(2010, 0, 1));
+      d.setUTCDate(d.getUTCDate() + i);
+      rows.push(`${d.toISOString().slice(0, 10)},${100 + i}`);
+    }
+    await fsp.writeFile(path.join(dir, "big.csv"), rows.join("\n"));
+    const c = await readEquityCurveRaw("big.csv", dir);
+    expect(c.length).toBe(5000); // NOT capped
+    expect(c[0].value).toBe(100);
+    expect(c[c.length - 1].value).toBe(100 + 4999);
+  });
+  it("missing/null -> []", async () => {
+    expect(await readEquityCurveRaw("nope.csv", FIX)).toEqual([]);
+    expect(await readEquityCurveRaw(null, FIX)).toEqual([]);
   });
 });
