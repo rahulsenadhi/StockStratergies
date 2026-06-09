@@ -69,3 +69,21 @@ def test_refresh_all_isolates_missing_equity_csv_key(tmp_path):
     assert "kpis_inline" in saved["good"]
     assert "kpis_error" in saved["broken"]
     assert "rank" not in saved["broken"]               # no stale/blank rank
+
+
+def test_main_returns_0_and_writes_index(tmp_path, monkeypatch):
+    a = _mk(tmp_path, "a", _make_equity(60, 0.002, 0.01))
+    b = _mk(tmp_path, "b", _make_equity(60, 0.0005, 0.02))
+    idx = tmp_path / "strategies_index.json"
+    idx.write_text(json.dumps({"strategies": [a, b]}))
+    monkeypatch.chdir(tmp_path)               # main() uses default index path = cwd/strategies_index.json
+    rc = LB.main()
+    assert rc == 0
+    out = json.loads(idx.read_text())
+    assert all("kpis_inline" in s for s in out["strategies"])
+    assert any("rank" in s for s in out["strategies"])
+
+
+def test_main_returns_1_when_index_missing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)               # no strategies_index.json present
+    assert LB.main() == 1

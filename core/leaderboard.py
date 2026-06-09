@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -48,3 +49,16 @@ def refresh_all(index_path: str = "strategies_index.json", benchmark_loader=None
     tmp.write_text(json.dumps(idx, indent=2, default=str))
     os.replace(tmp, p)
     return strategies
+
+
+def main() -> int:
+    try:
+        refresh_all()
+        return 0
+    except Exception as e:
+        print(f"recompute failed: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
