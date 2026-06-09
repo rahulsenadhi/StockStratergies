@@ -16,7 +16,7 @@ export type SpawnFn = (bin: string, args: string[], opts: { cwd: string }) => Sp
 
 /** Resolve the command to run from the server environment. No request input is involved. */
 export function resolveRecompute(
-  env: NodeJS.ProcessEnv,
+  env: { PYTHON_BIN?: string; DATA_DIR?: string; [key: string]: string | undefined },
   cwd: string,
 ): { bin: string; args: string[]; cwd: string } {
   return {
