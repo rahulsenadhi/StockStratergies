@@ -337,7 +337,7 @@ export async function getDecileSpread(
   for (const cells of rows) {
     const decile = numCell(cells, di);
     const fwdReturn = numCell(cells, fi);
-    if (decile == null || fwdReturn == null) continue;
+    if (decile === null || fwdReturn === null) continue;
     out.push({ decile, fwdReturn });
   }
   out.sort((a, b) => a.decile - b.decile);
