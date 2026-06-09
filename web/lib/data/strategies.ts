@@ -138,6 +138,7 @@ export function rebaseToReturn(curve: EquityPoint[]): EquityPoint[] {
   return curve.map((p) => ({ time: p.time, value: p.value / v0 - 1 }));
 }
 
+/** CAGR from a dated equity curve. Expects RAW absolute values (not rebased — a rebased series starts at 0 and returns null). */
 export function annualizedReturn(curve: EquityPoint[]): number | null {
   if (curve.length < 2) return null;
   const first = curve[0];
@@ -174,6 +175,8 @@ export async function getEquityWithBenchmark(
     const di = dateIdx >= 0 ? dateIdx : 0;
     const bi = header.indexOf(BENCHMARK_COL);
     if (bi < 0) return { strategy, benchmark: [], benchmarkCagr: null };
+    // Deliberate second read: parse the benchmark column independently of getEquityCurve.
+    // Consistent with this module's simple no-cache, per-call-read contract.
     const rawBench: EquityPoint[] = lines
       .slice(1)
       .map((l) => {
