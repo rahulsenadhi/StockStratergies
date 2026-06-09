@@ -307,6 +307,13 @@ describe("parseCsvLines", () => {
     await fsp.writeFile(path.join(dir, "h.csv"), "a,b,c");
     expect(await parseCsvLines("h.csv", dir)).toEqual({ header: [], rows: [] });
   });
+  it("handles CRLF line endings", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "crlf-"));
+    await fsp.writeFile(path.join(dir, "c.csv"), "a,b\r\nv1,v2\r\nv3,v4\r\n");
+    const r = await parseCsvLines("c.csv", dir);
+    expect(r.header).toEqual(["a", "b"]);
+    expect(r.rows).toEqual([["v1", "v2"], ["v3", "v4"]]);
+  });
 });
 
 describe("getFunnel", () => {

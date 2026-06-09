@@ -18,6 +18,9 @@ interface HorizontalBarsProps {
 
 export function HorizontalBars({ data }: HorizontalBarsProps): ReactNode {
   if (!data?.length) return null;
+  // Bars are scaled against the max value; negative values clamp to zero-width
+  // (the numeric valueLabel still shows them). Current callers (funnel counts,
+  // decile returns) are non-negative in practice.
   const max = Math.max(...data.map((d) => d.value), 0);
   return (
     <div className="flex flex-col gap-1.5">
