@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { getEquityWithBenchmark } from "@/lib/data/strategies";
 import type { Strategy } from "@/lib/data/strategies";
 import { MultiLineChart } from "@/components/multi-line-chart";
@@ -7,7 +8,7 @@ interface IpoEdgeSectionProps {
   strategy: Strategy;
 }
 
-export async function IpoEdgeSection({ strategy }: IpoEdgeSectionProps) {
+export async function IpoEdgeSection({ strategy }: IpoEdgeSectionProps): Promise<ReactNode> {
   const eq = await getEquityWithBenchmark(strategy.equityCsv);
   const series = [
     { name: "IPO Edge", color: "#22c55e", points: eq.strategy },

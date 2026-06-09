@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { getFunnel, getRecentBreakouts } from "@/lib/data/strategies";
 import type { Strategy } from "@/lib/data/strategies";
 import { HorizontalBars } from "@/components/horizontal-bars";
@@ -7,7 +8,7 @@ interface MomentumEdgeSectionProps {
   strategy: Strategy;
 }
 
-export async function MomentumEdgeSection({ strategy }: MomentumEdgeSectionProps) {
+export async function MomentumEdgeSection({ strategy }: MomentumEdgeSectionProps): Promise<ReactNode> {
   const funnel = await getFunnel(strategy.funnelJson);
   const breakouts = await getRecentBreakouts(strategy.recentBreakoutsCsv);
 

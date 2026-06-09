@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { getDecileSpread } from "@/lib/data/strategies";
 import type { Strategy } from "@/lib/data/strategies";
 import { HorizontalBars } from "@/components/horizontal-bars";
@@ -6,13 +7,14 @@ interface PeadSectionProps {
   strategy: Strategy;
 }
 
-export async function PeadSection({ strategy }: PeadSectionProps) {
+export async function PeadSection({ strategy }: PeadSectionProps): Promise<ReactNode> {
   const spread = await getDecileSpread(strategy.decileSpreadCsv);
   if (spread.length === 0) return null;
 
   const bars = spread.map((p) => ({
     label: `Decile ${p.decile}`,
     value: p.fwdReturn,
+    // fwdReturn is already in percentage points (e.g. 4.12 = 4.12%), not a fraction
     valueLabel: `${p.fwdReturn.toFixed(2)}%`,
     highlight: p.decile === 10,
   }));
