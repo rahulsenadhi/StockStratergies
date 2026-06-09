@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, readEquityCurveRaw, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel, getRecentBreakouts, getDecileSpread, getMonthlyReturns } from "@/lib/data/strategies";
 import { barWidthPct } from "@/components/horizontal-bars";
+import { cellColor } from "@/components/monthly-heatmap";
 import path from "path";
 import os from "os";
 import { promises as fsp } from "fs";
@@ -510,5 +511,26 @@ describe("getMonthlyReturns", () => {
     expect(r[0].months[0]).toBeNull();
     expect(r[0].months[1]).toBeNull();
     expect(r[0].annual).toBeNull();
+  });
+});
+
+describe("cellColor", () => {
+  it("null -> transparent (muted blank)", () => {
+    expect(cellColor(null)).toBe("transparent");
+  });
+  it("zero -> green with zero intensity", () => {
+    expect(cellColor(0)).toBe("rgba(34,197,94,0)");
+  });
+  it("positive scales intensity to +10% full saturation", () => {
+    expect(cellColor(0.05)).toBe("rgba(34,197,94,0.5)");
+    expect(cellColor(0.10)).toBe("rgba(34,197,94,1)");
+  });
+  it("positive beyond +10% clamps to full", () => {
+    expect(cellColor(0.25)).toBe("rgba(34,197,94,1)");
+  });
+  it("negative uses red, magnitude scaled and clamped", () => {
+    expect(cellColor(-0.05)).toBe("rgba(239,68,68,0.5)");
+    expect(cellColor(-0.10)).toBe("rgba(239,68,68,1)");
+    expect(cellColor(-0.25)).toBe("rgba(239,68,68,1)");
   });
 });
