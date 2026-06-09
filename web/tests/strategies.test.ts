@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel, getRecentBreakouts, getDecileSpread } from "@/lib/data/strategies";
+import { barWidthPct } from "@/components/horizontal-bars";
 import path from "path";
 import os from "os";
 import { promises as fsp } from "fs";
@@ -394,5 +395,20 @@ describe("parity field mapping", () => {
     expect(m.funnelJson).toBeNull();
     expect(m.recentBreakoutsCsv).toBeNull();
     expect(m.decileSpreadCsv).toBeNull();
+  });
+});
+
+describe("barWidthPct", () => {
+  it("scales value against max", () => {
+    expect(barWidthPct(50, 100)).toBe(50);
+    expect(barWidthPct(100, 100)).toBe(100);
+  });
+  it("maxValue <= 0 -> 0 (no div-by-zero)", () => {
+    expect(barWidthPct(5, 0)).toBe(0);
+    expect(barWidthPct(5, -3)).toBe(0);
+  });
+  it("clamps to [0, 100]", () => {
+    expect(barWidthPct(-2, 100)).toBe(0);
+    expect(barWidthPct(150, 100)).toBe(100);
   });
 });
