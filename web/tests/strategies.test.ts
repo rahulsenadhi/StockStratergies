@@ -466,7 +466,7 @@ describe("getMonthlyReturns", () => {
 
   it("gap month is null; next present month compounds from last month-end", async () => {
     const [csv, dir] = await write([
-      "2024-01-31,100",
+      "2024-01-15,100",
       "2024-01-31,110",
       "2024-03-31,132",
     ]);

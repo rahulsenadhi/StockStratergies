@@ -178,77 +178,42 @@ export async function getMonthlyReturns(
   csv: string | null,
   dataDir: string = DEFAULT_DATA_DIR,
 ): Promise<MonthlyReturnsRow[]> {
-  if (!csv) return [];
-  try {
-    const txt = await fs.readFile(path.join(dataDir, csv), "utf-8");
-    const lines = txt.trim().split(/\r?\n/);
-    if (lines.length < 2) return [];
-    const header = lines[0].split(",").map((h) => h.trim());
-    const dateIdx = header.findIndex((h) => DATE_COLS.includes(h));
-    const di = dateIdx >= 0 ? dateIdx : 0;
-    let vi = -1;
-    for (const c of EQUITY_COLS) {
-      vi = header.indexOf(c);
-      if (vi >= 0) break;
-    }
-    if (vi < 0) {
-      const first = lines[1].split(",");
-      vi = header.findIndex((_, i) => i !== di && !Number.isNaN(Number(first[i])));
-    }
-    if (vi < 0) return [];
+  const curve = await readEquityCurveRaw(csv, dataDir);
+  if (curve.length < 2) return [];
 
-    // Parse all valid data points in file order.
-    const raw: EquityPoint[] = lines
-      .slice(1)
-      .map((l) => {
-        const cells = l.split(",");
-        return { time: String(cells[di] ?? "").slice(0, 10), value: Number(cells[vi]) };
-      })
-      .filter((p) => p.time !== "" && !Number.isNaN(p.value));
+  const anchor = curve[0].value; // series opening value
 
-    if (raw.length < 2) return [];
-
-    // Sort by date ascending.
-    raw.sort((a, b) => a.time.localeCompare(b.time));
-
-    // Series opening value: first raw value seen for the series.
-    const openingValue = raw[0].value;
-
-    // Month-end value per YYYY-MM: last value that month (last-wins after sort).
-    const monthEnds = new Map<string, number>();
-    for (const p of raw) {
-      monthEnds.set(p.time.slice(0, 7), p.value);
-    }
-
-    let prev = openingValue;
-
-    const byYear = new Map<number, MonthlyReturnsRow>();
-    for (const key of [...monthEnds.keys()].sort()) {
-      const year = Number(key.slice(0, 4));
-      const monthIdx = Number(key.slice(5, 7)) - 1; // 0-11
-      const monthEnd = monthEnds.get(key)!;
-      const r = prev > 0 ? monthEnd / prev - 1 : null;
-      prev = monthEnd; // advance anchor to this month-end regardless
-
-      let row = byYear.get(year);
-      if (!row) {
-        row = { year, months: Array(12).fill(null), annual: null };
-        byYear.set(year, row);
-      }
-      row.months[monthIdx] = r;
-    }
-
-    const rows = [...byYear.values()].sort((a, b) => a.year - b.year);
-    for (const row of rows) {
-      const present = row.months.filter((m): m is number => m != null);
-      row.annual = present.length
-        ? present.reduce((acc, m) => acc * (1 + m), 1) - 1
-        : null;
-    }
-    return rows;
-  } catch {
-    return [];
+  // Month-end value per YYYY-MM: last value that month (curve already sorted asc).
+  const monthEnds = new Map<string, number>();
+  for (const p of curve) {
+    monthEnds.set(p.time.slice(0, 7), p.value);
   }
+
+  let prev = anchor;
+  const byYear = new Map<number, MonthlyReturnsRow>();
+  for (const key of [...monthEnds.keys()].sort()) {
+    const year = Number(key.slice(0, 4));
+    const monthIdx = Number(key.slice(5, 7)) - 1; // 0-11
+    const monthEnd = monthEnds.get(key)!;
+    const r = prev > 0 ? monthEnd / prev - 1 : null;
+    prev = monthEnd; // advance anchor to this month-end regardless
+
+    let row = byYear.get(year);
+    if (!row) {
+      row = { year, months: Array(12).fill(null), annual: null };
+      byYear.set(year, row);
+    }
+    row.months[monthIdx] = r;
+  }
+
+  const rows = [...byYear.values()].sort((a, b) => a.year - b.year);
+  for (const row of rows) {
+    const present = row.months.filter((m): m is number => m != null);
+    row.annual = present.length
+      ? present.reduce((acc, m) => acc * (1 + m), 1) - 1
+      : null;
+  }
+  return rows;
 }
 
 export function computeDrawdown(curve: EquityPoint[]): EquityPoint[] {
