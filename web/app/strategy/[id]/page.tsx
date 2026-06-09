@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getStrategy, getEquityCurve, computeDrawdown, getTrades } from "@/lib/data/strategies";
+import { getStrategy, getEquityCurve, computeDrawdown, getTrades, getMonthlyReturns } from "@/lib/data/strategies";
 import { LineChart } from "@/components/line-chart";
 import { KpiStrip } from "@/components/kpi-strip";
 import { TradesTable } from "@/components/trades-table";
 import { StrategySection } from "@/components/strategy-sections";
+import { MonthlyHeatmap } from "@/components/monthly-heatmap";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export default async function StrategyPage({ params }: { params: Promise<{ id: s
   const curve = await getEquityCurve(s.equityCsv);
   const dd = computeDrawdown(curve);
   const trades = await getTrades(s.tradesCsv);
+  const monthly = await getMonthlyReturns(s.equityCsv);
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-8">
@@ -33,6 +35,12 @@ export default async function StrategyPage({ params }: { params: Promise<{ id: s
         <h2 className="mb-2 text-lg font-semibold">Drawdown</h2>
         <LineChart data={dd} color="#ef4444" />
       </section>
+      {monthly.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-lg font-semibold">Monthly Returns</h2>
+          <MonthlyHeatmap rows={monthly} />
+        </section>
+      )}
       <section>
         <h2 className="mb-2 text-lg font-semibold">Trade History ({trades.rows.length})</h2>
         <TradesTable {...trades} />
