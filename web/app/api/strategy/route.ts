@@ -35,6 +35,7 @@ export async function POST(request: Request) {
 
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name) return bad("name is required");
+  if (name.length > 80) return bad("name is too long (max 80 characters)");
   const sid = deriveStrategyId(name);
   if (!SID_RE.test(sid)) return bad("name must contain letters, numbers, spaces or hyphens");
 
