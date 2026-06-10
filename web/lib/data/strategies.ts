@@ -531,6 +531,22 @@ export async function appendStrategyStub(
   await atomicWrite(idxPath, JSON.stringify(idx, null, 2));
 }
 
+/** Read strategies/{id}.json -> parsed object, or null if absent/unparseable.
+ *  Doubles as the user-created eligibility probe (built-ins have no spec file). */
+export async function getStrategySpec(
+  id: string, dataDir: string = DEFAULT_DATA_DIR,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const txt = await fs.readFile(path.join(dataDir, "strategies", `${id}.json`), "utf-8");
+    const parsed = JSON.parse(txt);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getRankings(
   csv: string | null,
   dataDir: string = DEFAULT_DATA_DIR,
