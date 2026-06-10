@@ -8,6 +8,7 @@ import {
   summarizeExits,
   writeStrategySpec,
   appendStrategyStub,
+  validateStrategyFields,
   type ExitsSpec,
   type StrategyStub,
 } from "@/lib/data/strategies";
@@ -45,20 +46,12 @@ export async function POST(request: Request) {
   const sid = deriveStrategyId(name);
   if (!SID_RE.test(sid)) return bad("name must contain letters, numbers, spaces or hyphens");
 
-  const entryFormula = typeof body.entry_formula === "string" ? body.entry_formula.trim() : "";
-  if (!entryFormula) return bad("entry formula is required");
+  const v = validateStrategyFields(body);
+  if (!v.ok) return bad(v.error);
 
+  const entryFormula = (body.entry_formula as string).trim();
   const exits: ExitsSpec = body.exits ?? {};
-  if (!exits.time_enabled && !exits.hard_stop_enabled && !exits.trail_enabled) {
-    return bad("enable at least one exit rule");
-  }
-
   const sizing = body.sizing ?? {};
-  const maxPositions = Number(sizing.max_positions);
-  const initialCash = Number(sizing.initial_cash);
-  if (!(maxPositions > 0) || !(initialCash > 0)) {
-    return bad("max positions and initial cash must be positive numbers");
-  }
 
   if (await getStrategy(sid)) {
     return NextResponse.json(

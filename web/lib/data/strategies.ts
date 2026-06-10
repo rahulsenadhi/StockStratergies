@@ -493,6 +493,34 @@ export function summarizeExits(ex: ExitsSpec): string {
   return parts.length ? parts.join(" · ") : "—";
 }
 
+export type StrategyFields = {
+  entry_formula?: unknown;
+  exits?: ExitsSpec;
+  sizing?: Record<string, unknown>;
+};
+
+export type ValidationResult = { ok: true } | { ok: false; error: string };
+
+/** Validate the spec fields shared by create + edit (NOT name/sid — those are
+ *  create-only). entry_formula required, >=1 exit enabled, sizing positive. */
+export function validateStrategyFields(body: StrategyFields): ValidationResult {
+  const entryFormula = typeof body.entry_formula === "string" ? body.entry_formula.trim() : "";
+  if (!entryFormula) return { ok: false, error: "entry formula is required" };
+
+  const exits: ExitsSpec = body.exits ?? {};
+  if (!exits.time_enabled && !exits.hard_stop_enabled && !exits.trail_enabled) {
+    return { ok: false, error: "enable at least one exit rule" };
+  }
+
+  const sizing = body.sizing ?? {};
+  const maxPositions = Number(sizing.max_positions);
+  const initialCash = Number(sizing.initial_cash);
+  if (!(maxPositions > 0) || !(initialCash > 0)) {
+    return { ok: false, error: "max positions and initial cash must be positive numbers" };
+  }
+  return { ok: true };
+}
+
 export type StrategyStub = {
   id: string; name: string; type: string; status: string; description: string;
   universe: string; entry_rule: string; exit_rule: string;

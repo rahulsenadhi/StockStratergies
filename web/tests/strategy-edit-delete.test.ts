@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import path from "node:path";
 import os from "node:os";
 import { promises as fsp } from "node:fs";
-import { getStrategySpec, updateStrategyIndexEntry, deleteStrategy } from "@/lib/data/strategies";
+import { getStrategySpec, updateStrategyIndexEntry, deleteStrategy, validateStrategyFields } from "@/lib/data/strategies";
 
 async function tmpDir(prefix: string): Promise<string> {
   return fsp.mkdtemp(path.join(os.tmpdir(), prefix));
@@ -89,5 +89,31 @@ describe("deleteStrategy", () => {
     await fsp.rm(path.join(dir, "strategies", "doomed.json"));
     await fsp.rm(path.join(dir, "doomed_trades.csv"));
     expect(await deleteStrategy("doomed", dir)).toBe(true);
+  });
+});
+
+describe("validateStrategyFields", () => {
+  const ok = {
+    entry_formula: "rsi_14 > 70",
+    exits: { time_enabled: true, time_days: 30 },
+    sizing: { max_positions: 5, initial_cash: 1_000_000 },
+  };
+  it("accepts a valid body", () => {
+    expect(validateStrategyFields(ok)).toEqual({ ok: true });
+  });
+  it("rejects an empty entry_formula", () => {
+    expect(validateStrategyFields({ ...ok, entry_formula: "  " })).toEqual({
+      ok: false, error: "entry formula is required",
+    });
+  });
+  it("rejects when no exit is enabled", () => {
+    expect(validateStrategyFields({ ...ok, exits: {} })).toEqual({
+      ok: false, error: "enable at least one exit rule",
+    });
+  });
+  it("rejects non-positive sizing", () => {
+    expect(validateStrategyFields({ ...ok, sizing: { max_positions: 0, initial_cash: 1 } })).toEqual({
+      ok: false, error: "max positions and initial cash must be positive numbers",
+    });
   });
 });
