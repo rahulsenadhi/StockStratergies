@@ -15,10 +15,10 @@
       "kpis_inline": {
         "cagr": 0.2160199156633329,
         "total_return": 0.798374773891138,
-        "volatility": 0.1392460501925541,
+        "volatility": 0.13924605019255404,
         "sharpe": 1.4830465320352835,
-        "max_dd": -0.11433567324304608,
-        "calmar": 1.889348350659852,
+        "max_dd": -0.11433567324304594,
+        "calmar": 1.8893483506598543,
         "win_rate": null,
         "num_trades": 36,
         "alpha": 0.15066948279078152,
@@ -27,9 +27,12 @@
       "last_run": "2026-06-01T12:42:00",
       "created": "2025-12-01",
       "page_key": "Monthly",
-      "kpis_updated": "2026-06-09T13:22:13",
+      "kpis_updated": "2026-06-10T05:14:50",
       "rank": 2,
-      "rank_score": 0.2291363850963109
+      "rank_score": 0.2291363481650198,
+      "backtest": [
+        "step2_backtest_momentum.py"
+      ]
     },
     {
       "id": "ipo_edge",
@@ -57,9 +60,9 @@
       "last_run": "2026-05-29T22:00:00",
       "created": "2025-08-01",
       "page_key": "IPO",
-      "kpis_updated": "2026-06-09T13:22:14",
+      "kpis_updated": "2026-06-10T05:14:50",
       "rank": 3,
-      "rank_score": -0.2195037556160435,
+      "rank_score": -0.21950379478421586,
       "backtest": [
         "ipo_edge_backtest.py"
       ]
@@ -93,9 +96,9 @@
       "last_run": "2026-06-01T13:55:00",
       "created": "2016-12-30",
       "page_key": "Momentum",
-      "kpis_updated": "2026-06-09T13:22:14",
+      "kpis_updated": "2026-06-10T05:14:50",
       "rank": 4,
-      "rank_score": -1.2708761976017324,
+      "rank_score": -1.2708761562819773,
       "backtest": [
         "momentum_edge_backtest.py"
       ]
@@ -116,8 +119,8 @@
       "kpis_inline": {
         "cagr": 0.26096073323615965,
         "total_return": 0.35624705857620986,
-        "volatility": 0.14608496509845775,
-        "sharpe": 2.4534779180932667,
+        "volatility": 0.146084944113341,
+        "sharpe": 2.453478252173318,
         "max_dd": -0.03119064845214803,
         "calmar": 8.366633788858849,
         "win_rate": 1.0,
@@ -128,9 +131,16 @@
       "last_run": "2026-05-27T00:27:00",
       "created": "2026-05-25",
       "page_key": "PEAD",
-      "kpis_updated": "2026-06-09T13:22:14",
+      "kpis_updated": "2026-06-10T05:14:50",
       "rank": 1,
-      "rank_score": 1.2841572066310962
+      "rank_score": 1.2841572377176755,
+      "backtest": [
+        "pead_backtest.py",
+        "--start",
+        "2022-01-01",
+        "--end",
+        "2026-12-31"
+      ]
     }
   ]
 }
