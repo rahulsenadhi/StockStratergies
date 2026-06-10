@@ -493,6 +493,34 @@ export function summarizeExits(ex: ExitsSpec): string {
   return parts.length ? parts.join(" · ") : "—";
 }
 
+export type StrategyFields = {
+  entry_formula?: unknown;
+  exits?: ExitsSpec;
+  sizing?: Record<string, unknown>;
+};
+
+export type ValidationResult = { ok: true } | { ok: false; error: string };
+
+/** Validate the spec fields shared by create + edit (NOT name/sid — those are
+ *  create-only). entry_formula required, >=1 exit enabled, sizing positive. */
+export function validateStrategyFields(body: StrategyFields): ValidationResult {
+  const entryFormula = typeof body.entry_formula === "string" ? body.entry_formula.trim() : "";
+  if (!entryFormula) return { ok: false, error: "entry formula is required" };
+
+  const exits: ExitsSpec = body.exits ?? {};
+  if (!exits.time_enabled && !exits.hard_stop_enabled && !exits.trail_enabled) {
+    return { ok: false, error: "enable at least one exit rule" };
+  }
+
+  const sizing = body.sizing ?? {};
+  const maxPositions = Number(sizing.max_positions);
+  const initialCash = Number(sizing.initial_cash);
+  if (!(maxPositions > 0) || !(initialCash > 0)) {
+    return { ok: false, error: "max positions and initial cash must be positive numbers" };
+  }
+  return { ok: true };
+}
+
 export type StrategyStub = {
   id: string; name: string; type: string; status: string; description: string;
   universe: string; entry_rule: string; exit_rule: string;
@@ -529,6 +557,70 @@ export async function appendStrategyStub(
   }
   idx.strategies.push(stub);
   await atomicWrite(idxPath, JSON.stringify(idx, null, 2));
+}
+
+/** Read strategies/{id}.json -> parsed object, or null if absent/unparseable.
+ *  Doubles as the user-created eligibility probe (built-ins have no spec file). */
+export async function getStrategySpec(
+  id: string, dataDir: string = DEFAULT_DATA_DIR,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const txt = await fs.readFile(path.join(dataDir, "strategies", `${id}.json`), "utf-8");
+    const parsed = JSON.parse(txt);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Shallow-merge `patch` into the strategies_index.json entry with `id`.
+ *  Throws if the id is absent. Atomic write, indent=2 (matches refresh_all). */
+export async function updateStrategyIndexEntry(
+  id: string, patch: Record<string, unknown>, dataDir: string = DEFAULT_DATA_DIR,
+): Promise<void> {
+  const idxPath = path.join(dataDir, "strategies_index.json");
+  const idx = JSON.parse(await fs.readFile(idxPath, "utf-8")) as {
+    strategies: Array<Record<string, unknown> & { id: string }>;
+  };
+  const i = idx.strategies.findIndex((s) => s.id === id);
+  if (i < 0) throw new Error(`strategy not found: ${id}`);
+  idx.strategies[i] = { ...idx.strategies[i], ...patch };
+  await atomicWrite(idxPath, JSON.stringify(idx, null, 2));
+}
+
+/** Remove a strategy: index entry + strategies/{id}.json + its trades_csv/equity_csv.
+ *  Returns false if the id is absent. File unlinks are best-effort (swallow ENOENT). */
+export async function deleteStrategy(
+  id: string, dataDir: string = DEFAULT_DATA_DIR,
+): Promise<boolean> {
+  const idxPath = path.join(dataDir, "strategies_index.json");
+  const idx = JSON.parse(await fs.readFile(idxPath, "utf-8")) as {
+    strategies: Array<Record<string, unknown> & { id: string }>;
+  };
+  const entry = idx.strategies.find((s) => s.id === id);
+  if (!entry) return false;
+
+  const csvs = [entry.trades_csv, entry.equity_csv].filter(
+    (c): c is string => typeof c === "string" && c !== "",
+  );
+  idx.strategies = idx.strategies.filter((s) => s.id !== id);
+  await atomicWrite(idxPath, JSON.stringify(idx, null, 2));
+
+  const unlinkQuiet = async (p: string) => {
+    try {
+      await fs.unlink(path.join(dataDir, p));
+    } catch {
+      // already gone — best-effort
+    }
+  };
+  await unlinkQuiet(path.join("strategies", `${id}.json`));
+  // generic_backtest.py writes strategies/{id}_kpis.csv but does not record it in the
+  // index entry (KPIs live in kpis_inline), so remove it by convention too.
+  await unlinkQuiet(path.join("strategies", `${id}_kpis.csv`));
+  for (const c of csvs) await unlinkQuiet(c);
+  return true;
 }
 
 export async function getRankings(

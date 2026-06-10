@@ -14,7 +14,7 @@ export interface JobStreamResult {
 }
 
 /**
- * POST to `url`, then read the SSE stream, invoking handlers per progress line,
+ * POST (or PUT) to `url`, then read the SSE stream, invoking handlers per progress line,
  * and resolve with the terminal `done` payload. Non-stream responses (validation
  * errors / 409) are returned as plain JSON.
  */
@@ -22,9 +22,10 @@ export async function runJobStream(
   url: string,
   body?: unknown,
   handlers: JobStreamHandlers = {},
+  method: "POST" | "PUT" = "POST",
 ): Promise<JobStreamResult> {
   const res = await fetch(url, {
-    method: "POST",
+    method,
     headers: body !== undefined ? { "content-type": "application/json" } : undefined,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });

@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getStrategy, getEquityCurve, computeDrawdown, getTrades, getMonthlyReturns } from "@/lib/data/strategies";
+import { getStrategy, getEquityCurve, computeDrawdown, getTrades, getMonthlyReturns, getStrategySpec } from "@/lib/data/strategies";
 import { LineChart } from "@/components/line-chart";
 import { KpiStrip } from "@/components/kpi-strip";
 import { TradesTable } from "@/components/trades-table";
 import { StrategySection } from "@/components/strategy-sections";
 import { MonthlyHeatmap } from "@/components/monthly-heatmap";
 import { BacktestButton } from "@/components/backtest-button";
+import { DeleteStrategyButton } from "@/components/delete-strategy-button";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,8 @@ export default async function StrategyPage({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const s = await getStrategy(id);
   if (!s) notFound();
+
+  const spec = await getStrategySpec(id);
 
   const curve = await getEquityCurve(s.equityCsv);
   const dd = computeDrawdown(curve);
@@ -28,7 +31,12 @@ export default async function StrategyPage({ params }: { params: Promise<{ id: s
           <h1 className="text-2xl font-bold">{s.name}</h1>
           <p className="text-sm text-muted-foreground">{s.type} · {s.status}</p>
         </div>
-        {s.backtest && <BacktestButton strategyId={s.id} />}
+        <div className="flex items-center gap-2">
+          {spec && <Link href={`/strategy/${id}/edit`} className="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent">Edit</Link>}
+          {spec && <Link href={`/strategy/new?from=${id}`} className="rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent">Clone</Link>}
+          {spec && <DeleteStrategyButton id={id} />}
+          {s.backtest && <BacktestButton strategyId={s.id} />}
+        </div>
       </div>
       <KpiStrip kpis={s.kpis} />
       <section>
