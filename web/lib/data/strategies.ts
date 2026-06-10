@@ -493,6 +493,44 @@ export function summarizeExits(ex: ExitsSpec): string {
   return parts.length ? parts.join(" · ") : "—";
 }
 
+export type StrategyStub = {
+  id: string; name: string; type: string; status: string; description: string;
+  universe: string; entry_rule: string; exit_rule: string;
+  sizing: Record<string, unknown>;
+  trades_csv: string; equity_csv: string; kpis_inline: Record<string, never>;
+  last_run: string; created: string; page_key: string;
+};
+
+async function atomicWrite(filePath: string, contents: string): Promise<void> {
+  const tmp = `${filePath}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, contents);
+  await fs.rename(tmp, filePath);
+}
+
+/** Atomically write strategies/{sid}.json under dataDir. */
+export async function writeStrategySpec(
+  sid: string, spec: unknown, dataDir: string = DEFAULT_DATA_DIR,
+): Promise<void> {
+  const specDir = path.join(dataDir, "strategies");
+  await fs.mkdir(specDir, { recursive: true });
+  await atomicWrite(path.join(specDir, `${sid}.json`), JSON.stringify(spec, null, 2));
+}
+
+/** Append a Research stub to strategies_index.json; throws if the id already exists. */
+export async function appendStrategyStub(
+  stub: StrategyStub, dataDir: string = DEFAULT_DATA_DIR,
+): Promise<void> {
+  const idxPath = path.join(dataDir, "strategies_index.json");
+  const idx = JSON.parse(await fs.readFile(idxPath, "utf-8")) as {
+    strategies: Array<{ id: string }>;
+  };
+  if (idx.strategies.some((s) => s.id === stub.id)) {
+    throw new Error(`strategy id already exists: ${stub.id}`);
+  }
+  idx.strategies.push(stub);
+  await atomicWrite(idxPath, JSON.stringify(idx, null, 2));
+}
+
 export async function getRankings(
   csv: string | null,
   dataDir: string = DEFAULT_DATA_DIR,
