@@ -14,22 +14,22 @@
       "live_signals_csv": "live_rankings.csv",
       "kpis_inline": {
         "cagr": 0.2160199156633329,
-        "total_return": 0.798374773891138,
-        "volatility": 0.13924605019255404,
-        "sharpe": 1.4830465320352835,
-        "max_dd": -0.11433567324304594,
-        "calmar": 1.8893483506598543,
+        "total_return": 0.7983747738911375,
+        "volatility": 0.13924605019255412,
+        "sharpe": 1.4830465320352826,
+        "max_dd": -0.11433567324304612,
+        "calmar": 1.8893483506598514,
         "win_rate": null,
         "num_trades": 36,
         "alpha": 0.15066948279078152,
-        "final_equity": 89918.7386945569
+        "final_equity": 89918.73869455687
       },
       "last_run": "2026-06-01T12:42:00",
       "created": "2025-12-01",
       "page_key": "Monthly",
-      "kpis_updated": "2026-06-10T05:24:33",
+      "kpis_updated": "2026-06-10T07:32:46",
       "rank": 2,
-      "rank_score": 0.2291363481650198,
+      "rank_score": 0.22913634816501893,
       "backtest": [
         "step2_backtest_momentum.py"
       ]
@@ -60,9 +60,9 @@
       "last_run": "2026-05-29T22:00:00",
       "created": "2025-08-01",
       "page_key": "IPO",
-      "kpis_updated": "2026-06-10T05:24:33",
+      "kpis_updated": "2026-06-10T07:32:46",
       "rank": 3,
-      "rank_score": -0.21950379478421586,
+      "rank_score": -0.2195037947842158,
       "backtest": [
         "ipo_edge_backtest.py"
       ]
@@ -96,9 +96,9 @@
       "last_run": "2026-06-01T13:55:00",
       "created": "2016-12-30",
       "page_key": "Momentum",
-      "kpis_updated": "2026-06-10T05:24:33",
+      "kpis_updated": "2026-06-10T07:32:47",
       "rank": 4,
-      "rank_score": -1.2708761562819773,
+      "rank_score": -1.270876156281977,
       "backtest": [
         "momentum_edge_backtest.py"
       ]
@@ -131,9 +131,9 @@
       "last_run": "2026-05-27T00:27:00",
       "created": "2026-05-25",
       "page_key": "PEAD",
-      "kpis_updated": "2026-06-10T05:24:33",
+      "kpis_updated": "2026-06-10T07:32:47",
       "rank": 1,
-      "rank_score": 1.2841572377176755,
+      "rank_score": 1.2841572377176758,
       "backtest": [
         "pead_backtest.py",
         "--start",
