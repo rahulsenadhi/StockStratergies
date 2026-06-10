@@ -5,26 +5,54 @@ import { useRouter } from "next/navigation";
 import { runJobStream } from "@/lib/use-job-stream";
 import { JobProgress } from "@/components/job-progress";
 
-export function StrategyForm() {
+export interface StrategyFormValues {
+  name: string;
+  type: string;
+  description: string;
+  universe: string;
+  entryFormula: string;
+  timeEnabled: boolean; timeDays: number;
+  hardStopEnabled: boolean; hardStopPct: number;
+  trailEnabled: boolean; trailPct: number;
+  maxPositions: number; initialCash: number;
+}
+
+const DEFAULTS: StrategyFormValues = {
+  name: "", type: "Momentum", description: "", universe: "Nifty 50", entryFormula: "",
+  timeEnabled: true, timeDays: 30,
+  hardStopEnabled: true, hardStopPct: 8,
+  trailEnabled: false, trailPct: 12,
+  maxPositions: 5, initialCash: 1000000,
+};
+
+export interface StrategyFormProps {
+  mode?: "create" | "edit";
+  initial?: Partial<StrategyFormValues>;
+  strategyId?: string;
+  lockName?: boolean;
+}
+
+export function StrategyForm({ mode = "create", initial, strategyId, lockName }: StrategyFormProps) {
   const router = useRouter();
+  const init = { ...DEFAULTS, ...initial };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [phase, setPhase] = useState<string | null>(null);
 
-  const [name, setName] = useState("");
-  const [type, setType] = useState("Momentum");
-  const [description, setDescription] = useState("");
-  const [universe, setUniverse] = useState("Nifty 50");
-  const [entryFormula, setEntryFormula] = useState("");
-  const [timeEnabled, setTimeEnabled] = useState(true);
-  const [timeDays, setTimeDays] = useState(30);
-  const [hardStopEnabled, setHardStopEnabled] = useState(true);
-  const [hardStopPct, setHardStopPct] = useState(8);
-  const [trailEnabled, setTrailEnabled] = useState(false);
-  const [trailPct, setTrailPct] = useState(12);
-  const [maxPositions, setMaxPositions] = useState(5);
-  const [initialCash, setInitialCash] = useState(1000000);
+  const [name, setName] = useState(init.name);
+  const [type, setType] = useState(init.type);
+  const [description, setDescription] = useState(init.description);
+  const [universe, setUniverse] = useState(init.universe);
+  const [entryFormula, setEntryFormula] = useState(init.entryFormula);
+  const [timeEnabled, setTimeEnabled] = useState(init.timeEnabled);
+  const [timeDays, setTimeDays] = useState(init.timeDays);
+  const [hardStopEnabled, setHardStopEnabled] = useState(init.hardStopEnabled);
+  const [hardStopPct, setHardStopPct] = useState(init.hardStopPct);
+  const [trailEnabled, setTrailEnabled] = useState(init.trailEnabled);
+  const [trailPct, setTrailPct] = useState(init.trailPct);
+  const [maxPositions, setMaxPositions] = useState(init.maxPositions);
+  const [initialCash, setInitialCash] = useState(init.initialCash);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,7 +61,9 @@ export function StrategyForm() {
     setLines([]);
     setPhase(null);
     try {
-      const res = await runJobStream("/api/strategy", {
+      const url = mode === "edit" ? `/api/strategy/${strategyId}` : "/api/strategy";
+      const httpMethod = mode === "edit" ? "PUT" : "POST";
+      const res = await runJobStream(url, {
         name, type, description, universe,
         entry_formula: entryFormula,
         exits: {
@@ -48,12 +78,12 @@ export function StrategyForm() {
       }, {
         onLine: (l) => setLines((prev) => [...prev.slice(-199), l]),
         onPhase: (p) => setPhase(p),
-      });
+      }, httpMethod);
       const data = res.data as { ok?: boolean; sid?: string; error?: string };
-      if (res.ok && data.ok && data.sid) {
-        router.push(`/strategy/${data.sid}`);
+      if (res.ok && data.ok) {
+        router.push(`/strategy/${mode === "edit" ? strategyId : data.sid}`);
       } else {
-        setError(data.error ?? `Create failed (${res.status})`);
+        setError(data.error ?? `${mode === "edit" ? "Save" : "Create"} failed (${res.status})`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error");
@@ -64,11 +94,15 @@ export function StrategyForm() {
   }
 
   const field = "rounded-md border px-3 py-1.5 text-sm w-full";
+  const submitLabel = mode === "edit"
+    ? (loading ? "Saving & re-backtesting…" : "Save changes")
+    : (loading ? "Creating & backtesting…" : "Create strategy");
   return (
     <form onSubmit={onSubmit} className="max-w-xl space-y-4">
       <label className="block">
         <span className="text-sm font-medium">Name</span>
-        <input className={field} value={name} onChange={(e) => setName(e.target.value)} required />
+        <input className={field} value={name} onChange={(e) => setName(e.target.value)}
+          required readOnly={lockName} disabled={lockName} />
       </label>
       <label className="block">
         <span className="text-sm font-medium">Type</span>
@@ -127,7 +161,7 @@ export function StrategyForm() {
 
       <button type="submit" disabled={loading}
         className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50">
-        {loading ? "Creating & backtesting…" : "Create strategy"}
+        {submitLabel}
       </button>
       {loading && <JobProgress phase={phase} lines={lines} />}
       {error && <p className="text-sm text-red-500">{error}</p>}
