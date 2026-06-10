@@ -545,6 +545,10 @@ describe("mapStrategy backtest field", () => {
     expect(mapStrategy({ id: "y" }).backtest).toBeNull();
     expect(mapStrategy({ id: "z", backtest: "nope" }).backtest).toBeNull();
   });
+  it("rejects arrays with non-string elements", () => {
+    expect(mapStrategy({ id: "w", backtest: [42] }).backtest).toBeNull();
+    expect(mapStrategy({ id: "v", backtest: ["a.py", 1] }).backtest).toBeNull();
+  });
 });
 
 describe("compareCells", () => {

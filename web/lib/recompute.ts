@@ -34,7 +34,7 @@ const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(
  */
 export function runRecompute(
   spawnFn: SpawnFn,
-  opts: { bin: string; args: string[]; cwd: string; timeoutMs: number },
+  opts: { bin: string; args: string[]; cwd: string; timeoutMs: number; label?: string },
 ): Promise<{ status: number; body: RecomputeResult }> {
   return new Promise((resolve) => {
     const start = Date.now();
@@ -55,7 +55,7 @@ export function runRecompute(
       } catch {
         // ignore kill failure; we're already timing out
       }
-      done(504, { ok: false, error: "Recompute timed out" });
+      done(504, { ok: false, error: `${opts.label ?? "Job"} timed out` });
     }, opts.timeoutMs);
 
     try {

@@ -18,7 +18,7 @@ export async function POST() {
     const { bin, args, cwd } = resolveRecompute(process.env, process.cwd());
     const { status, body } = await runRecompute(
       (b, a, o) => spawn(b, a, o) as unknown as SpawnedChild,
-      { bin, args, cwd, timeoutMs: TIMEOUT_MS },
+      { bin, args, cwd, timeoutMs: TIMEOUT_MS, label: "Recompute" },
     );
     return NextResponse.json(body, { status });
   } finally {

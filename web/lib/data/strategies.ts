@@ -79,7 +79,10 @@ export function mapStrategy(raw: any): Strategy {
     funnelJson: raw.funnel_json ?? null,
     recentBreakoutsCsv: raw.recent_breakouts_csv ?? null,
     decileSpreadCsv: raw.decile_spread_csv ?? null,
-    backtest: Array.isArray(raw.backtest) ? raw.backtest : null,
+    backtest:
+      Array.isArray(raw.backtest) && raw.backtest.every((x: unknown) => typeof x === "string")
+        ? raw.backtest
+        : null,
   };
   if (raw.kpis_error) s.kpisError = raw.kpis_error;
   return s;

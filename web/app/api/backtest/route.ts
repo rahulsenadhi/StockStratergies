@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { runRecompute, resolveBacktest, type SpawnedChild } from "@/lib/recompute";
+import { runRecompute, resolveBacktest, resolveRecompute, type SpawnedChild } from "@/lib/recompute";
 import { getStrategy } from "@/lib/data/strategies";
 import { tryAcquire, release } from "@/lib/job-lock";
 
@@ -55,17 +55,18 @@ export async function POST(request: Request) {
     const backtestRun = await runRecompute(spawnChild, {
       ...bt,
       timeoutMs: BACKTEST_TIMEOUT_MS,
+      label: "Backtest",
     });
     if (backtestRun.status !== 200) {
       return NextResponse.json(backtestRun.body, { status: backtestRun.status });
     }
 
     // Step 2: chain a recompute to refresh KPIs + rank in the index.
+    const rc = resolveRecompute(process.env, process.cwd());
     const recomputeRun = await runRecompute(spawnChild, {
-      bin: bt.bin,
-      args: ["-m", "core.leaderboard"],
-      cwd: repoRoot,
+      ...rc,
       timeoutMs: RECOMPUTE_TIMEOUT_MS,
+      label: "Recompute",
     });
     return NextResponse.json(recomputeRun.body, { status: recomputeRun.status });
   } finally {
