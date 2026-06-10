@@ -547,6 +547,21 @@ export async function getStrategySpec(
   }
 }
 
+/** Shallow-merge `patch` into the strategies_index.json entry with `id`.
+ *  Throws if the id is absent. Atomic write, indent=2 (matches refresh_all). */
+export async function updateStrategyIndexEntry(
+  id: string, patch: Record<string, unknown>, dataDir: string = DEFAULT_DATA_DIR,
+): Promise<void> {
+  const idxPath = path.join(dataDir, "strategies_index.json");
+  const idx = JSON.parse(await fs.readFile(idxPath, "utf-8")) as {
+    strategies: Array<Record<string, unknown> & { id: string }>;
+  };
+  const i = idx.strategies.findIndex((s) => s.id === id);
+  if (i < 0) throw new Error(`strategy not found: ${id}`);
+  idx.strategies[i] = { ...idx.strategies[i], ...patch };
+  await atomicWrite(idxPath, JSON.stringify(idx, null, 2));
+}
+
 export async function getRankings(
   csv: string | null,
   dataDir: string = DEFAULT_DATA_DIR,
