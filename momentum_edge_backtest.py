@@ -497,6 +497,65 @@ def check_volume_and_breakout(row: pd.Series, cfg: dict) -> bool:
     return True
 
 
+def _entry_eligibility(ind: pd.DataFrame, cfg: dict) -> np.ndarray:
+    """Vectorized per-bar eligibility = check_filters AND check_volume_and_breakout.
+
+    PERF: the entry scan in run_backtest tests every ticker on every date. Calling
+    check_filters/check_volume_and_breakout on a pandas row (ind.loc[date]) per bar
+    was the dominant remaining cost (millions of fast_xs/get_loc calls). This
+    computes the same boolean over the whole history once with numpy. Must stay a
+    FAITHFUL port of both functions above — including NaN handling and the
+    volume/choppiness edge cases — verified by golden-output diff.
+    """
+    n = len(ind)
+
+    def num(name: str) -> np.ndarray:
+        return ind[name].to_numpy(dtype=float) if name in ind.columns else np.full(n, np.nan)
+
+    close       = num('close')
+    sma50       = num('sma50')
+    sma150      = num('sma150')
+    ema220      = num('ema220')
+    low52w      = num('low52w')
+    vol_avg50_s = num('vol_avg50_s')
+    high52w_s   = num('high52w_s')
+    chop_s      = num('choppiness_s')
+
+    # volume: check_volume uses row.get('volume', row.get('volume_s')) — prefer the
+    # 'volume' column if it EXISTS (NaN values still count), else fall back.
+    if 'volume' in ind.columns:
+        vol_today = ind['volume'].to_numpy(dtype=float)
+    elif 'volume_s' in ind.columns:
+        vol_today = ind['volume_s'].to_numpy(dtype=float)
+    else:
+        vol_today = np.full(n, np.nan)
+
+    if 'had_ema_dip_s' in ind.columns:
+        had_dip = ind['had_ema_dip_s'].to_numpy().astype(bool)
+    else:
+        had_dip = np.zeros(n, dtype=bool)
+
+    with np.errstate(invalid='ignore'):
+        ok = ~(np.isnan(sma50) | np.isnan(sma150) | np.isnan(ema220)
+               | np.isnan(low52w) | np.isnan(close) | np.isnan(vol_avg50_s))
+        ok &= sma150 > ema220                                   # F1
+        ok &= close > sma50                                     # F2
+        ok &= sma50 > sma150                                    # F3
+        ok &= close >= cfg['min_price_vs_low'] * low52w         # F4
+        ok &= had_dip                                           # F5
+        # F6: fail only when choppiness present (non-NaN) AND above threshold
+        ok &= ~((~np.isnan(chop_s)) & (chop_s > cfg['choppiness_threshold']))
+
+        # check_volume_and_breakout
+        if cfg.get('vol_filter', True):
+            ok &= (~np.isnan(vol_today)) & (~np.isnan(vol_avg50_s)) & (vol_avg50_s > 0)
+            ok &= vol_today >= cfg.get('vol_multiplier', 1.5) * vol_avg50_s
+        ok &= (~np.isnan(high52w_s)) & (close > high52w_s)      # B2/B10: strict >
+        ok &= close >= ema220                                   # above EMA220 today
+
+    return ok
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  SEQUENTIAL SIGNAL VALIDATION
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -699,6 +758,41 @@ def run_backtest(indicators: dict[str, pd.DataFrame],
             print(f'    Validated {t_idx+1}/{len(all_tickers)}…', end='\r', flush=True)
     print(f'    Done. Sequential pattern found in {len(seq_first_valid)} of {len(all_tickers)} stocks.')
 
+    # PERF: precompute per-ticker numpy caches for the daily entry scan (section 6).
+    # Old code did ind.loc[date] + check_filters + check_volume_and_breakout for
+    # EVERY ticker on EVERY date (millions of pandas fast_xs/get_loc calls). Now:
+    #   tk_pos[t]   — {date: integer position} for O(1) date→row lookup
+    #   tk_elig[t]  — bool array: passes filters+volume/breakout (vectorized once)
+    #   tk_score[t] — only the columns score_signal_v2 / all_mom read, as numpy
+    # The full pandas row is never materialized in the scan; passing candidates get
+    # a tiny dict (score_signal_v2 uses .get, so a dict works unchanged).
+    tk_pos:   dict[str, dict] = {}
+    tk_elig:  dict[str, np.ndarray] = {}
+    tk_score: dict[str, dict] = {}
+    for ticker in all_tickers:
+        ind = indicators[ticker]
+        idx = ind.index
+        nrow = len(idx)
+        tk_pos[ticker]  = {d: i for i, d in enumerate(idx)}
+        tk_elig[ticker] = _entry_eligibility(ind, cfg)
+
+        # Store ONLY columns that exist, so a candidate's row_like (built below)
+        # has the same .get() fallback behavior as the original pandas row —
+        # e.g. score_signal_v2 expects row.get('breakout_ref_s', 0) → 0 when that
+        # column is absent, not NaN.
+        sc = {c: ind[c].to_numpy(dtype=float)
+              for c in ('momentum_6m_s', 'ath_prev', 'breakout_ref_s',
+                        'close_s', 'vol_avg50_s')
+              if c in ind.columns}
+        # volume: mirror row.get('volume', row.get('volume_s', 0)) preference
+        if 'volume' in ind.columns:
+            sc['volume'] = ind['volume'].to_numpy(dtype=float)
+        elif 'volume_s' in ind.columns:
+            sc['volume'] = ind['volume_s'].to_numpy(dtype=float)
+        if 'entry_type' in ind.columns:
+            sc['entry_type'] = ind['entry_type'].to_numpy(dtype=object)
+        tk_score[ticker] = sc
+
     for i, date in enumerate(all_dates):
 
         # ── 1. Execute exits queued from previous close ────────────────────────
@@ -831,14 +925,11 @@ def run_backtest(indicators: dict[str, pd.DataFrame],
         for ticker in all_tickers:
             if ticker in positions or ticker in entry_queue:
                 continue
-            ind = indicators.get(ticker)
-            if ind is None or date not in ind.index:
+            pos = tk_pos[ticker].get(date)
+            if pos is None:
                 continue
-            row = ind.loc[date]
-
-            # F1-F6 filters
-            passed, _ = check_filters(row, cfg)
-            if not passed:
+            # F1-F6 filters + volume/breakout (vectorized; same AND of all checks)
+            if not tk_elig[ticker][pos]:
                 continue
 
             # B6 FIX: sequential check — only valid on/after first-valid-date
@@ -847,9 +938,10 @@ def run_backtest(indicators: dict[str, pd.DataFrame],
                 continue
             _, rec_label, rec_days = seq_entry
 
-            # Volume + breakout
-            if not check_volume_and_breakout(row, cfg):
-                continue
+            # Build a minimal dict row from numpy caches (score_signal_v2 uses .get,
+            # so a dict matches the old pandas row — including absent-column defaults).
+            sc = tk_score[ticker]
+            row = {k: arr[pos] for k, arr in sc.items()}
 
             mom = row.get('momentum_6m_s') or 0
             all_mom.append(mom)
