@@ -10,6 +10,7 @@ function makeFakeChild() {
     killed: boolean;
   };
   child.stderr = new EventEmitter();
+  (child as unknown as { stdout: EventEmitter }).stdout = new EventEmitter();
   child.killed = false;
   child.kill = () => {
     child.killed = true;
@@ -73,6 +74,34 @@ describe("runRecompute", () => {
     );
     expect(r.status).toBe(500);
     expect(r.body).toEqual({ ok: false, error: "cannot spawn" });
+  });
+});
+
+describe("runRecompute onLine", () => {
+  it("emits complete stdout lines, splitting on \\n and \\r, buffering partials", async () => {
+    const child = makeFakeChild();
+    const stdout = (child as unknown as { stdout: EventEmitter }).stdout;
+    const lines: string[] = [];
+    const p = runRecompute(() => child as unknown as SpawnedChild, {
+      bin: "python", args: [], cwd: ".", timeoutMs: 1000,
+      onLine: (l) => lines.push(l),
+    });
+    stdout.emit("data", "Loading\n[1/5] x\rVali");
+    stdout.emit("data", "dated 200\n");
+    child.emit("exit", 0);
+    await p;
+    expect(lines).toEqual(["Loading", "[1/5] x", "Validated 200"]);
+  });
+
+  it("does not throw when the child has no stdout (back-compat)", async () => {
+    const child = makeFakeChild();
+    delete (child as unknown as { stdout?: unknown }).stdout;
+    const p = runRecompute(() => child as unknown as SpawnedChild, {
+      bin: "python", args: [], cwd: ".", timeoutMs: 1000, onLine: () => {},
+    });
+    child.emit("exit", 0);
+    const r = await p;
+    expect(r.status).toBe(200);
   });
 });
 

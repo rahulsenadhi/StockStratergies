@@ -4,8 +4,10 @@ export type RecomputeResult =
   | { ok: true; durationMs: number }
   | { ok: false; error: string };
 
-/** Minimal shape of a spawned child that runRecompute needs (real child_process.spawn matches it). */
+/** Minimal shape of a spawned child that runRecompute needs (real child_process.spawn matches it).
+ *  stdout is optional: existing test fakes omit it, and we read it defensively. */
 export interface SpawnedChild {
+  stdout?: { on(event: "data", listener: (chunk: unknown) => void): void };
   stderr: { on(event: "data", listener: (chunk: unknown) => void): void };
   on(event: "exit", listener: (code: number | null) => void): void;
   on(event: "error", listener: (err: Error) => void): void;
@@ -34,7 +36,7 @@ const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(
  */
 export function runRecompute(
   spawnFn: SpawnFn,
-  opts: { bin: string; args: string[]; cwd: string; timeoutMs: number; label?: string },
+  opts: { bin: string; args: string[]; cwd: string; timeoutMs: number; label?: string; onLine?: (line: string) => void },
 ): Promise<{ status: number; body: RecomputeResult }> {
   return new Promise((resolve) => {
     const start = Date.now();
@@ -68,8 +70,23 @@ export function runRecompute(
     child.stderr.on("data", (c) => {
       stderr += String(c);
     });
+
+    // Stream stdout to onLine as complete lines (split on \n and \r progress runs).
+    let outBuf = "";
+    const pump = (flush: boolean) => {
+      if (!opts.onLine) return;
+      const parts = outBuf.split(/\r\n|\r|\n/);
+      outBuf = flush ? "" : (parts.pop() ?? "");
+      for (const line of parts) if (line.length > 0) opts.onLine(line);
+    };
+    child.stdout?.on("data", (c) => {
+      outBuf += String(c);
+      pump(false);
+    });
+
     child.on("error", (e) => done(500, { ok: false, error: errMsg(e) }));
     child.on("exit", (code) => {
+      pump(true);
       if (code === 0) done(200, { ok: true, durationMs: Date.now() - start });
       else done(500, { ok: false, error: stderr.trim() || `exit ${code}` });
     });
