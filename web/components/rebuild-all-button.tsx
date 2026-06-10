@@ -7,6 +7,7 @@ interface RebuildAllResponse {
   ok?: boolean;
   ran?: string[];
   failed?: { id: string; error: string }[];
+  recompute?: { status: number; error?: string };
   error?: string;
 }
 
@@ -34,6 +35,9 @@ export function RebuildAllButton() {
       if (failed.length > 0) {
         setIsError(true);
         setSummary(`Rebuilt ${ran} · failed: ${failed.map((f) => f.id).join(", ")}`);
+      } else if (data.ok === false) {
+        setIsError(true);
+        setSummary(`Rebuilt ${ran} · recompute failed`);
       } else {
         setSummary(`Rebuilt ${ran}`);
       }
