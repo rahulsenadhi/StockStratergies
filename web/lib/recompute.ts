@@ -75,3 +75,31 @@ export function runRecompute(
     });
   });
 }
+
+/**
+ * Resolve a strategy's declarative backtest argv (from the trusted index, NOT the request)
+ * to a spawn command. Validates defensively: repo-relative .py first arg, no absolute path,
+ * no ".." traversal, no shell metacharacters anywhere. Throws on invalid/missing argv.
+ */
+export function resolveBacktest(
+  argv: string[] | null,
+  repoRoot: string,
+  env: { PYTHON_BIN?: string },
+): { bin: string; args: string[]; cwd: string } {
+  if (!argv || argv.length === 0) throw new Error("no backtest command configured");
+  const script = argv[0];
+  if (
+    script.startsWith("/") ||
+    /^[a-zA-Z]:/.test(script) || // windows absolute (C:\...)
+    script.includes("..") ||
+    !script.endsWith(".py") ||
+    /[;&|`$<>\n]/.test(argv.join(" ")) // shell metacharacters anywhere
+  ) {
+    throw new Error(`unsafe backtest command: ${script}`);
+  }
+  return {
+    bin: env.PYTHON_BIN ?? "python",
+    args: argv,
+    cwd: repoRoot,
+  };
+}
