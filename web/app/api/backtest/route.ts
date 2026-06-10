@@ -7,7 +7,8 @@ import { tryAcquire, release } from "@/lib/job-lock";
 
 export const dynamic = "force-dynamic";
 
-const BACKTEST_TIMEOUT_MS = 600_000;
+// momentum_edge runs ~563s standalone and exceeds 600s under Rebuild All contention; 20min gives margin
+const BACKTEST_TIMEOUT_MS = 1_200_000;
 const RECOMPUTE_TIMEOUT_MS = 120_000;
 
 const spawnChild = (b: string, a: string[], o: { cwd: string }) =>
