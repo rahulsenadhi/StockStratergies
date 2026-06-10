@@ -123,3 +123,22 @@ describe("runRebuildAll", () => {
     expect(calls).toEqual(["-m"]); // only recompute
   });
 });
+
+describe("runRebuildAll onLine", () => {
+  it("emits a '▶ running <id>' header before each backtest and threads onLine", async () => {
+    const { fn } = scriptedSpawn([{ code: 0 }, { code: 0 }, { code: 0 }]);
+    const lines: string[] = [];
+    await runRebuildAll(fn, {
+      ...baseOpts,
+      backtests: [
+        { id: "a", argv: ["a.py"] },
+        { id: "b", argv: ["b.py"] },
+      ],
+      onLine: (l) => lines.push(l),
+    });
+    expect(lines).toContain("▶ running a");
+    expect(lines).toContain("▶ running b");
+    expect(lines).toContain("▶ recompute");
+    expect(lines.indexOf("▶ running a")).toBeLessThan(lines.indexOf("▶ running b"));
+  });
+});

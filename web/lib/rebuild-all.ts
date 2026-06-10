@@ -25,6 +25,7 @@ export async function runRebuildAll(
     recompute: { bin: string; args: string[]; cwd: string };
     backtestTimeoutMs: number;
     recomputeTimeoutMs: number;
+    onLine?: (line: string) => void;
   },
 ): Promise<{ status: number; body: RebuildAllBody }> {
   const ran: string[] = [];
@@ -38,10 +39,12 @@ export async function runRebuildAll(
       failed.push({ id: bt.id, error: errMsg(e) });
       continue;
     }
+    opts.onLine?.(`▶ running ${bt.id}`);
     const run = await runRecompute(spawnFn, {
       ...cmd,
       timeoutMs: opts.backtestTimeoutMs,
       label: `Backtest ${bt.id}`,
+      onLine: opts.onLine,
     });
     if (run.status === 200) {
       ran.push(bt.id);
@@ -50,10 +53,12 @@ export async function runRebuildAll(
     }
   }
 
+  opts.onLine?.("▶ recompute");
   const rc = await runRecompute(spawnFn, {
     ...opts.recompute,
     timeoutMs: opts.recomputeTimeoutMs,
     label: "Recompute",
+    onLine: opts.onLine,
   });
   const recompute =
     rc.status === 200
