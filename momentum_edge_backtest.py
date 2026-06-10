@@ -512,16 +512,26 @@ def validate_sequential_signals(ind: pd.DataFrame, cfg: dict) -> tuple[bool, str
     Returns (valid, recovery_label, recovery_days).
     Signal 4 is checked per-bar in run_backtest; this validates signals 1-3.
     """
-    close  = ind['close']
-    ema220 = ind['ema220']
+    return _validate_seq_arrays(
+        ind['close'].to_numpy(dtype=float),
+        ind['ema220'].to_numpy(dtype=float),
+        cfg,
+    )
+
+
+def _validate_seq_arrays(c: np.ndarray, e: np.ndarray, cfg: dict) -> tuple[bool, str, int]:
+    """Array-native core of validate_sequential_signals.
+
+    Takes raw numpy close/ema220 arrays so the per-date precompute loop in
+    run_backtest can pass cheap numpy views (c[:k+1]) instead of building a fresh
+    pandas .loc[:date] copy on every bar. Identical logic — the wrapper above just
+    extracts the two columns once.
+    """
     max_rec = cfg.get('max_recovery_days', 90)
 
-    if len(close) < 2:
-        return False, 'No Reclaim', -1
-
-    c = close.values
-    e = ema220.values
     n = len(c)
+    if n < 2:
+        return False, 'No Reclaim', -1
 
     # Signal 2: find most recent dip below EMA220
     dip_end = -1
@@ -671,12 +681,18 @@ def run_backtest(indicators: dict[str, pd.DataFrame],
 
     for t_idx, ticker in enumerate(all_tickers):
         ind = indicators[ticker]
+        # PERF: extract close/ema220 as numpy ONCE, then slice cheap views per bar.
+        # Old code rebuilt a pandas ind.loc[:date] copy every day (1.04M slices →
+        # ~250s of pandas overhead in profiling). c[:k+1] is a zero-copy view and
+        # _validate_seq_arrays runs the identical scan on it.
+        c = ind['close'].to_numpy(dtype=float)
+        e = ind['ema220'].to_numpy(dtype=float)
+        dates = ind.index
         prev_valid = False
-        for date in ind.index:
-            ind_slice = ind.loc[:date]
-            valid, label, days = validate_sequential_signals(ind_slice, cfg)
+        for k in range(len(c)):
+            valid, label, days = _validate_seq_arrays(c[:k + 1], e[:k + 1], cfg)
             if valid and not prev_valid:
-                seq_first_valid[ticker] = (date, label, days)
+                seq_first_valid[ticker] = (dates[k], label, days)
                 break
             prev_valid = valid
         if (t_idx + 1) % 200 == 0:
@@ -1100,21 +1116,41 @@ def print_diagnostic_report(indicators: dict[str, pd.DataFrame],
 #  PARALLEL + CACHED INDICATOR COMPUTATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _normalize_indicator_dtypes(ind):
+    """De-arrow string columns so hot-loop row access stays numpy-fast.
+
+    pandas 3.x stores plain string columns (e.g. 'entry_type') as pyarrow-backed
+    `str`. Every fast_xs/.loc row materialization in run_backtest then pays an
+    Arrow→Python conversion — profiling showed arrow array.__getitem__ at ~46s
+    over 3.5M calls. Casting string columns back to numpy `object` removes that
+    tax. Values are unchanged.
+    """
+    if ind is None:
+        return ind
+    for col in ind.columns:
+        dt = ind[col].dtype
+        if dt != object and pd.api.types.is_string_dtype(dt):
+            ind[col] = ind[col].astype(object)
+    return ind
+
+
 def _compute_one_cached(args: tuple) -> tuple[str, object]:
     ticker, df, cfg, cache_file, csv_mtime = args
-    if cache_file is not None and cache_file.exists():
-        if cache_file.stat().st_mtime >= csv_mtime:
+    ind = None
+    if (cache_file is not None and cache_file.exists()
+            and cache_file.stat().st_mtime >= csv_mtime):
+        try:
+            ind = pd.read_parquet(cache_file)
+        except Exception:
+            ind = None
+    if ind is None:
+        ind = compute_indicators(df, cfg)
+        if ind is not None and cache_file is not None:
             try:
-                return ticker, pd.read_parquet(cache_file)
+                ind.to_parquet(cache_file)
             except Exception:
                 pass
-    ind = compute_indicators(df, cfg)
-    if ind is not None and cache_file is not None:
-        try:
-            ind.to_parquet(cache_file)
-        except Exception:
-            pass
-    return ticker, ind
+    return ticker, _normalize_indicator_dtypes(ind)
 
 
 def load_indicators_parallel(
