@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getStrategies, getEquitySeries } from "@/lib/data/strategies";
 import { LeaderboardTable, type Row } from "@/components/leaderboard-table";
 import { RecomputeButton } from "@/components/recompute-button";
+import { RebuildAllButton } from "@/components/rebuild-all-button";
 
 export const dynamic = "force-dynamic"; // read files at request time
 
@@ -25,6 +26,7 @@ export default async function LeaderboardPage() {
             + New strategy
           </Link>
           <RecomputeButton />
+          <RebuildAllButton />
         </div>
       </div>
       <p className="mb-6 text-sm text-muted-foreground">
