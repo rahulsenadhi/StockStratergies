@@ -27,7 +27,7 @@
       "last_run": "2026-06-01T12:42:00",
       "created": "2025-12-01",
       "page_key": "Monthly",
-      "kpis_updated": "2026-06-10T05:14:50",
+      "kpis_updated": "2026-06-10T05:24:33",
       "rank": 2,
       "rank_score": 0.2291363481650198,
       "backtest": [
@@ -60,7 +60,7 @@
       "last_run": "2026-05-29T22:00:00",
       "created": "2025-08-01",
       "page_key": "IPO",
-      "kpis_updated": "2026-06-10T05:14:50",
+      "kpis_updated": "2026-06-10T05:24:33",
       "rank": 3,
       "rank_score": -0.21950379478421586,
       "backtest": [
@@ -96,7 +96,7 @@
       "last_run": "2026-06-01T13:55:00",
       "created": "2016-12-30",
       "page_key": "Momentum",
-      "kpis_updated": "2026-06-10T05:14:50",
+      "kpis_updated": "2026-06-10T05:24:33",
       "rank": 4,
       "rank_score": -1.2708761562819773,
       "backtest": [
@@ -131,7 +131,7 @@
       "last_run": "2026-05-27T00:27:00",
       "created": "2026-05-25",
       "page_key": "PEAD",
-      "kpis_updated": "2026-06-10T05:14:50",
+      "kpis_updated": "2026-06-10T05:24:33",
       "rank": 1,
       "rank_score": 1.2841572377176755,
       "backtest": [
