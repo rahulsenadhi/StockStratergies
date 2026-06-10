@@ -562,6 +562,36 @@ export async function updateStrategyIndexEntry(
   await atomicWrite(idxPath, JSON.stringify(idx, null, 2));
 }
 
+/** Remove a strategy: index entry + strategies/{id}.json + its trades_csv/equity_csv.
+ *  Returns false if the id is absent. File unlinks are best-effort (swallow ENOENT). */
+export async function deleteStrategy(
+  id: string, dataDir: string = DEFAULT_DATA_DIR,
+): Promise<boolean> {
+  const idxPath = path.join(dataDir, "strategies_index.json");
+  const idx = JSON.parse(await fs.readFile(idxPath, "utf-8")) as {
+    strategies: Array<Record<string, unknown> & { id: string }>;
+  };
+  const entry = idx.strategies.find((s) => s.id === id);
+  if (!entry) return false;
+
+  const csvs = [entry.trades_csv, entry.equity_csv].filter(
+    (c): c is string => typeof c === "string" && c !== "",
+  );
+  idx.strategies = idx.strategies.filter((s) => s.id !== id);
+  await atomicWrite(idxPath, JSON.stringify(idx, null, 2));
+
+  const unlinkQuiet = async (p: string) => {
+    try {
+      await fs.unlink(path.join(dataDir, p));
+    } catch {
+      // already gone — best-effort
+    }
+  };
+  await unlinkQuiet(path.join("strategies", `${id}.json`));
+  for (const c of csvs) await unlinkQuiet(c);
+  return true;
+}
+
 export async function getRankings(
   csv: string | null,
   dataDir: string = DEFAULT_DATA_DIR,
