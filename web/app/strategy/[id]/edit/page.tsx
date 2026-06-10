@@ -29,6 +29,7 @@ function specToInitial(spec: Record<string, unknown>): Partial<StrategyFormValue
 
 export default async function EditStrategyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  if (!/^[a-z0-9_]+$/.test(id)) notFound(); // traversal guard before fs read
   const spec = await getStrategySpec(id);
   if (!spec) notFound();
 

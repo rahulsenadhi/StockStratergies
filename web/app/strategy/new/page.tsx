@@ -30,7 +30,9 @@ export default async function NewStrategyPage({
   searchParams,
 }: { searchParams: Promise<{ from?: string }> }) {
   const { from } = await searchParams;
-  const sourceSpec = from ? await getStrategySpec(from) : null;
+  // Only a well-formed id reaches the fs read; anything else → no prefill (traversal guard).
+  const validFrom = from && /^[a-z0-9_]+$/.test(from) ? from : null;
+  const sourceSpec = validFrom ? await getStrategySpec(validFrom) : null;
   const initial = sourceSpec ? cloneInitial(sourceSpec) : undefined;
 
   return (
