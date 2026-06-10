@@ -19,8 +19,13 @@ export const dynamic = "force-dynamic";
 const CREATE_TIMEOUT_MS = 600_000;
 const SID_RE = /^[a-z0-9_]+$/;
 
+// PYTHONUNBUFFERED forces the child to flush stdout per line instead of block-
+// buffering it (the default when stdout is a pipe), so progress streams live.
 const spawnChild = (b: string, a: string[], o: { cwd: string }) =>
-  spawn(b, a, o) as unknown as SpawnedChild;
+  spawn(b, a, {
+    cwd: o.cwd,
+    env: { ...process.env, PYTHONUNBUFFERED: "1" },
+  }) as unknown as SpawnedChild;
 
 type CreateBody = {
   name?: unknown; description?: unknown; type?: unknown; universe?: unknown;

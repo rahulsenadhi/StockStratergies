@@ -15,8 +15,13 @@ export const dynamic = "force-dynamic";
 const BACKTEST_TIMEOUT_MS = 360_000;
 const RECOMPUTE_TIMEOUT_MS = 120_000;
 
+// PYTHONUNBUFFERED forces the child to flush stdout per line instead of block-
+// buffering it (the default when stdout is a pipe), so progress streams live.
 const spawnChild = (b: string, a: string[], o: { cwd: string }) =>
-  spawn(b, a, o) as unknown as SpawnedChild;
+  spawn(b, a, {
+    cwd: o.cwd,
+    env: { ...process.env, PYTHONUNBUFFERED: "1" },
+  }) as unknown as SpawnedChild;
 
 export async function POST() {
   if (!tryAcquire()) {
