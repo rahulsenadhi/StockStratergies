@@ -58,6 +58,7 @@ describe("deleteStrategy", () => {
     const dir = await tmpDir("del-");
     await fsp.mkdir(path.join(dir, "strategies"), { recursive: true });
     await fsp.writeFile(path.join(dir, "strategies", "doomed.json"), JSON.stringify({ name: "Doomed" }));
+    await fsp.writeFile(path.join(dir, "strategies", "doomed_kpis.csv"), "k,v\n1,2");
     await fsp.writeFile(path.join(dir, "doomed_trades.csv"), "h\n1");
     await fsp.writeFile(path.join(dir, "doomed_equity.csv"), "h\n1");
     await fsp.writeFile(
@@ -75,6 +76,7 @@ describe("deleteStrategy", () => {
     const idx = JSON.parse(await fsp.readFile(path.join(dir, "strategies_index.json"), "utf-8"));
     expect(idx.strategies.map((s: { id: string }) => s.id)).toEqual(["keep"]);
     await expect(fsp.access(path.join(dir, "strategies", "doomed.json"))).rejects.toThrow();
+    await expect(fsp.access(path.join(dir, "strategies", "doomed_kpis.csv"))).rejects.toThrow();
     await expect(fsp.access(path.join(dir, "doomed_trades.csv"))).rejects.toThrow();
     await expect(fsp.access(path.join(dir, "doomed_equity.csv"))).rejects.toThrow();
   });

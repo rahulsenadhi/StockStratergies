@@ -616,6 +616,9 @@ export async function deleteStrategy(
     }
   };
   await unlinkQuiet(path.join("strategies", `${id}.json`));
+  // generic_backtest.py writes strategies/{id}_kpis.csv but does not record it in the
+  // index entry (KPIs live in kpis_inline), so remove it by convention too.
+  await unlinkQuiet(path.join("strategies", `${id}_kpis.csv`));
   for (const c of csvs) await unlinkQuiet(c);
   return true;
 }
