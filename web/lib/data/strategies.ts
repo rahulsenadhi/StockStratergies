@@ -474,6 +474,25 @@ export type RankingRow = {
 const stripSignal = (s: string): string =>
   s.replace(/^[🟢🔴]\s*/u, "").trim();
 
+export function deriveStrategyId(name: string): string {
+  return name.trim().toLowerCase().replace(/[ -]/g, "_");
+}
+
+export type ExitsSpec = {
+  time_enabled?: boolean; time_days?: number;
+  hard_stop_enabled?: boolean; hard_stop_pct?: number;
+  trail_enabled?: boolean; trail_pct?: number;
+};
+
+/** Human summary of enabled exits (port of Streamlit _summarize_exits). */
+export function summarizeExits(ex: ExitsSpec): string {
+  const parts: string[] = [];
+  if (ex.time_enabled) parts.push(`hold ${ex.time_days ?? 60}d`);
+  if (ex.hard_stop_enabled) parts.push(`hard stop ${ex.hard_stop_pct ?? 10}%`);
+  if (ex.trail_enabled) parts.push(`trail ${ex.trail_pct ?? 8}%`);
+  return parts.length ? parts.join(" · ") : "—";
+}
+
 export async function getRankings(
   csv: string | null,
   dataDir: string = DEFAULT_DATA_DIR,
