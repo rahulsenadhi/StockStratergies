@@ -21,15 +21,15 @@
         "calmar": 1.889348350659852,
         "win_rate": null,
         "num_trades": 36,
-        "alpha": 0.14758304355191076,
+        "alpha": 0.15066948279078152,
         "final_equity": 89918.7386945569
       },
       "last_run": "2026-06-01T12:42:00",
       "created": "2025-12-01",
       "page_key": "Monthly",
-      "kpis_updated": "2026-06-05T00:13:43",
+      "kpis_updated": "2026-06-09T13:22:13",
       "rank": 2,
-      "rank_score": 0.21170693856087483
+      "rank_score": 0.2291363850963109
     },
     {
       "id": "ipo_edge",
@@ -57,9 +57,12 @@
       "last_run": "2026-05-29T22:00:00",
       "created": "2025-08-01",
       "page_key": "IPO",
-      "kpis_updated": "2026-06-05T00:13:43",
+      "kpis_updated": "2026-06-09T13:22:14",
       "rank": 3,
-      "rank_score": -0.2397979495325368
+      "rank_score": -0.2195037556160435,
+      "backtest": [
+        "ipo_edge_backtest.py"
+      ]
     },
     {
       "id": "momentum_edge",
@@ -76,23 +79,26 @@
       "funnel_json": "momentum_edge_funnel.json",
       "recent_breakouts_csv": "momentum_edge_recent_breakouts.csv",
       "kpis_inline": {
-        "cagr": 0.10100839807659012,
-        "total_return": 1.4724933999999998,
-        "volatility": 0.17415176239898436,
-        "sharpe": 0.8657010866212532,
-        "max_dd": -0.260372565468283,
-        "calmar": 0.3879379453627358,
-        "win_rate": 0.30656934306569344,
-        "num_trades": 137,
-        "alpha": -0.015873031349694644,
-        "final_equity": 2472493.4
+        "cagr": 0.09461396147472811,
+        "total_return": 1.3441372500000002,
+        "volatility": 0.178178631536805,
+        "sharpe": 0.8041361268398433,
+        "max_dd": -0.25988445454394377,
+        "calmar": 0.3640616428587877,
+        "win_rate": 0.3161764705882353,
+        "num_trades": 136,
+        "alpha": -0.02102411751518729,
+        "final_equity": 2344137.25
       },
       "last_run": "2026-06-01T13:55:00",
       "created": "2016-12-30",
       "page_key": "Momentum",
-      "kpis_updated": "2026-06-05T00:13:43",
+      "kpis_updated": "2026-06-09T13:22:14",
       "rank": 4,
-      "rank_score": -1.2467138740797354
+      "rank_score": -1.2708761976017324,
+      "backtest": [
+        "momentum_edge_backtest.py"
+      ]
     },
     {
       "id": "pead",
@@ -122,9 +128,9 @@
       "last_run": "2026-05-27T00:27:00",
       "created": "2026-05-25",
       "page_key": "PEAD",
-      "kpis_updated": "2026-06-05T00:13:43",
+      "kpis_updated": "2026-06-09T13:22:14",
       "rank": 1,
-      "rank_score": 1.2959755789074845
+      "rank_score": 1.2841572066310962
     }
   ]
 }

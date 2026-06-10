@@ -13,7 +13,8 @@ export type Strategy = {
   id: string; name: string; type: string; status: string;
   kpis: Kpis; rank: number | null; rankScore: number | null;
   equityCsv: string | null; tradesCsv: string | null; lastRun: string | null; liveSignalsCsv: string | null;
-  funnelJson: string | null; recentBreakoutsCsv: string | null; decileSpreadCsv: string | null; kpisError?: string;
+  funnelJson: string | null; recentBreakoutsCsv: string | null; decileSpreadCsv: string | null;
+  backtest: string[] | null; kpisError?: string;
 };
 
 const numOrNull = (v: unknown): number | null =>
@@ -78,6 +79,7 @@ export function mapStrategy(raw: any): Strategy {
     funnelJson: raw.funnel_json ?? null,
     recentBreakoutsCsv: raw.recent_breakouts_csv ?? null,
     decileSpreadCsv: raw.decile_spread_csv ?? null,
+    backtest: Array.isArray(raw.backtest) ? raw.backtest : null,
   };
   if (raw.kpis_error) s.kpisError = raw.kpis_error;
   return s;

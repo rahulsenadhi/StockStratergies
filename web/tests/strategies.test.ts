@@ -536,6 +536,17 @@ describe("cellColor", () => {
   });
 });
 
+describe("mapStrategy backtest field", () => {
+  it("maps a backtest argv array", () => {
+    const m = mapStrategy({ id: "x", backtest: ["momentum_edge_backtest.py"] });
+    expect(m.backtest).toEqual(["momentum_edge_backtest.py"]);
+  });
+  it("defaults to null when absent or not an array", () => {
+    expect(mapStrategy({ id: "y" }).backtest).toBeNull();
+    expect(mapStrategy({ id: "z", backtest: "nope" }).backtest).toBeNull();
+  });
+});
+
 describe("compareCells", () => {
   it("numeric, not lexical: 2 before 10", () => {
     expect(compareCells("2", "10")).toBeLessThan(0);
