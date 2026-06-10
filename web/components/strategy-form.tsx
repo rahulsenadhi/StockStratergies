@@ -2,11 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { runJobStream } from "@/lib/use-job-stream";
+import { JobProgress } from "@/components/job-progress";
 
 export function StrategyForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lines, setLines] = useState<string[]>([]);
+  const [phase, setPhase] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [type, setType] = useState("Momentum");
@@ -26,25 +30,26 @@ export function StrategyForm() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setLines([]);
+    setPhase(null);
     try {
-      const res = await fetch("/api/strategy", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name, type, description, universe,
-          entry_formula: entryFormula,
-          exits: {
-            time_enabled: timeEnabled, time_days: timeDays,
-            hard_stop_enabled: hardStopEnabled, hard_stop_pct: hardStopPct,
-            trail_enabled: trailEnabled, trail_pct: trailPct,
-          },
-          sizing: {
-            method: "Equal weight (capped)",
-            max_positions: maxPositions, initial_cash: initialCash,
-          },
-        }),
+      const res = await runJobStream("/api/strategy", {
+        name, type, description, universe,
+        entry_formula: entryFormula,
+        exits: {
+          time_enabled: timeEnabled, time_days: timeDays,
+          hard_stop_enabled: hardStopEnabled, hard_stop_pct: hardStopPct,
+          trail_enabled: trailEnabled, trail_pct: trailPct,
+        },
+        sizing: {
+          method: "Equal weight (capped)",
+          max_positions: maxPositions, initial_cash: initialCash,
+        },
+      }, {
+        onLine: (l) => setLines((prev) => [...prev.slice(-199), l]),
+        onPhase: (p) => setPhase(p),
       });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; sid?: string; error?: string };
+      const data = res.data as { ok?: boolean; sid?: string; error?: string };
       if (res.ok && data.ok && data.sid) {
         router.push(`/strategy/${data.sid}`);
       } else {
@@ -54,6 +59,7 @@ export function StrategyForm() {
       setError(err instanceof Error ? err.message : "Network error");
     } finally {
       setLoading(false);
+      setPhase(null);
     }
   }
 
@@ -121,8 +127,9 @@ export function StrategyForm() {
 
       <button type="submit" disabled={loading}
         className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50">
-        {loading ? "Creating & backtesting… (1–3 min)" : "Create strategy"}
+        {loading ? "Creating & backtesting…" : "Create strategy"}
       </button>
+      {loading && <JobProgress phase={phase} lines={lines} />}
       {error && <p className="text-sm text-red-500">{error}</p>}
     </form>
   );
