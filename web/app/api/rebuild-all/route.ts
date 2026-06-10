@@ -5,6 +5,7 @@ import { resolveRecompute, type SpawnedChild } from "@/lib/recompute";
 import { runRebuildAll } from "@/lib/rebuild-all";
 import { getStrategies } from "@/lib/data/strategies";
 import { tryAcquire, release } from "@/lib/job-lock";
+import { streamJob } from "@/lib/job-stream";
 
 export const dynamic = "force-dynamic";
 
@@ -24,24 +25,27 @@ export async function POST() {
       { status: 409 },
     );
   }
-  try {
-    const repoRoot = path.resolve(process.cwd(), process.env.DATA_DIR ?? "..");
-    const strategies = await getStrategies();
-    const backtests = strategies
-      .filter((s) => s.backtest)
-      .map((s) => ({ id: s.id, argv: s.backtest as string[] }));
-    const recompute = resolveRecompute(process.env, process.cwd());
+  return streamJob(async (onLine) => {
+    try {
+      const repoRoot = path.resolve(process.cwd(), process.env.DATA_DIR ?? "..");
+      const strategies = await getStrategies();
+      const backtests = strategies
+        .filter((s) => s.backtest)
+        .map((s) => ({ id: s.id, argv: s.backtest as string[] }));
+      const recompute = resolveRecompute(process.env, process.cwd());
 
-    const result = await runRebuildAll(spawnChild, {
-      backtests,
-      repoRoot,
-      env: { PYTHON_BIN: process.env.PYTHON_BIN },
-      recompute,
-      backtestTimeoutMs: BACKTEST_TIMEOUT_MS,
-      recomputeTimeoutMs: RECOMPUTE_TIMEOUT_MS,
-    });
-    return NextResponse.json(result.body, { status: result.status });
-  } finally {
-    release();
-  }
+      const result = await runRebuildAll(spawnChild, {
+        backtests,
+        repoRoot,
+        env: { PYTHON_BIN: process.env.PYTHON_BIN },
+        recompute,
+        backtestTimeoutMs: BACKTEST_TIMEOUT_MS,
+        recomputeTimeoutMs: RECOMPUTE_TIMEOUT_MS,
+        onLine,
+      });
+      return { status: result.status, body: result.body };
+    } finally {
+      release();
+    }
+  });
 }

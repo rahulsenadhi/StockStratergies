@@ -12,6 +12,7 @@ import {
   type StrategyStub,
 } from "@/lib/data/strategies";
 import { tryAcquire, release } from "@/lib/job-lock";
+import { streamJob } from "@/lib/job-stream";
 
 export const dynamic = "force-dynamic";
 
@@ -67,49 +68,52 @@ export async function POST(request: Request) {
       { status: 409 },
     );
   }
-  try {
-    const description = typeof body.description === "string" ? body.description : "";
-    const type = typeof body.type === "string" && body.type ? body.type : "Custom";
-    const universe = typeof body.universe === "string" && body.universe ? body.universe : "Nifty 50";
-
-    const spec = {
-      name, description, type, universe,
-      entry_mode: "Formula DSL",
-      entry_formula: entryFormula,
-      exits,
-      sizing,
-    };
-
-    const now = new Date().toISOString();
-    const stub: StrategyStub = {
-      id: sid, name, type, status: "Research", description, universe,
-      entry_rule: entryFormula, exit_rule: summarizeExits(exits),
-      sizing, trades_csv: "", equity_csv: "", kpis_inline: {},
-      last_run: now, created: now, page_key: "Library",
-    };
-
+  return streamJob(async (onLine) => {
     try {
-      await writeStrategySpec(sid, spec);
-      await appendStrategyStub(stub);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const status = msg.includes("already exists") ? 409 : 500;
-      return NextResponse.json({ ok: false, error: msg }, { status });
-    }
+      const description = typeof body.description === "string" ? body.description : "";
+      const type = typeof body.type === "string" && body.type ? body.type : "Custom";
+      const universe = typeof body.universe === "string" && body.universe ? body.universe : "Nifty 50";
 
-    const repoRoot = path.resolve(process.cwd(), process.env.DATA_DIR ?? "..");
-    const run = await runRecompute(spawnChild, {
-      bin: process.env.PYTHON_BIN ?? "python",
-      args: ["generic_backtest.py", "--spec", `strategies/${sid}.json`],
-      cwd: repoRoot,
-      timeoutMs: CREATE_TIMEOUT_MS,
-      label: "Backtest",
-    });
-    if (run.status !== 200) {
-      return NextResponse.json(run.body, { status: run.status });
+      const spec = {
+        name, description, type, universe,
+        entry_mode: "Formula DSL",
+        entry_formula: entryFormula,
+        exits,
+        sizing,
+      };
+
+      const now = new Date().toISOString();
+      const stub: StrategyStub = {
+        id: sid, name, type, status: "Research", description, universe,
+        entry_rule: entryFormula, exit_rule: summarizeExits(exits),
+        sizing, trades_csv: "", equity_csv: "", kpis_inline: {},
+        last_run: now, created: now, page_key: "Library",
+      };
+
+      try {
+        await writeStrategySpec(sid, spec);
+        await appendStrategyStub(stub);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        const status = msg.includes("already exists") ? 409 : 500;
+        return { status, body: { ok: false, error: msg } };
+      }
+
+      const repoRoot = path.resolve(process.cwd(), process.env.DATA_DIR ?? "..");
+      const run = await runRecompute(spawnChild, {
+        bin: process.env.PYTHON_BIN ?? "python",
+        args: ["generic_backtest.py", "--spec", `strategies/${sid}.json`],
+        cwd: repoRoot,
+        timeoutMs: CREATE_TIMEOUT_MS,
+        label: "Backtest",
+        onLine,
+      });
+      if (run.status !== 200) {
+        return { status: run.status, body: run.body };
+      }
+      return { status: 200, body: { ok: true, sid } };
+    } finally {
+      release();
     }
-    return NextResponse.json({ ok: true, sid }, { status: 200 });
-  } finally {
-    release();
-  }
+  });
 }
