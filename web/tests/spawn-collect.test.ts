@@ -68,4 +68,7 @@ describe("parseDryrunJson", () => {
   it("returns null on malformed JSON", () => {
     expect(parseDryrunJson("{not valid}")).toBeNull();
   });
+  it("returns null when the only JSON is an array", () => {
+    expect(parseDryrunJson("[1,2,3]\n")).toBeNull();
+  });
 });

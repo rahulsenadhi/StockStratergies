@@ -67,7 +67,9 @@ export function parseDryrunJson(stdout: string): Record<string, unknown> | null 
     if (!line.startsWith("{")) continue;
     try {
       const parsed = JSON.parse(line);
-      if (parsed && typeof parsed === "object") return parsed as Record<string, unknown>;
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
     } catch { /* try the previous line */ }
   }
   return null;
