@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { runJobStream } from "@/lib/use-job-stream";
 import { JobProgress } from "@/components/job-progress";
 
+type DryrunResult =
+  | { ok: true; universe: string; today: { date: string; count: number; tickers: string[] }; history: { trading_days: number; signal_rows: number; distinct_tickers: number } }
+  | { ok: false; error: string; unknown_features?: string[] };
+
 export interface StrategyFormValues {
   name: string;
   type: string;
@@ -53,6 +57,33 @@ export function StrategyForm({ mode = "create", initial, strategyId, lockName }:
   const [trailPct, setTrailPct] = useState(init.trailPct);
   const [maxPositions, setMaxPositions] = useState(init.maxPositions);
   const [initialCash, setInitialCash] = useState(init.initialCash);
+
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState<DryrunResult | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  async function onPreview() {
+    setPreviewing(true);
+    setPreview(null);
+    setPreviewError(null);
+    try {
+      const res = await fetch("/api/strategy/dryrun", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ entry_formula: entryFormula, universe }),
+      });
+      const data = (await res.json()) as DryrunResult;
+      if (!res.ok && !("ok" in data)) {
+        setPreviewError(`Preview failed (${res.status})`);
+      } else {
+        setPreview(data);
+      }
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : "Network error");
+    } finally {
+      setPreviewing(false);
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -121,6 +152,40 @@ export function StrategyForm({ mode = "create", initial, strategyId, lockName }:
         <textarea className={field} rows={2} value={entryFormula}
           onChange={(e) => setEntryFormula(e.target.value)}
           placeholder="rsi_14 > 70 AND close > sma_200" required />
+        <div className="mt-1.5 flex items-center gap-2">
+          <button type="button" onClick={onPreview} disabled={previewing || !entryFormula.trim()}
+            className="rounded-md border px-3 py-1 text-xs font-medium hover:bg-accent disabled:opacity-50">
+            {previewing ? "Previewing…" : "Preview signals"}
+          </button>
+          <span className="text-xs text-muted-foreground">Validate the formula without running a full backtest</span>
+        </div>
+        {previewError && <p className="mt-1.5 text-sm text-red-500">{previewError}</p>}
+        {preview && !preview.ok && (
+          <p className="mt-1.5 text-sm text-red-500">
+            {preview.unknown_features?.length
+              ? `Unknown feature(s): ${preview.unknown_features.join(", ")}`
+              : preview.error}
+          </p>
+        )}
+        {preview && preview.ok && preview.today.count === 0 && preview.history.signal_rows === 0 && (
+          <p className="mt-1.5 text-sm text-amber-600">Formula valid but never fires — check thresholds</p>
+        )}
+        {preview && preview.ok && (preview.today.count > 0 || preview.history.signal_rows > 0) && (
+          <div className="mt-1.5 rounded-md border p-2 text-sm">
+            <p className="font-medium text-green-600">
+              ✓ {preview.today.count} ticker{preview.today.count === 1 ? "" : "s"} match today ({preview.today.date})
+            </p>
+            {preview.today.tickers.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {preview.today.tickers.join(", ")}
+                {preview.today.count > preview.today.tickers.length ? ` +${preview.today.count - preview.today.tickers.length} more` : ""}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {preview.history.signal_rows} signals over last {preview.history.trading_days} trading days · {preview.history.distinct_tickers} distinct tickers
+            </p>
+          </div>
+        )}
       </label>
 
       <fieldset className="space-y-2 rounded-md border p-3">
