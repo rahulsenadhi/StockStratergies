@@ -3,6 +3,7 @@ import { getFunnel, getRecentBreakouts } from "@/lib/data/strategies";
 import type { Strategy } from "@/lib/data/strategies";
 import { HorizontalBars } from "@/components/horizontal-bars";
 import { TradesTable } from "@/components/trades-table";
+import { ActionableSignals } from "@/components/actionable-signals";
 
 interface MomentumEdgeSectionProps {
   strategy: Strategy;
@@ -25,10 +26,11 @@ export async function MomentumEdgeSection({ strategy }: MomentumEdgeSectionProps
 
   const hasFunnel = funnel.length > 0;
   const hasBreakouts = breakouts.columns.length > 0 && breakouts.rows.length > 0;
-  if (!hasFunnel && !hasBreakouts) return null;
+  if (!hasFunnel && !hasBreakouts && !strategy.liveSignalsCsv) return null;
 
   return (
     <>
+      {strategy.liveSignalsCsv && <ActionableSignals csv={strategy.liveSignalsCsv} />}
       {hasFunnel && (
         <section>
           <h2 className="mb-1 text-lg font-semibold">Filter Funnel</h2>

@@ -655,6 +655,78 @@ export async function getRankings(
     .filter((r) => r.ticker !== "");
 }
 
+export type SignalAction = "BUY NOW" | "WATCH" | "FORMING" | string;
+
+export interface ActionableSignal {
+  ticker: string;
+  company: string;
+  signal: string;
+  action: SignalAction;
+  close: number | null;
+  stopPrice: number | null;
+  stopPct: number;
+  score: number | null;
+  entryType: string;
+  distAthPct: number | null;
+  recovery: string;
+  volRatio: number | null;
+}
+
+const ACTION_MAP: Record<string, string> = {
+  "Breakout Today": "BUY NOW",
+  "Near Breakout": "WATCH",
+  "Watch Zone": "FORMING",
+};
+
+/** Rich live-signals loader used by the "what to buy now" screen.
+ *  Reads <dataDir>/<csv>, derives Action label + 15% hard stop per row.
+ *  Missing/empty/unreadable file → []. Never throws. */
+export async function getActionableSignals(
+  csv: string,
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<ActionableSignal[]> {
+  const { header, rows } = await parseCsvLines(csv, dataDir, true);
+  if (header.length === 0) return [];
+  const idx = (name: string) => header.indexOf(name.toLowerCase());
+  const ti = idx("ticker");
+  if (ti < 0) return [];
+  const ci = idx("company");
+  const si = idx("signal");
+  const closi = idx("close");
+  const scorei = idx("score");
+  const entryTypei = idx("entry type");
+  const distAthPcti = idx("dist ath%");
+  const recoveryi = idx("recovery");
+  const volRatioi = idx("vol ratio");
+
+  const out: ActionableSignal[] = [];
+  for (const cells of rows) {
+    const ticker = cell(cells, ti);
+    if (ticker === "") continue;
+    const company = ci >= 0 && cell(cells, ci) !== "" ? cell(cells, ci) : ticker;
+    const signal = si >= 0 ? cell(cells, si) : "";
+    const close = numCell(cells, closi);
+    const stopPrice =
+      close === null ? null : Math.round(close * 0.85 * 100) / 100;
+    const action = ACTION_MAP[signal] ?? (signal || "—");
+    out.push({
+      ticker,
+      company,
+      signal,
+      action,
+      close,
+      stopPrice,
+      stopPct: -15,
+      score: numCell(cells, scorei),
+      entryType: entryTypei >= 0 ? cell(cells, entryTypei) : "",
+      distAthPct: numCell(cells, distAthPcti),
+      recovery: recoveryi >= 0 ? cell(cells, recoveryi) : "",
+      volRatio: numCell(cells, volRatioi),
+    });
+  }
+  return out;
+}
+
 export interface ExitTarget {
   pct: number;
   bookPct: number;
