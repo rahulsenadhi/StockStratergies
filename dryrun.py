@@ -32,3 +32,36 @@ def extract_unknown_features(formula: str, known: set[str]) -> list[str]:
         seen.add(tok)
         unknown.append(tok)
     return unknown
+
+
+TICKER_LIST_CAP = 25
+HISTORY_DAYS = 90
+
+
+def compute_preview(feat, formula: str, history_days: int = HISTORY_DAYS) -> dict:
+    """Evaluate a (pre-validated) formula on the feature panel and return today's
+    matches + recent firing stats. `feat` is indexed by trading date and has a
+    'ticker' column plus feature columns."""
+    mask = _evaluate_signals(feat, formula)
+    f = feat.assign(_m=mask)
+    dates = f.index.unique().sort_values()
+    last_day = dates[-1]
+    win_start = dates[-history_days] if len(dates) >= history_days else dates[0]
+
+    today_rows = f[(f.index == last_day) & f["_m"]]
+    win_rows = f[(f.index >= win_start) & f["_m"]]
+    tickers = sorted(today_rows["ticker"].tolist())
+    day_str = last_day.date().isoformat() if hasattr(last_day, "date") else str(last_day)
+
+    return {
+        "today": {
+            "date": day_str,
+            "count": int(len(today_rows)),
+            "tickers": tickers[:TICKER_LIST_CAP],
+        },
+        "history": {
+            "trading_days": int(min(len(dates), history_days)),
+            "signal_rows": int(len(win_rows)),
+            "distinct_tickers": int(win_rows["ticker"].nunique()),
+        },
+    }
