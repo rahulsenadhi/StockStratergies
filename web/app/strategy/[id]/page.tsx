@@ -9,6 +9,7 @@ import { MonthlyHeatmap } from "@/components/monthly-heatmap";
 import { BacktestButton } from "@/components/backtest-button";
 import { DeleteStrategyButton } from "@/components/delete-strategy-button";
 import { StrategyExplainer } from "@/components/strategy-explainer";
+import { ExitPlaybook } from "@/components/exit-playbook";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ export default async function StrategyPage({ params }: { params: Promise<{ id: s
       </div>
       <KpiStrip kpis={s.kpis} />
       <StrategyExplainer id={s.id} />
+      <ExitPlaybook id={s.id} />
       <section>
         <h2 className="mb-2 text-lg font-semibold">Equity Curve</h2>
         <LineChart data={curve} color="#22c55e" />

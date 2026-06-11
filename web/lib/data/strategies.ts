@@ -654,3 +654,60 @@ export async function getRankings(
     })
     .filter((r) => r.ticker !== "");
 }
+
+export interface ExitTarget {
+  pct: number;
+  bookPct: number;
+  hitRate: number;
+}
+
+export interface ExitPlaybook {
+  holdDays: number;
+  holdMedianReturn: number;
+  holdWinRate: number;
+  targets: ExitTarget[];
+  stopPct: number;
+  sampleSize: number;
+  dataQuality: "ohlcv" | "close";
+  curve: { day: number; median: number }[];
+}
+
+/** Read exit_recommendations.json from dataDir and return the ALL-bucket recommendation
+ *  for the given strategy id, with snake_case keys mapped to camelCase.
+ *  Returns null on any error (missing file, bad JSON, unknown strategy). */
+export async function getExitPlaybook(
+  id: string,
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<ExitPlaybook | null> {
+  try {
+    const txt = await fs.readFile(path.join(dataDir, "exit_recommendations.json"), "utf-8");
+    const parsed: unknown = JSON.parse(txt);
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const data = parsed as Record<string, unknown>;
+    const stratEntry = data[id];
+    if (stratEntry === null || typeof stratEntry !== "object" || Array.isArray(stratEntry)) return null;
+    const buckets = stratEntry as Record<string, unknown>;
+    const rec = buckets["ALL"];
+    if (rec === null || typeof rec !== "object" || Array.isArray(rec)) return null;
+    const r = rec as Record<string, unknown>;
+    return {
+      holdDays: r.hold_days as number,
+      holdMedianReturn: r.hold_median_return as number,
+      holdWinRate: r.hold_win_rate as number,
+      targets: (r.targets as Array<Record<string, number>>).map((t) => ({
+        pct: t.pct,
+        bookPct: t.book_pct,
+        hitRate: t.hit_rate,
+      })),
+      stopPct: r.stop_pct as number,
+      sampleSize: r.sample_size as number,
+      dataQuality: r.data_quality as "ohlcv" | "close",
+      curve: (r.curve as Array<Record<string, number>>).map((c) => ({
+        day: c.day,
+        median: c.median,
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
