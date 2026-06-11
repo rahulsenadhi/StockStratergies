@@ -12,9 +12,11 @@ export interface SpawnedChild {
 
 export type SpawnFn = (bin: string, args: string[], opts: { cwd: string }) => SpawnedChild;
 
+// Disjoint status types so `status === 200` discriminates the union for callers.
+// collectJob only ever emits 200 (ok), 500 (spawn/exit/error), or 504 (timeout).
 export type CollectOutcome =
   | { status: 200; stdout: string }
-  | { status: number; error: string };
+  | { status: 500 | 504; error: string };
 
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 

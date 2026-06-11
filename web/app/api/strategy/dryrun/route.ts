@@ -29,11 +29,10 @@ export async function POST(request: Request) {
   });
 
   if (out.status !== 200) {
-    const err = "error" in out ? out.error : "unexpected error";
-    return NextResponse.json({ ok: false, error: err }, { status: out.status });
+    return NextResponse.json({ ok: false, error: out.error }, { status: out.status });
   }
 
-  const parsed = parseDryrunJson("stdout" in out ? out.stdout : "");
+  const parsed = parseDryrunJson(out.stdout);
   if (!parsed) {
     return NextResponse.json({ ok: false, error: "could not parse preview output" }, { status: 500 });
   }
