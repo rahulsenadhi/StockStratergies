@@ -9,6 +9,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
+import { Term } from "@/components/ui/term";
 import {
   Table,
   TableBody,
@@ -49,25 +50,25 @@ const columns: ColumnDef<Row>[] = [
   {
     id: "cagr",
     accessorFn: (r) => r.kpis.cagr ?? -Infinity,
-    header: "CAGR",
+    header: () => <Term k="CAGR">CAGR</Term>,
     cell: (c) => <KpiCell value={c.row.original.kpis.cagr} />,
   },
   {
     id: "sharpe",
     accessorFn: (r) => r.kpis.sharpe ?? -Infinity,
-    header: "Sharpe",
+    header: () => <Term k="Sharpe">Sharpe</Term>,
     cell: (c) => <KpiCell value={c.row.original.kpis.sharpe} kind="num" />,
   },
   {
     id: "maxDd",
     accessorFn: (r) => r.kpis.maxDd ?? -Infinity,
-    header: "Max DD",
+    header: () => <Term k="Drawdown">Max DD</Term>,
     cell: (c) => <KpiCell value={c.row.original.kpis.maxDd} />,
   },
   {
     id: "winRate",
     accessorFn: (r) => r.kpis.winRate ?? -Infinity,
-    header: "Win",
+    header: () => <Term k="Win_Rate">Win</Term>,
     cell: (c) => <KpiCell value={c.row.original.kpis.winRate} />,
   },
   {
