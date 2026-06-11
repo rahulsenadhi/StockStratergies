@@ -73,7 +73,9 @@ export function StrategyForm({ mode = "create", initial, strategyId, lockName }:
         body: JSON.stringify({ entry_formula: entryFormula, universe }),
       });
       const data = (await res.json()) as DryrunResult;
-      if (!res.ok && !("ok" in data)) {
+      // Trust the body only if it carries the discriminant; otherwise surface
+      // the HTTP failure (guards against a malformed/non-union response body).
+      if (typeof (data as { ok?: unknown }).ok !== "boolean") {
         setPreviewError(`Preview failed (${res.status})`);
       } else {
         setPreview(data);
