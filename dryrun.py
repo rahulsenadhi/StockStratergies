@@ -12,6 +12,8 @@ import argparse
 import json
 import re
 
+import pandas as pd
+
 from generic_backtest import _load_universe, _compute_features, _evaluate_signals
 
 # Feature columns produced by generic_backtest._compute_features.
@@ -38,7 +40,7 @@ TICKER_LIST_CAP = 25
 HISTORY_DAYS = 90
 
 
-def compute_preview(feat, formula: str, history_days: int = HISTORY_DAYS) -> dict:
+def compute_preview(feat: pd.DataFrame, formula: str, history_days: int = HISTORY_DAYS) -> dict:
     """Evaluate a (pre-validated) formula on the feature panel and return today's
     matches + recent firing stats. `feat` is indexed by trading date and has a
     'ticker' column plus feature columns."""
@@ -65,3 +67,46 @@ def compute_preview(feat, formula: str, history_days: int = HISTORY_DAYS) -> dic
             "distinct_tickers": int(win_rows["ticker"].nunique()),
         },
     }
+
+
+def run_dryrun(formula: str, universe: str) -> dict:
+    """Orchestrate a DSL dry-run: validate, load, compute, preview.
+
+    Returns a JSON-serialisable dict with ``"ok": True`` on success or
+    ``"ok": False`` plus an ``"error"`` string on any failure.
+    """
+    formula = (formula or "").strip()
+    if not formula:
+        return {"ok": False, "error": "empty formula"}
+
+    unknown = extract_unknown_features(formula, KNOWN_FEATURES)
+    if unknown:
+        return {
+            "ok": False,
+            "error": f"unknown feature(s): {', '.join(unknown)}",
+            "unknown_features": unknown,
+        }
+
+    try:
+        ohlcv = _load_universe({"universe": universe})
+        if not ohlcv:
+            return {"ok": False, "error": f"no data for universe {universe}"}
+        feat = _compute_features(ohlcv).sort_index()
+        if feat.empty:
+            return {"ok": False, "error": "no features computable (too little history)"}
+        preview = compute_preview(feat, formula)
+        return {"ok": True, "universe": universe, **preview}
+    except Exception as e:  # noqa: BLE001 — surface any engine error to the UI
+        return {"ok": False, "error": str(e)}
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--formula", required=True)
+    ap.add_argument("--universe", default="Nifty 50")
+    args = ap.parse_args()
+    print(json.dumps(run_dryrun(args.formula, args.universe)))
+
+
+if __name__ == "__main__":
+    main()

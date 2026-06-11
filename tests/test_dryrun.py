@@ -64,3 +64,36 @@ def test_compute_preview_caps_ticker_list_at_25():
     p = D.compute_preview(pd.concat(frames).sort_index(), "rsi_14 > 70")
     assert p["today"]["count"] == 30           # full count reported
     assert len(p["today"]["tickers"]) == 25     # list truncated
+
+
+def test_run_dryrun_empty_formula():
+    r = D.run_dryrun("   ", "Nifty 50")
+    assert r == {"ok": False, "error": "empty formula"}
+
+
+def test_run_dryrun_unknown_feature_short_circuits(monkeypatch):
+    # Must NOT touch the universe loader when a feature name is bad.
+    def boom(_spec):
+        raise AssertionError("universe loader should not be called")
+    monkeypatch.setattr(D, "_load_universe", boom)
+    r = D.run_dryrun("rsi_14 > 70 AND xyz_bad > 1", "Nifty 50")
+    assert r["ok"] is False
+    assert r["unknown_features"] == ["xyz_bad"]
+    assert "xyz_bad" in r["error"]
+
+
+def test_run_dryrun_success(monkeypatch):
+    monkeypatch.setattr(D, "_load_universe", lambda _spec: {"AAA": "df"})
+    monkeypatch.setattr(D, "_compute_features", lambda _ohlcv: _panel())
+    r = D.run_dryrun("rsi_14 > 70", "Nifty 50")
+    assert r["ok"] is True
+    assert r["universe"] == "Nifty 50"
+    assert r["today"]["count"] == 1
+    assert r["history"]["signal_rows"] == 3
+
+
+def test_run_dryrun_no_data(monkeypatch):
+    monkeypatch.setattr(D, "_load_universe", lambda _spec: {})
+    r = D.run_dryrun("rsi_14 > 70", "Bogus")
+    assert r["ok"] is False
+    assert "Bogus" in r["error"]
