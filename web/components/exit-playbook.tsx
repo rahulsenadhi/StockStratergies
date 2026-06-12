@@ -45,20 +45,37 @@ export async function ExitPlaybook({ id }: { id: string }) {
       <div className="overflow-x-auto">
         <table className="w-full caption-bottom text-xs">
           <thead>
-            <tr className="border-b">
-              <th className="px-2 py-1 text-left font-medium whitespace-nowrap">Tier</th>
-              <th className="px-2 py-1 text-left font-medium whitespace-nowrap">Profit target</th>
-              <th className="px-2 py-1 text-left font-medium whitespace-nowrap">Book</th>
-              <th className="px-2 py-1 text-left font-medium whitespace-nowrap">Hit rate (hist.)</th>
+            <tr className="border-b border-border">
+              <th className="px-3 py-1.5 text-left text-xs font-medium uppercase tracking-wide whitespace-nowrap text-muted-foreground">
+                Tier
+              </th>
+              <th className="px-3 py-1.5 text-right text-xs font-medium uppercase tracking-wide whitespace-nowrap text-muted-foreground">
+                Profit target
+              </th>
+              <th className="px-3 py-1.5 text-right text-xs font-medium uppercase tracking-wide whitespace-nowrap text-muted-foreground">
+                Book
+              </th>
+              <th className="px-3 py-1.5 text-right text-xs font-medium uppercase tracking-wide whitespace-nowrap text-muted-foreground">
+                Hit rate (hist.)
+              </th>
             </tr>
           </thead>
           <tbody>
             {rec.targets.map((tgt, i) => (
-              <tr key={i} className="border-b last:border-0 hover:bg-muted/50">
-                <td className="px-2 py-1 whitespace-nowrap text-muted-foreground">T{i + 1}</td>
-                <td className="px-2 py-1 whitespace-nowrap">+{tgt.pct.toFixed(1)}%</td>
-                <td className="px-2 py-1 whitespace-nowrap">{tgt.bookPct}%</td>
-                <td className="px-2 py-1 whitespace-nowrap">
+              <tr
+                key={i}
+                className="border-b border-border transition-colors last:border-0 hover:bg-muted/40 odd:bg-muted/10"
+              >
+                <td className="px-3 py-1.5 whitespace-nowrap text-muted-foreground">
+                  T{i + 1}
+                </td>
+                <td className="px-3 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                  +{tgt.pct.toFixed(1)}%
+                </td>
+                <td className="px-3 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
+                  {tgt.bookPct}%
+                </td>
+                <td className="px-3 py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
                   {(tgt.hitRate * 100).toFixed(0)}%
                 </td>
               </tr>

@@ -36,7 +36,7 @@ export default async function NewStrategyPage({
   const initial = sourceSpec ? cloneInitial(sourceSpec) : undefined;
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-8">
+    <main className="mx-auto max-w-7xl space-y-6 px-6 py-4">
       <Link href="/leaderboard" className="text-sm text-muted-foreground">← Leaderboard</Link>
       <h1 className="text-2xl font-bold">{sourceSpec ? "Clone Strategy" : "New Strategy"}</h1>
       <p className="text-sm text-muted-foreground">

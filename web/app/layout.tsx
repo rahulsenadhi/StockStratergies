@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Nav } from "@/components/nav";
+import { AppShell } from "@/components/app-shell";
 
 export const metadata: Metadata = {
   title: "NSE Strategy Hub",
@@ -15,8 +15,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="bg-background text-foreground antialiased">
-        <Nav />
-        {children}
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

@@ -39,7 +39,7 @@ export default async function Home() {
   ).filter((x) => x.points.length > 0);
 
   return (
-    <main className="mx-auto max-w-5xl space-y-8 p-8">
+    <main className="mx-auto max-w-7xl space-y-6 px-6 py-4">
       <h1 className="text-2xl font-bold">NSE Strategy Hub</h1>
       <HomeKpiStrip summary={summary} />
       <section>

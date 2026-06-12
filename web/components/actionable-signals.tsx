@@ -14,10 +14,11 @@ const fmtNum = (v: number | null): string => (v == null ? "—" : v.toFixed(2));
 const fmtSignedPct = (v: number | null): string =>
   v == null ? "—" : `${v.toFixed(2)}%`;
 
-const TH = "px-2 py-1 text-xs font-medium uppercase text-muted-foreground";
+const TH =
+  "px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground";
 const THR = `${TH} text-right`;
-const TD = "px-2 py-1";
-const TDR = `${TD} text-right tabular-nums`;
+const TD = "px-3 py-1.5";
+const TDR = `${TD} text-right font-mono tabular-nums`;
 
 export async function ActionableSignals({ csv }: { csv: string }) {
   const rows = await getActionableSignals(csv);
@@ -34,7 +35,7 @@ export async function ActionableSignals({ csv }: { csv: string }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border">
+            <tr className="sticky top-0 z-10 border-b border-border bg-background">
               <th className={`${TH} text-left`}>Action</th>
               <th className={`${TH} text-left`}>Ticker</th>
               <th className={THR}>Close</th>
@@ -48,7 +49,13 @@ export async function ActionableSignals({ csv }: { csv: string }) {
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={i} className="border-b border-border hover:bg-muted/40">
+              <tr
+                key={i}
+                className={cn(
+                  "border-b border-border transition-colors hover:bg-muted/40",
+                  i % 2 !== 0 && "bg-muted/10",
+                )}
+              >
                 <td className={TD}>
                   <span
                     className={cn(
@@ -60,7 +67,7 @@ export async function ActionableSignals({ csv }: { csv: string }) {
                   </span>
                 </td>
                 <td className={TD}>
-                  <span className="font-bold">{r.ticker}</span>
+                  <span className="font-medium">{r.ticker}</span>
                   <span className="block text-xs text-muted-foreground">{r.company}</span>
                 </td>
                 <td className={TDR}>{fmtPrice(r.close)}</td>

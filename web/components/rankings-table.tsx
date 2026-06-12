@@ -6,6 +6,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import { upDown } from "@/lib/dir";
 import type { RankingRow } from "@/lib/data/strategies";
 
 const fmtPrice = (v: number | null): string =>
@@ -20,14 +22,28 @@ export function RankingsTable({ rows }: { rows: RankingRow[] }) {
   return (
     <Table>
       <TableHeader>
-        <TableRow>
-          <TableHead className="w-10">#</TableHead>
-          <TableHead>Ticker</TableHead>
-          <TableHead>Company</TableHead>
-          <TableHead className="text-right">Price</TableHead>
-          <TableHead className="text-right">Return</TableHead>
-          <TableHead className="text-right">RS Score</TableHead>
-          <TableHead>Signal</TableHead>
+        <TableRow className="sticky top-0 z-10 bg-background">
+          <TableHead className="w-10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            #
+          </TableHead>
+          <TableHead className="px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Ticker
+          </TableHead>
+          <TableHead className="px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Company
+          </TableHead>
+          <TableHead className="px-3 py-1.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Price
+          </TableHead>
+          <TableHead className="px-3 py-1.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Return
+          </TableHead>
+          <TableHead className="px-3 py-1.5 text-right text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            RS Score
+          </TableHead>
+          <TableHead className="px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Signal
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -36,15 +52,34 @@ export function RankingsTable({ rows }: { rows: RankingRow[] }) {
           return (
             <TableRow
               key={i}
-              className={held ? "border-l-2 border-l-green-500 bg-green-500/5" : ""}
+              className={cn(
+                "border-b border-border hover:bg-muted/40 transition-colors",
+                i % 2 !== 0 && "bg-muted/10",
+                held && "border-l-2 border-l-accent-blue bg-accent-blue/5",
+              )}
             >
-              <TableCell className="font-bold text-green-500">{r.rank ?? "—"}</TableCell>
-              <TableCell className="font-medium">{r.ticker}</TableCell>
-              <TableCell className="text-xs text-muted-foreground">{r.company}</TableCell>
-              <TableCell className="text-right">{fmtPrice(r.price)}</TableCell>
-              <TableCell className="text-right">{fmtPctNum(r.returnPct)}</TableCell>
-              <TableCell className="text-right">{fmtPctNum(r.rsScore)}</TableCell>
-              <TableCell className="text-xs">{r.signal}</TableCell>
+              <TableCell className="px-3 py-1.5 font-mono tabular-nums font-medium text-accent-blue">
+                {r.rank ?? "—"}
+              </TableCell>
+              <TableCell className="px-3 py-1.5 font-medium">{r.ticker}</TableCell>
+              <TableCell className="px-3 py-1.5 text-xs text-muted-foreground">
+                {r.company}
+              </TableCell>
+              <TableCell className="px-3 py-1.5 text-right font-mono tabular-nums">
+                {fmtPrice(r.price)}
+              </TableCell>
+              <TableCell
+                className={cn(
+                  "px-3 py-1.5 text-right font-mono tabular-nums",
+                  upDown(r.returnPct),
+                )}
+              >
+                {fmtPctNum(r.returnPct)}
+              </TableCell>
+              <TableCell className="px-3 py-1.5 text-right font-mono tabular-nums">
+                {fmtPctNum(r.rsScore)}
+              </TableCell>
+              <TableCell className="px-3 py-1.5 text-xs">{r.signal}</TableCell>
             </TableRow>
           );
         })}

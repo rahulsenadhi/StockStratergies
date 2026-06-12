@@ -26,7 +26,7 @@ export default async function StrategyPage({ params }: { params: Promise<{ id: s
   const monthly = await getMonthlyReturns(s.equityCsv);
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-8">
+    <main className="mx-auto max-w-7xl space-y-6 px-6 py-4">
       <Link href="/leaderboard" className="text-sm text-muted-foreground">← Leaderboard</Link>
       <div className="flex items-start justify-between">
         <div>
