@@ -9,6 +9,8 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
+import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -28,7 +30,36 @@ function isEmptyCell(v: string | undefined): boolean {
   return t === "" || t === "—";
 }
 
+/** A cell is numeric when its non-empty value parses as a finite number. */
+function isNumericCell(v: string | undefined): boolean {
+  return !isEmptyCell(v) && Number.isFinite(Number((v ?? "").trim()));
+}
+
+/** Sort caret icon for header cells */
+function SortIcon({ sorted }: { sorted: false | "asc" | "desc" }) {
+  if (sorted === "asc")
+    return <ChevronUp size={14} className="inline-block ml-0.5 shrink-0" />;
+  if (sorted === "desc")
+    return <ChevronDown size={14} className="inline-block ml-0.5 shrink-0" />;
+  return (
+    <ChevronsUpDown
+      size={14}
+      className="inline-block ml-0.5 shrink-0 text-muted-foreground/50"
+    />
+  );
+}
+
 export function TradesTable({ columns, rows }: TradesData) {
+  // A column is numeric when the first non-empty value in it parses as a number.
+  const numericColumns = useMemo<Set<string>>(() => {
+    const set = new Set<string>();
+    for (const col of columns) {
+      const sample = rows.find((row) => !isEmptyCell(row[col]));
+      if (sample && isNumericCell(sample[col])) set.add(col);
+    }
+    return set;
+  }, [columns, rows]);
+
   const columnDefs = useMemo<ColumnDef<TradeRow>[]>(
     () =>
       columns.map((col) => ({
@@ -68,27 +99,56 @@ export function TradesTable({ columns, rows }: TradesData) {
     <Table>
       <TableHeader>
         {table.getHeaderGroups().map((hg) => (
-          <TableRow key={hg.id}>
-            {hg.headers.map((h) => (
-              <TableHead
-                key={h.id}
-                onClick={h.column.getToggleSortingHandler()}
-                className={h.column.getCanSort() ? "cursor-pointer select-none" : ""}
-              >
-                {flexRender(h.column.columnDef.header, h.getContext())}
-                {({ asc: " ↑", desc: " ↓" } as Record<string, string>)[
-                  h.column.getIsSorted() as string
-                ] ?? ""}
-              </TableHead>
-            ))}
+          <TableRow key={hg.id} className="sticky top-0 z-10 bg-background">
+            {hg.headers.map((h) => {
+              const numeric = numericColumns.has(h.column.id);
+              return (
+                <TableHead
+                  key={h.id}
+                  onClick={h.column.getToggleSortingHandler()}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground",
+                    numeric && "text-right",
+                    h.column.getCanSort() && "cursor-pointer select-none",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-0.5",
+                      numeric && "justify-end",
+                    )}
+                  >
+                    {flexRender(h.column.columnDef.header, h.getContext())}
+                    {h.column.getCanSort() && (
+                      <SortIcon
+                        sorted={h.column.getIsSorted() as false | "asc" | "desc"}
+                      />
+                    )}
+                  </span>
+                </TableHead>
+              );
+            })}
           </TableRow>
         ))}
       </TableHeader>
       <TableBody>
-        {table.getRowModel().rows.map((r) => (
-          <TableRow key={r.id}>
+        {table.getRowModel().rows.map((r, i) => (
+          <TableRow
+            key={r.id}
+            className={cn(
+              "border-b border-border hover:bg-muted/40 transition-colors",
+              i % 2 !== 0 && "bg-muted/10",
+            )}
+          >
             {r.getVisibleCells().map((cell) => (
-              <TableCell key={cell.id}>
+              <TableCell
+                key={cell.id}
+                className={cn(
+                  "px-3 py-1.5",
+                  numericColumns.has(cell.column.id) &&
+                    "font-mono tabular-nums text-right",
+                )}
+              >
                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
               </TableCell>
             ))}
