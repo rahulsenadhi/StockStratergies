@@ -13,9 +13,9 @@ export function LiveSignals({ panels }: { panels: LivePanel[] }) {
           <div className="mb-2 font-medium">{p.name}</div>
           <ul className="space-y-1 text-sm">
             {p.picks.map((s, i) => (
-              <li key={i} className="flex items-center justify-between gap-2">
+              <li key={i} className="flex items-center justify-between gap-2 px-1 py-0.5 hover:bg-muted/40 transition-colors rounded">
                 <span>
-                  <span className="font-mono">{s.ticker}</span>{" "}
+                  <span className="font-mono tabular-nums text-accent-blue">{s.ticker}</span>{" "}
                   <span className="text-muted-foreground">{s.company}</span>
                 </span>
                 <span className="text-muted-foreground">{s.signal}</span>

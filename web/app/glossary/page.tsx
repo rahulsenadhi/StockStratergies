@@ -16,7 +16,7 @@ export default function GlossaryPage() {
   const entries = Object.entries(GLOSSARY).sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <main className="mx-auto max-w-5xl p-8">
+    <main className="mx-auto max-w-7xl px-6 py-4">
       <h1 className="mb-1 text-2xl font-bold">Glossary</h1>
       <p className="mb-6 text-sm text-muted-foreground">
         {entries.length} terms · hover a term anywhere in the app to see its definition

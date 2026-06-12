@@ -34,7 +34,7 @@ export default async function EditStrategyPage({ params }: { params: Promise<{ i
   if (!spec) notFound();
 
   return (
-    <main className="mx-auto max-w-5xl space-y-6 p-8">
+    <main className="mx-auto max-w-7xl space-y-6 px-6 py-4">
       <Link href={`/strategy/${id}`} className="text-sm text-muted-foreground">← Back to strategy</Link>
       <h1 className="text-2xl font-bold">Edit Strategy</h1>
       <p className="text-sm text-muted-foreground">
