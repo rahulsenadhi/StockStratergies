@@ -15,9 +15,17 @@ export default async function LeaderboardPage() {
     })),
   );
   return (
-    <main className="mx-auto max-w-5xl p-8">
+    <main className="mx-auto max-w-7xl px-6 py-4">
       <div className="mb-1 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Strategy Leaderboard</h1>
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight">
+            Strategy Leaderboard
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Ranked by composite score · {rows.length}{" "}
+            {rows.length === 1 ? "strategy" : "strategies"}
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           <Link
             href="/strategy/new"
@@ -29,10 +37,9 @@ export default async function LeaderboardPage() {
           <RebuildAllButton />
         </div>
       </div>
-      <p className="mb-6 text-sm text-muted-foreground">
-        Ranked by composite score · {rows.length} strategies
-      </p>
-      <LeaderboardTable rows={rows} />
+      <div className="mt-3 rounded-lg border border-border overflow-hidden">
+        <LeaderboardTable rows={rows} />
+      </div>
     </main>
   );
 }
