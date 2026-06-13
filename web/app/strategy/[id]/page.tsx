@@ -11,6 +11,7 @@ import { DeleteStrategyButton } from "@/components/delete-strategy-button";
 import { StrategyExplainer } from "@/components/strategy-explainer";
 import { ExitPlaybook } from "@/components/exit-playbook";
 import { PositionSizer } from "@/components/position-sizer";
+import { ConfidenceVerdict } from "@/components/confidence-verdict";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ export default async function StrategyPage({ params }: { params: Promise<{ id: s
         </div>
       </div>
       <KpiStrip kpis={s.kpis} />
+      <ConfidenceVerdict kpis={s.kpis} annualReturns={monthly.map((m) => m.annual)} />
       <StrategyExplainer id={s.id} />
       <ExitPlaybook id={s.id} />
       <PositionSizer />
