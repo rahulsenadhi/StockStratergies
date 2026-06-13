@@ -471,6 +471,70 @@ export type RankingRow = {
   signal: string;
 };
 
+/** One edge-filtered, regime-gated pick from the Suggestions feed. */
+export type SuggestionPick = {
+  rank: number;
+  ticker: string;
+  company: string;
+  strategy: string;
+  strategyId: string;
+  signal: string;
+  close: number;
+  stop: number;
+  target: number;
+  rr: number;
+  confidence: number;
+  avgPnl: number;
+  nHist: number;
+  positionPct: number;
+  edgeScore: number;
+  rationale: string;
+};
+
+export type SuggestionsRegime = {
+  status: string;
+  barsSinceFlip: number;
+  close?: number;
+  sma50?: number;
+  sma200?: number;
+  high52?: number;
+  pctFromHigh?: number;
+  date?: string;
+};
+
+export type SuggestionsFeed = {
+  regime: SuggestionsRegime;
+  summary: {
+    picks: number;
+    avgConfidence: number;
+    totalAllocation: number;
+    cashReserve: number;
+  };
+  picks: SuggestionPick[];
+};
+
+/** Read the precomputed Suggestions feed (precompute_suggestions.py -> suggestions.json).
+ *  Already camelCased by the precompute. Best-effort: null on missing/unreadable/malformed. */
+export async function getSuggestions(
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<SuggestionsFeed | null> {
+  try {
+    const txt = await fs.readFile(path.join(dataDir, "suggestions.json"), "utf-8");
+    const raw: unknown = JSON.parse(txt);
+    if (
+      raw === null ||
+      typeof raw !== "object" ||
+      !Array.isArray((raw as SuggestionsFeed).picks) ||
+      typeof (raw as SuggestionsFeed).regime !== "object"
+    ) {
+      return null;
+    }
+    return raw as SuggestionsFeed;
+  } catch {
+    return null;
+  }
+}
+
 const stripSignal = (s: string): string =>
   s.replace(/^[🟢🔴]\s*/u, "").trim();
 
