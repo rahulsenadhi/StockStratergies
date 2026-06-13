@@ -513,6 +513,36 @@ export type SuggestionsFeed = {
   picks: SuggestionPick[];
 };
 
+// ── PEAD screener (precompute_pead_screener.py -> pead_screener.json) ─────────
+export type PeadScreenerRow = {
+  ticker: string;
+  sector: string | null;
+  resultDate: string | null;
+  periodType: string | null;
+  sue: number | null;
+  sueDecile: number | null;
+  epsActual: number | null;
+  epsExpected: number | null;
+  piotroski: number | null;
+  pb: number | null;
+  pbSectorMedian: number | null;
+  qualifiesLong: boolean | null;
+};
+
+/** Read the PEAD earnings-events universe for the screener. Best-effort: [] on
+ *  missing/unreadable/non-array. Already camelCased by the precompute. */
+export async function getPeadScreener(
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<PeadScreenerRow[]> {
+  try {
+    const txt = await fs.readFile(path.join(dataDir, "pead_screener.json"), "utf-8");
+    const raw: unknown = JSON.parse(txt);
+    return Array.isArray(raw) ? (raw as PeadScreenerRow[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 // ── Data freshness (port of master_dashboard.py _data_freshness ~L7486) ──────
 const FRESHNESS_FOLDERS = ["data/nse_bse", "data", "momentum_edge_data"];
 const FRESHNESS_PROBES = ["RELIANCE.NS.csv", "HDFCBANK.NS.csv", "INFY.NS.csv"];
