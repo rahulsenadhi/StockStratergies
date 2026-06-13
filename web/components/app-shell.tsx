@@ -6,6 +6,7 @@ import {
   BookOpen,
   LayoutDashboard,
   LineChart,
+  Target,
   Trophy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,6 +20,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard, exact: true },
+  { label: "Buy Now", href: "/suggestions", icon: Target },
   { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
   { label: "Glossary", href: "/glossary", icon: BookOpen },
 ];
