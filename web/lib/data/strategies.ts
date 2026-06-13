@@ -513,6 +513,41 @@ export type SuggestionsFeed = {
   picks: SuggestionPick[];
 };
 
+// ── Insights / trade analytics (precompute_insights.py -> insights.json) ─────
+export type InsightBucket = {
+  group: string;
+  count: number;
+  winRate: number | null;
+  avgPnl: number | null;
+  medianPnl: number | null;
+};
+
+export type StrategyInsights = {
+  overall?: { n: number; winRate: number | null; avgPnl: number | null; medianPnl: number | null };
+  byEntryType?: InsightBucket[];
+  byRecoverySpeed?: InsightBucket[];
+  byExitReason?: InsightBucket[];
+  byScoreBucket?: InsightBucket[];
+  bySetupType?: InsightBucket[];
+  byEntryStage?: InsightBucket[];
+};
+
+export type InsightsReport = Record<string, StrategyInsights>;
+
+/** Read precomputed trade-analytics insights. Best-effort: null on missing/malformed. */
+export async function getInsights(
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<InsightsReport | null> {
+  try {
+    const txt = await fs.readFile(path.join(dataDir, "insights.json"), "utf-8");
+    const raw: unknown = JSON.parse(txt);
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    return raw as InsightsReport;
+  } catch {
+    return null;
+  }
+}
+
 // ── PEAD screener (precompute_pead_screener.py -> pead_screener.json) ─────────
 export type PeadScreenerRow = {
   ticker: string;
