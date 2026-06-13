@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   BookOpen,
+  Filter,
   LayoutDashboard,
   LineChart,
   Target,
@@ -22,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard, exact: true },
   { label: "Buy Now", href: "/suggestions", icon: Target },
   { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
+  { label: "Screener", href: "/screener", icon: Filter },
   { label: "Glossary", href: "/glossary", icon: BookOpen },
 ];
 
