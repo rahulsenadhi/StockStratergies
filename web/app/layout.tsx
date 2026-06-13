@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AppShell } from "@/components/app-shell";
+import { DataFreshness } from "@/components/data-freshness";
 
 export const metadata: Metadata = {
   title: "NSE Strategy Hub",
@@ -15,7 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="bg-background text-foreground antialiased">
-        <AppShell>{children}</AppShell>
+        <AppShell topbarRight={<DataFreshness />}>{children}</AppShell>
       </body>
     </html>
   );
