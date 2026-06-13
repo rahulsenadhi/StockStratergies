@@ -10,6 +10,7 @@ import { BacktestButton } from "@/components/backtest-button";
 import { DeleteStrategyButton } from "@/components/delete-strategy-button";
 import { StrategyExplainer } from "@/components/strategy-explainer";
 import { ExitPlaybook } from "@/components/exit-playbook";
+import { PositionSizer } from "@/components/position-sizer";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export default async function StrategyPage({ params }: { params: Promise<{ id: s
       <KpiStrip kpis={s.kpis} />
       <StrategyExplainer id={s.id} />
       <ExitPlaybook id={s.id} />
+      <PositionSizer />
       <section>
         <h2 className="mb-2 text-lg font-semibold">Equity Curve</h2>
         <LineChart data={curve} color="#22c55e" />
