@@ -1,0 +1,179 @@
+{
+  "momentum_edge": {
+    "overall": {
+      "n": 136,
+      "winRate": 31.6,
+      "avgPnl": 7.82,
+      "medianPnl": -10.68
+    },
+    "byEntryType": [
+      {
+        "group": "52W_HIGH_FALLBACK",
+        "count": 40,
+        "winRate": 30.0,
+        "avgPnl": 11.1,
+        "medianPnl": -12.22
+      },
+      {
+        "group": "ATH",
+        "count": 96,
+        "winRate": 32.3,
+        "avgPnl": 6.46,
+        "medianPnl": -10.68
+      }
+    ],
+    "byRecoverySpeed": [
+      {
+        "group": "Fast",
+        "count": 132,
+        "winRate": 31.8,
+        "avgPnl": 8.3,
+        "medianPnl": -10.61
+      },
+      {
+        "group": "Normal",
+        "count": 4,
+        "winRate": 25.0,
+        "avgPnl": -7.94,
+        "medianPnl": -11.99
+      }
+    ],
+    "byExitReason": [
+      {
+        "group": "15% Hard Stop",
+        "count": 52,
+        "winRate": 0.0,
+        "avgPnl": -18.05,
+        "medianPnl": -15.75
+      },
+      {
+        "group": "220 EMA Break",
+        "count": 84,
+        "winRate": 51.2,
+        "avgPnl": 23.84,
+        "medianPnl": 0.69
+      }
+    ],
+    "byScoreBucket": [
+      {
+        "group": "(62.619, 80.84]",
+        "count": 28,
+        "winRate": 32.1,
+        "avgPnl": 15.29,
+        "medianPnl": -13.04
+      },
+      {
+        "group": "(80.84, 95.6]",
+        "count": 27,
+        "winRate": 37.0,
+        "avgPnl": 3.08,
+        "medianPnl": -10.67
+      },
+      {
+        "group": "(95.6, 98.65]",
+        "count": 27,
+        "winRate": 29.6,
+        "avgPnl": 5.75,
+        "medianPnl": -10.53
+      },
+      {
+        "group": "(98.65, 99.74]",
+        "count": 27,
+        "winRate": 29.6,
+        "avgPnl": 16.55,
+        "medianPnl": -10.91
+      },
+      {
+        "group": "(99.74, 100.0]",
+        "count": 27,
+        "winRate": 29.6,
+        "avgPnl": -1.84,
+        "medianPnl": -8.83
+      }
+    ]
+  },
+  "ipo_edge": {
+    "overall": {
+      "n": 71,
+      "winRate": 56.3,
+      "avgPnl": 3.48,
+      "medianPnl": 0.77
+    },
+    "bySetupType": [
+      {
+        "group": "EARLY BOOM",
+        "count": 23,
+        "winRate": 47.8,
+        "avgPnl": 1.85,
+        "medianPnl": -0.02
+      },
+      {
+        "group": "FLAG",
+        "count": 6,
+        "winRate": 50.0,
+        "avgPnl": 2.38,
+        "medianPnl": 1.2
+      },
+      {
+        "group": "STANDARD",
+        "count": 36,
+        "winRate": 61.1,
+        "avgPnl": 4.12,
+        "medianPnl": 0.94
+      },
+      {
+        "group": "U-TURN",
+        "count": 6,
+        "winRate": 66.7,
+        "avgPnl": 7.02,
+        "medianPnl": 2.0
+      }
+    ],
+    "byExitReason": [
+      {
+        "group": "Hard Stop",
+        "count": 8,
+        "winRate": 0.0,
+        "avgPnl": -10.84,
+        "medianPnl": -10.5
+      },
+      {
+        "group": "Open",
+        "count": 8,
+        "winRate": 100.0,
+        "avgPnl": 8.12,
+        "medianPnl": 6.4
+      },
+      {
+        "group": "SL\u2192Breakeven",
+        "count": 1,
+        "winRate": 100.0,
+        "avgPnl": 4.64,
+        "medianPnl": 4.64
+      },
+      {
+        "group": "SMA10 Trail",
+        "count": 54,
+        "winRate": 57.4,
+        "avgPnl": 4.9,
+        "medianPnl": 0.76
+      }
+    ],
+    "byEntryStage": [
+      {
+        "group": "Stage 1 \u2014 Building Base",
+        "count": 35,
+        "winRate": 48.6,
+        "avgPnl": 3.5,
+        "medianPnl": -0.02
+      },
+      {
+        "group": "Stage 3 \u2014 Breakout",
+        "count": 36,
+        "winRate": 63.9,
+        "avgPnl": 3.47,
+        "medianPnl": 1.73
+      }
+    ]
+  }
+}

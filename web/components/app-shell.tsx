@@ -6,6 +6,7 @@ import {
   BookOpen,
   Filter,
   LayoutDashboard,
+  Lightbulb,
   LineChart,
   Target,
   Trophy,
@@ -24,6 +25,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Buy Now", href: "/suggestions", icon: Target },
   { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
   { label: "Screener", href: "/screener", icon: Filter },
+  { label: "Insights", href: "/insights", icon: Lightbulb },
   { label: "Glossary", href: "/glossary", icon: BookOpen },
 ];
 
