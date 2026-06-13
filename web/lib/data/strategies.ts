@@ -513,6 +513,69 @@ export type SuggestionsFeed = {
   picks: SuggestionPick[];
 };
 
+// ── Data freshness (port of master_dashboard.py _data_freshness ~L7486) ──────
+const FRESHNESS_FOLDERS = ["data/nse_bse", "data", "momentum_edge_data"];
+const FRESHNESS_PROBES = ["RELIANCE.NS.csv", "HDFCBANK.NS.csv", "INFY.NS.csv"];
+
+export type DataFreshness = {
+  /** Latest bar date (YYYY-MM-DD) across probe files, or null. */
+  latestBar: string | null;
+  /** Hours since the newest probe-file mtime, or null. */
+  ageHours: number | null;
+  /** Repo-relative path of the newest probe file, or null. */
+  sourceFile: string | null;
+};
+
+export type FreshnessTier = {
+  label: string;
+  tone: "fresh" | "stale" | "old" | "none";
+};
+
+/** Chip label + tone from age. Fresh <24h, stale 24-72h, old >72h (port of the
+ *  Streamlit freshness chip thresholds). */
+export function freshnessTier(ageHours: number | null): FreshnessTier {
+  if (ageHours == null) return { label: "No data", tone: "none" };
+  if (ageHours < 24) return { label: `${ageHours.toFixed(1)}h ago`, tone: "fresh" };
+  if (ageHours < 72) return { label: `${Math.round(ageHours)}h ago`, tone: "stale" };
+  return { label: `${Math.round(ageHours / 24)}d ago`, tone: "old" };
+}
+
+export async function getDataFreshness(
+  dataDir: string = DEFAULT_DATA_DIR,
+  now: number = Date.now(),
+): Promise<DataFreshness> {
+  let latestBar: string | null = null;
+  let newestMtime = 0;
+  let newestFile: string | null = null;
+
+  for (const folder of FRESHNESS_FOLDERS) {
+    for (const probe of FRESHNESS_PROBES) {
+      const p = path.join(dataDir, folder, probe);
+      try {
+        const stat = await fs.stat(p);
+        const txt = await fs.readFile(p, "utf-8");
+        const lines = txt.trim().split(/\r?\n/);
+        const bar = lines[lines.length - 1]?.split(",")[0]?.slice(0, 10);
+        if (bar && (latestBar == null || bar > latestBar)) latestBar = bar;
+        if (stat.mtimeMs > newestMtime) {
+          newestMtime = stat.mtimeMs;
+          newestFile = `${folder}/${probe}`;
+        }
+        break; // first existing probe per folder, like _data_freshness
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  if (latestBar == null) return { latestBar: null, ageHours: null, sourceFile: null };
+  return {
+    latestBar,
+    ageHours: Math.round(((now - newestMtime) / 3_600_000) * 10) / 10,
+    sourceFile: newestFile,
+  };
+}
+
 /** Read the precomputed Suggestions feed (precompute_suggestions.py -> suggestions.json).
  *  Already camelCased by the precompute. Best-effort: null on missing/unreadable/malformed. */
 export async function getSuggestions(

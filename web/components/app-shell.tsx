@@ -46,7 +46,13 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  topbarRight,
+}: {
+  children: React.ReactNode;
+  topbarRight?: React.ReactNode;
+}) {
   const pathname = usePathname();
 
   return (
@@ -98,7 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           {/* Right-side action slot */}
-          <div className="ml-auto" />
+          <div className="ml-auto">{topbarRight}</div>
         </header>
 
         {/* Page content */}
