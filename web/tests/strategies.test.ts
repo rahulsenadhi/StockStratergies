@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, readEquityCurveRaw, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel, getRecentBreakouts, getDecileSpread, getMonthlyReturns } from "@/lib/data/strategies";
+import { getStrategies, mapStrategy, getEquitySeries, getStrategy, getEquityCurve, readEquityCurveRaw, computeDrawdown, getTrades, rebaseToReturn, getLiveSignals, getEquityWithBenchmark, annualizedReturn, getRankings, parseCsvLines, getFunnel, getRecentBreakouts, getDecileSpread, getMonthlyReturns, getOhlcv, listTickers } from "@/lib/data/strategies";
 import { barWidthPct } from "@/components/horizontal-bars";
 import { cellColor } from "@/components/monthly-heatmap";
 import { compareCells } from "@/components/trades-table";
@@ -571,5 +571,30 @@ describe("compareCells", () => {
   });
   it("mixed numeric/non-numeric falls back to string compare", () => {
     expect(compareCells("abc", "5")).toBe("abc".localeCompare("5"));
+  });
+});
+
+const OHLCV_FIX = path.join(import.meta.dirname, "fixtures", "ohlcv");
+
+describe("getOhlcv", () => {
+  it("parses OHLCV, dedups date (keep last), sorts", async () => {
+    const r = await getOhlcv("AAA", "", OHLCV_FIX);
+    expect(r.length).toBe(2);
+    expect(r[0]).toEqual({ time: "2024-01-01", open: 100, high: 105, low: 99, close: 103, volume: 1100 });
+    expect(r[1].time).toBe("2024-01-02");
+  });
+  it("missing file -> []", async () => {
+    expect(await getOhlcv("NOPE", "", OHLCV_FIX)).toEqual([]);
+  });
+});
+
+describe("listTickers", () => {
+  it("returns stems, drops ^-files", async () => {
+    const t = await listTickers("", OHLCV_FIX);
+    expect(t).toContain("AAA");
+    expect(t.some((x) => x.startsWith("^"))).toBe(false);
+  });
+  it("missing dir -> []", async () => {
+    expect(await listTickers("nope", path.join(import.meta.dirname, "fixtures"))).toEqual([]);
   });
 });

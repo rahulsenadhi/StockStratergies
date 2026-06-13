@@ -721,6 +721,66 @@ export type StrategyStub = {
   last_run: string; created: string; page_key: string;
 };
 
+export type Ohlcv = {
+  time: string; open: number; high: number; low: number; close: number; volume: number;
+};
+
+const MAX_BARS = 1500;
+
+export async function getOhlcv(
+  ticker: string,
+  folder: string,
+  dataDir: string = DEFAULT_DATA_DIR,
+  maxBars: number = MAX_BARS,
+): Promise<Ohlcv[]> {
+  try {
+    const txt = await fs.readFile(path.join(dataDir, folder, `${ticker}.csv`), "utf-8");
+    const lines = txt.trim().split(/\r?\n/);
+    if (lines.length < 2) return [];
+    const h = lines[0].split(",").map((x) => x.trim().toLowerCase());
+    const di = h.indexOf("date"), oi = h.indexOf("open"), hi = h.indexOf("high");
+    const li = h.indexOf("low"), ci = h.indexOf("close"), vi = h.indexOf("volume");
+    if ([di, oi, hi, li, ci].some((x) => x < 0)) return [];
+    const seen = new Map<string, Ohlcv>();
+    for (const ln of lines.slice(1)) {
+      const c = ln.split(",");
+      const time = String(c[di] ?? "").slice(0, 10);
+      if (!time) continue;
+      const row: Ohlcv = {
+        time, open: Number(c[oi]), high: Number(c[hi]), low: Number(c[li]),
+        close: Number(c[ci]), volume: vi >= 0 ? Number(c[vi]) || 0 : 0,
+      };
+      if ([row.open, row.high, row.low, row.close].some(Number.isNaN)) continue;
+      seen.set(time, row); // dedup: keep last for a date
+    }
+    const rows = [...seen.values()].sort((a, b) => a.time.localeCompare(b.time));
+    return rows.length > maxBars ? rows.slice(rows.length - maxBars) : rows;
+  } catch {
+    return [];
+  }
+}
+
+export async function listTickers(
+  folder: string,
+  dataDir: string = DEFAULT_DATA_DIR,
+): Promise<string[]> {
+  try {
+    const files = await fs.readdir(path.join(dataDir, folder));
+    return files
+      .filter((f) => f.endsWith(".csv") && !f.startsWith("^"))
+      .map((f) => f.slice(0, -4))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+export const OHLCV_FOLDER_BY_ID: Record<string, string> = {
+  momentum_edge: "data/nse_bse",
+  ipo_edge: "ipo_data",
+  pead: "data/nse_bse",
+};
+
 async function atomicWrite(filePath: string, contents: string): Promise<void> {
   const tmp = `${filePath}.${process.pid}.tmp`;
   await fs.writeFile(tmp, contents);
