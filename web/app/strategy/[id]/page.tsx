@@ -12,6 +12,7 @@ import { StrategyExplainer } from "@/components/strategy-explainer";
 import { ExitPlaybook } from "@/components/exit-playbook";
 import { PositionSizer } from "@/components/position-sizer";
 import { ConfidenceVerdict } from "@/components/confidence-verdict";
+import { HistoryProofSection } from "@/components/history-proof";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,7 @@ export default async function StrategyPage({ params }: { params: Promise<{ id: s
           <MonthlyHeatmap rows={monthly} />
         </section>
       )}
+      <HistoryProofSection equityCsv={s.equityCsv} totalReturn={s.kpis.totalReturn} />
       <section>
         <h2 className="mb-2 text-lg font-semibold">Trade History ({trades.rows.length})</h2>
         <TradesTable {...trades} />
