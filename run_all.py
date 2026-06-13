@@ -256,9 +256,27 @@ def main():
             if not ok:
                 print(f'\n  WARNING: {strategy} pipeline failed — continuing with existing data.')
                 all_ok = False
-        run_pipeline('Exit Recommendations', [
-            [PY, 'precompute_exit_recommendations.py'],
-        ])
+        # ── Precompute web feeds (after data pipelines) ──────────────────────
+        # JSON/CSV the Next.js app + Master Hub read. Each runs independently and
+        # best-effort so one failure doesn't block the rest. Order matters:
+        # momentum signals must exist before suggestions consumes them.
+        print(f'\n{sep()}\n  Precompute web feeds\n{sep()}')
+        PRECOMPUTE = [
+            'precompute_momentum_signals.py',     # momentum_edge_signals/funnel/breakouts
+            'precompute_exit_recommendations.py', # exit_recommendations.json
+            'precompute_suggestions.py',          # suggestions.json (reads momentum signals)
+            'precompute_pead_screener.py',        # pead_screener.json (reads events.parquet)
+            'precompute_insights.py',             # insights.json
+        ]
+        for script in PRECOMPUTE:
+            try:
+                if not run_step_captured([PY, script], script):
+                    all_ok = False
+            except KeyboardInterrupt:
+                print('\n  ⚠  Precompute interrupted by user.')
+                all_ok = False
+                break
+
         if all_ok:
             print(f'\n  All pipelines completed successfully.')
         else:
