@@ -11,7 +11,7 @@ interface PeadSectionProps {
 
 export async function PeadSection({ strategy, chart }: PeadSectionProps): Promise<ReactNode> {
   const spread = await getDecileSpread(strategy.decileSpreadCsv);
-  if (spread.length === 0) return null;
+  const hasOther = spread.length > 0;
 
   const bars = spread.map((p) => ({
     label: `Decile ${p.decile}`,
@@ -24,14 +24,16 @@ export async function PeadSection({ strategy, chart }: PeadSectionProps): Promis
   return (
     <>
       <PriceChartBlock strategy={strategy} chart={chart} />
-      <section>
-      <h2 className="mb-1 text-lg font-semibold">SUE Decile Spread</h2>
-      <p className="mb-2 text-sm text-muted-foreground">
-        Average forward 60-day return by earnings-surprise (SUE) decile. The strategy
-        buys decile 10 (highlighted).
-      </p>
-      <HorizontalBars data={bars} />
-      </section>
+      {hasOther && (
+        <section>
+          <h2 className="mb-1 text-lg font-semibold">SUE Decile Spread</h2>
+          <p className="mb-2 text-sm text-muted-foreground">
+            Average forward 60-day return by earnings-surprise (SUE) decile. The strategy
+            buys decile 10 (highlighted).
+          </p>
+          <HorizontalBars data={bars} />
+        </section>
+      )}
     </>
   );
 }

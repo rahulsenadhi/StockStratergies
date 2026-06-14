@@ -16,7 +16,7 @@ export async function IpoEdgeSection({ strategy, chart }: IpoEdgeSectionProps): 
     { name: "IPO Edge", color: "#22c55e", points: eq.strategy },
     { name: "Nifty", color: "#f59e0b", points: eq.benchmark },
   ].filter((s) => s.points.length > 0);
-  if (series.length === 0) return null;
+  const hasOther = series.length > 0;
 
   const alpha =
     strategy.kpis.cagr != null && eq.benchmarkCagr != null
@@ -26,26 +26,28 @@ export async function IpoEdgeSection({ strategy, chart }: IpoEdgeSectionProps): 
   return (
     <>
       <PriceChartBlock strategy={strategy} chart={chart} />
-      <section>
-      <div className="mb-2 flex items-baseline justify-between">
-        <h2 className="text-lg font-semibold">Growth vs Nifty</h2>
-        <span className="text-sm text-muted-foreground">
-          Extra vs Nifty (Alpha):{" "}
-          <span
-            className={
-              alpha == null
-                ? "text-muted-foreground"
-                : alpha >= 0
-                  ? "text-green-500"
-                  : "text-red-500"
-            }
-          >
-            {pct(alpha)}
-          </span>
-        </span>
-      </div>
-      <MultiLineChart series={series} />
-      </section>
+      {hasOther && (
+        <section>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 className="text-lg font-semibold">Growth vs Nifty</h2>
+            <span className="text-sm text-muted-foreground">
+              Extra vs Nifty (Alpha):{" "}
+              <span
+                className={
+                  alpha == null
+                    ? "text-muted-foreground"
+                    : alpha >= 0
+                      ? "text-green-500"
+                      : "text-red-500"
+                }
+              >
+                {pct(alpha)}
+              </span>
+            </span>
+          </div>
+          <MultiLineChart series={series} />
+        </section>
+      )}
     </>
   );
 }

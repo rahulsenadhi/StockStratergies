@@ -28,27 +28,31 @@ export async function MomentumEdgeSection({ strategy, chart }: MomentumEdgeSecti
 
   const hasFunnel = funnel.length > 0;
   const hasBreakouts = breakouts.columns.length > 0 && breakouts.rows.length > 0;
-  if (!hasFunnel && !hasBreakouts && !strategy.liveSignalsCsv) return null;
+  const hasOther = hasFunnel || hasBreakouts || Boolean(strategy.liveSignalsCsv);
 
   return (
     <>
       <PriceChartBlock strategy={strategy} chart={chart} />
-      {strategy.liveSignalsCsv && <ActionableSignals csv={strategy.liveSignalsCsv} />}
-      {hasFunnel && (
-        <section>
-          <h2 className="mb-1 text-lg font-semibold">Filter Funnel</h2>
-          <p className="mb-2 text-sm text-muted-foreground">
-            How the universe narrows to today&apos;s signals. Each bar is a gate; the
-            drop to the next is how many stocks failed it.
-          </p>
-          <HorizontalBars data={bars} />
-        </section>
-      )}
-      {hasBreakouts && (
-        <section>
-          <h2 className="mb-2 text-lg font-semibold">Recent Breakouts</h2>
-          <TradesTable columns={breakouts.columns} rows={breakouts.rows} />
-        </section>
+      {hasOther && (
+        <>
+          {strategy.liveSignalsCsv && <ActionableSignals csv={strategy.liveSignalsCsv} />}
+          {hasFunnel && (
+            <section>
+              <h2 className="mb-1 text-lg font-semibold">Filter Funnel</h2>
+              <p className="mb-2 text-sm text-muted-foreground">
+                How the universe narrows to today&apos;s signals. Each bar is a gate; the
+                drop to the next is how many stocks failed it.
+              </p>
+              <HorizontalBars data={bars} />
+            </section>
+          )}
+          {hasBreakouts && (
+            <section>
+              <h2 className="mb-2 text-lg font-semibold">Recent Breakouts</h2>
+              <TradesTable columns={breakouts.columns} rows={breakouts.rows} />
+            </section>
+          )}
+        </>
       )}
     </>
   );
