@@ -4,12 +4,14 @@ import type { Strategy } from "@/lib/data/strategies";
 import { HorizontalBars } from "@/components/horizontal-bars";
 import { TradesTable } from "@/components/trades-table";
 import { ActionableSignals } from "@/components/actionable-signals";
+import { PriceChartBlock } from "@/components/strategy-sections/price-chart-block";
 
 interface MomentumEdgeSectionProps {
   strategy: Strategy;
+  chart?: string;
 }
 
-export async function MomentumEdgeSection({ strategy }: MomentumEdgeSectionProps): Promise<ReactNode> {
+export async function MomentumEdgeSection({ strategy, chart }: MomentumEdgeSectionProps): Promise<ReactNode> {
   const funnel = await getFunnel(strategy.funnelJson);
   const breakouts = await getRecentBreakouts(strategy.recentBreakoutsCsv);
 
@@ -30,6 +32,7 @@ export async function MomentumEdgeSection({ strategy }: MomentumEdgeSectionProps
 
   return (
     <>
+      <PriceChartBlock strategy={strategy} chart={chart} />
       {strategy.liveSignalsCsv && <ActionableSignals csv={strategy.liveSignalsCsv} />}
       {hasFunnel && (
         <section>

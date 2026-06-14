@@ -16,8 +16,15 @@ import { HistoryProofSection } from "@/components/history-proof";
 
 export const dynamic = "force-dynamic";
 
-export default async function StrategyPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function StrategyPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ chart?: string }>;
+}) {
   const { id } = await params;
+  const { chart } = await searchParams;
   const s = await getStrategy(id);
   if (!s) notFound();
 
@@ -67,7 +74,7 @@ export default async function StrategyPage({ params }: { params: Promise<{ id: s
         <h2 className="mb-2 text-lg font-semibold">Trade History ({trades.rows.length})</h2>
         <TradesTable {...trades} />
       </section>
-      <StrategySection strategy={s} />
+      <StrategySection strategy={s} chart={chart} />
     </main>
   );
 }

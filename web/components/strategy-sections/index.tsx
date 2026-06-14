@@ -5,16 +5,16 @@ import { IpoEdgeSection } from "@/components/strategy-sections/ipo-edge";
 import { MomentumEdgeSection } from "@/components/strategy-sections/momentum-edge";
 import { PeadSection } from "@/components/strategy-sections/pead";
 
-export function StrategySection({ strategy }: { strategy: Strategy }): ReactNode {
+export function StrategySection({ strategy, chart }: { strategy: Strategy; chart?: string }): ReactNode {
   switch (strategy.id) {
     case "monthly_rotation":
       return <MonthlyRotationSection strategy={strategy} />;
     case "ipo_edge":
-      return <IpoEdgeSection strategy={strategy} />;
+      return <IpoEdgeSection strategy={strategy} chart={chart} />;
     case "momentum_edge":
-      return <MomentumEdgeSection strategy={strategy} />;
+      return <MomentumEdgeSection strategy={strategy} chart={chart} />;
     case "pead":
-      return <PeadSection strategy={strategy} />;
+      return <PeadSection strategy={strategy} chart={chart} />;
     default:
       return null;
   }
