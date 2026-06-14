@@ -100,7 +100,7 @@ export function bollinger(close: number[], n = 20, k = 2): BollingerResult {
     const m = mid[i] as number;
     let s = 0;
     for (let j = i - n + 1; j <= i; j++) s += (close[j] - m) ** 2;
-    const sd = Math.sqrt(s / n);
+    const sd = Math.sqrt(s / (n - 1)); // sample stddev (ddof=1) — parity with pandas rolling().std() in core/indicators.py
     upper.push(m + k * sd);
     lower.push(m - k * sd);
   }
