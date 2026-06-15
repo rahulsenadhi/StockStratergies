@@ -4136,7 +4136,9 @@ def _compute_momentum_signals() -> tuple[pd.DataFrame, dict]:
 
     PERF: tries `data/indicator_cache/*.parquet` first (written by
     momentum_edge_backtest.py). If those exist and are fresh (latest index
-    within 7 days of CSV's latest), takes the fast path (~3s instead of ~30s).
+    within _parquet_is_fresh's tol_days=1 of CSV's latest), takes the fast path
+    (~3s instead of ~30s); otherwise falls back to the CSV recompute path so a
+    stale cache never shadows freshly downloaded bars.
     """
     full_folder   = Path(BASE_DIR) / 'data' / 'nse_bse'
     legacy_folder = Path(BASE_DIR) / 'momentum_edge_data'
@@ -4608,6 +4610,91 @@ def _run_strategy(commands: list[list[str]]):
             st.error(f'`{" ".join(cmd)}` failed:\n```\n{result.stderr[-800:]}\n```')
             return False
     return True
+
+
+# ── Per-strategy refresh pipelines ──────────────────────────────────────────
+# Mirrors run_all.py PIPELINES exactly so the dashboard buttons and the CLI
+# launcher stay in lock-step. Each step is a script (+args) run with the current
+# interpreter. Order matters: download → parquet-sync → backtest.
+#
+# NOTE: Momentum reads the data/nse_bse store, which is refreshed by
+# nse_bse_downloader.py (NOT the legacy momentum_edge_downloader.py). build_universe
+# refreshes the symbol list first; convert_to_parquet --sync nse_bse rebuilds the
+# parquet fast-path the dashboard loads from. Skipping any of these = stale data.
+_PIPELINES: dict[str, list[list[str]]] = {
+    'Monthly': [
+        ['step1_download_data.py'],
+        ['step2_backtest_momentum.py'],
+        ['step3_dashboard.py'],
+    ],
+    'IPO': [
+        ['ipo_edge_downloader.py'],
+        ['convert_to_parquet.py', '--sync', 'ipo_data'],
+        ['ipo_edge_backtest.py'],
+    ],
+    'Momentum': [
+        ['build_universe.py'],
+        ['nse_bse_downloader.py'],
+        ['convert_to_parquet.py', '--sync', 'nse_bse'],
+        ['momentum_edge_backtest.py'],
+    ],
+    # PEAD daily refresh only (matches run_all.py). The full historical backtest
+    # (pead_backtest.py) depends on a one-time events backfill + a price folder and
+    # is run manually, so it's intentionally not wired to this button.
+    'PEAD': [
+        ['pead_downloader.py'],
+    ],
+}
+
+# Web/dashboard feeds to regenerate after each strategy's backtest. Without these
+# the signal tables/screeners keep serving the previous run's CSV/JSON even though
+# the underlying prices changed. Only the feeds a strategy actually feeds are run,
+# to keep the click responsive.
+_PRECOMPUTE_FOR: dict[str, list[str]] = {
+    'Monthly':  ['precompute_suggestions.py', 'precompute_insights.py'],
+    'IPO':      ['precompute_exit_recommendations.py', 'precompute_suggestions.py',
+                 'precompute_insights.py'],
+    'Momentum': ['precompute_momentum_signals.py', 'precompute_exit_recommendations.py',
+                 'precompute_suggestions.py', 'precompute_insights.py'],
+    'PEAD':     ['precompute_pead_screener.py', 'precompute_insights.py'],
+}
+
+
+def _run_refresh_steps(label: str) -> bool:
+    """Run one strategy's full update (download → backtest → precompute) with live
+    per-step progress. Returns True on success. Does NOT clear cache or rerun."""
+    steps = _PIPELINES[label] + [[s] for s in _PRECOMPUTE_FOR.get(label, [])]
+    with st.status(f'Updating {label}…', expanded=True) as status:
+        for cmd in steps:
+            name = next((c for c in cmd if c.endswith('.py')), cmd[0])
+            st.write(f'▸ {name}')
+            result = subprocess.run(
+                [sys.executable, *cmd], cwd=BASE_DIR,
+                capture_output=True, text=True,
+                env={**os.environ, 'PYTHONIOENCODING': 'utf-8'},
+            )
+            if result.returncode != 0:
+                status.update(label=f'{label} failed at {name}', state='error')
+                st.error(f'```\n{(result.stderr or result.stdout or "")[-800:]}\n```')
+                return False
+        status.update(label=f'{label} updated ✓', state='complete')
+    return True
+
+
+def _refresh_strategy(label: str) -> None:
+    """Single-button refresh: run one strategy, then clear caches + rerun."""
+    if _run_refresh_steps(label):
+        st.cache_data.clear()
+        st.rerun()
+
+
+def _refresh_all() -> None:
+    """Run every strategy in sequence (one failure doesn't skip the rest),
+    then clear caches + rerun once."""
+    results = [_run_refresh_steps(s) for s in ('Monthly', 'IPO', 'Momentum', 'PEAD')]
+    st.cache_data.clear()
+    if all(results):
+        st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -5643,42 +5730,23 @@ def render_sidebar() -> str:
         st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
         st.markdown('<div class="sec-hdr">Refresh Data</div>', unsafe_allow_html=True)
 
+        st.caption('Each button re-downloads prices, re-runs that '
+                   'strategy\'s backtest, and refreshes its signals.')
+
         col_a, col_b = st.columns(2)
         with col_a:
             if st.button('🔄 Monthly', width='stretch'):
-                with st.spinner('Updating…'):
-                    ok = _run_strategy([
-                        [sys.executable, 'step1_download_data.py'],
-                        [sys.executable, 'step2_backtest_momentum.py'],
-                        [sys.executable, 'step3_dashboard.py'],
-                    ])
-                if ok:
-                    st.cache_data.clear()
-                    st.success('Done ✓')
-                    st.rerun()
-
+                _refresh_strategy('Monthly')
+            if st.button('📈 Momentum', width='stretch'):
+                _refresh_strategy('Momentum')
         with col_b:
             if st.button('🚀 IPO', width='stretch'):
-                with st.spinner('Updating…'):
-                    ok = _run_strategy([
-                        [sys.executable, 'ipo_edge_downloader.py'],
-                        [sys.executable, 'ipo_edge_backtest.py'],
-                    ])
-                if ok:
-                    st.cache_data.clear()
-                    st.success('Done ✓')
-                    st.rerun()
+                _refresh_strategy('IPO')
+            if st.button('⚡ PEAD', width='stretch'):
+                _refresh_strategy('PEAD')
 
-        if st.button('📈 Momentum Edge', width='stretch'):
-            with st.spinner('Updating…'):
-                ok = _run_strategy([
-                    [sys.executable, 'momentum_edge_downloader.py'],
-                    [sys.executable, 'momentum_edge_backtest.py'],
-                ])
-            if ok:
-                st.cache_data.clear()
-                st.success('Done ✓')
-                st.rerun()
+        if st.button('↻ Update ALL', width='stretch', type='primary'):
+            _refresh_all()
 
         st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
         st.markdown('<div class="sec-hdr">Last Updated</div>', unsafe_allow_html=True)
@@ -5686,7 +5754,8 @@ def render_sidebar() -> str:
         <div style="font-size:11px;line-height:2.2;color:#3d4a60;">
           🔄 Monthly &nbsp;&nbsp;<b style="color:#7c9cff">{_file_age('live_rankings.csv')}</b><br>
           🚀 IPO Edge &nbsp;&nbsp;<b style="color:#00c853">{_file_age('ipo_edge_equity.csv')}</b><br>
-          📈 Momentum &nbsp;<b style="color:#f9c200">{_file_age('momentum_edge_equity.csv')}</b>
+          📈 Momentum &nbsp;<b style="color:#f9c200">{_file_age('momentum_edge_equity.csv')}</b><br>
+          ⚡ PEAD &nbsp;&nbsp;&nbsp;&nbsp;<b style="color:#c084fc">{_file_age('pead_data/live_signals.csv')}</b>
         </div>
         """, unsafe_allow_html=True)
 
@@ -6477,7 +6546,14 @@ def render_momentum(mo: dict):
             if subset.empty:
                 st.info('No signals in this bucket.')
                 return
-            sub_display = display_cols
+            # Default to a compact, screen-fitting set of columns; an expander
+            # reveals all 20. (display_cols / essential_cols defined below.)
+            expanded = st.toggle(
+                '⤢ Expand — show all columns',
+                key=f'me_screener_expand_{key_suffix}',
+                help='Show every column (scrolls sideways). Off = compact view that fits the screen.',
+            )
+            sub_display = display_cols if expanded else essential_cols
             d = subset[[c for c in sub_display if c in subset.columns]].copy()
             colors = [sig_color_map.get(s, '#1c1c1c') for s in subset['Signal']]
             for c in ('Close', 'ATH (₹)', '220 EMA', '52W High', 'Stop (₹)'):
@@ -6515,6 +6591,13 @@ def render_momentum(mo: dict):
             'Entry Type', 'Chart Qual', 'Choppiness',
             'Recovery', '220 EMA', '52W High', 'vs High%', 'Vol Ratio',
             'Score', 'Hist Win%', 'Hist Avg%',
+        ]
+        # Compact view: the columns that drive a buy/watch decision, chosen to fit
+        # on screen without sideways scroll. The ⤢ Expand toggle swaps in display_cols.
+        essential_cols = [
+            'Ticker', 'Signal', 'Action',
+            'Close', 'Stop %', 'Dist ATH%',
+            'Entry Type', 'Vol Ratio', 'Score',
         ]
         with tab_all:   _render_subset(sigs, 'all')
         with tab_buy:   _render_subset(sigs[sigs['Action'] == 'BUY NOW'],  'buy')
