@@ -2107,6 +2107,11 @@ html, body, [data-testid="stApp"] {
     --mtbl-accent:#0e7c5a; --mtbl-pos:#15803d; --mtbl-neg:#b91c1c; --mtbl-warn:#b45309;
 }
 .mtbl-wrap{ width:100%; border:1px solid var(--mtbl-border); border-radius:10px; overflow:auto; margin:4px 0 8px; }
+/* Full-bleed: break a table out of the constrained page column to span the
+   whole viewport (used by the screener's Expand toggle). */
+.mtbl-fullbleed{ width:100vw; position:relative; left:50%; right:50%;
+  margin-left:-50vw; margin-right:-50vw; padding:0 28px; box-sizing:border-box; }
+.mtbl-fullbleed .mtbl{ font-size:12px; }
 .mtbl{ width:100%; border-collapse:collapse; font-family:var(--font-sans); font-size:12.5px; color:var(--mtbl-text); background:var(--mtbl-surface); }
 .mtbl thead th{ position:sticky; top:0; z-index:1; background:var(--mtbl-surface-2); color:var(--mtbl-text-muted);
     text-align:left; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em;
@@ -6549,9 +6554,10 @@ def render_momentum(mo: dict):
             # Default to a compact, screen-fitting set of columns; an expander
             # reveals all 20. (display_cols / essential_cols defined below.)
             expanded = st.toggle(
-                '⤢ Expand — show all columns',
+                '⤢ Expand — full screen (all columns)',
                 key=f'me_screener_expand_{key_suffix}',
-                help='Show every column (scrolls sideways). Off = compact view that fits the screen.',
+                help='Widen the table to the full screen and show every column. '
+                     'Off = compact view that fits the page column.',
             )
             sub_display = display_cols if expanded else essential_cols
             d = subset[[c for c in sub_display if c in subset.columns]].copy()
@@ -6572,10 +6578,10 @@ def render_momentum(mo: dict):
                 d['Hist Avg%'] = d['Hist Avg%'].apply(lambda x: f'{x:+.1f}%')
             if not d.empty:
                 d['Exit Plan'] = _exit_badge(_pick_rec('momentum_edge'))
-            n_c = len(d.columns)
-            w   = ([60, 130, 90, 70, 80, 70, 80, 70, 70, 70, 70, 75, 70, 70, 65, 55, 60, 60])[:n_c]
-            st.markdown(_modern_table(d, sortable=True, max_height=560),
-                        unsafe_allow_html=True)
+            table_html = _modern_table(d, sortable=True, max_height=560)
+            if expanded:
+                table_html = f'<div class="mtbl-fullbleed">{table_html}</div>'
+            st.markdown(table_html, unsafe_allow_html=True)
 
         sig_color_map = {
             'Breakout Today': 'rgba(34,197,94,0.10)',
