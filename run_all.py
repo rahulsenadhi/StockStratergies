@@ -267,6 +267,7 @@ def main():
             'precompute_suggestions.py',          # suggestions.json (reads momentum signals)
             'precompute_pead_screener.py',        # pead_screener.json (reads events.parquet)
             'precompute_insights.py',             # insights.json
+            'precompute_ui_home.py',              # ui_snapshot.json (Next.js Home)
         ]
         for script in PRECOMPUTE:
             try:

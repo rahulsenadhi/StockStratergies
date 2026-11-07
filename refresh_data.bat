@@ -72,6 +72,14 @@ if errorlevel 1 (
     echo  ok PEAD downloader done >> "%LOG%"
 )
 
+echo [7/7] Saving Home data for the Next.js app ... >> "%LOG%"
+"%PY%" precompute_ui_home.py >> "%LOG%" 2>&1
+if errorlevel 1 (
+    echo  !! precompute_ui_home.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
+) else (
+    echo  ok ui_snapshot.json done >> "%LOG%"
+)
+
 echo Refresh finished: %DATE% %TIME% >> "%LOG%"
 echo ====================================================== >> "%LOG%"
 
