@@ -5,6 +5,7 @@ Integrates Monthly Rotation, IPO Edge, and Momentum Edge in one unified UI.
 Run: streamlit run master_dashboard.py --server.port 8500
 """
 
+import html as _h
 import os
 import subprocess
 import sys
@@ -4729,11 +4730,11 @@ def _file_age(filename: str) -> str:
         return 'never'
     mtime = datetime.fromtimestamp(p.stat().st_mtime)
     delta = datetime.now() - mtime
+    if delta.days >= 1:
+        return f'{delta.days}d ago'
     if delta.seconds < 3600:
         return f'{delta.seconds // 60}m ago'
-    if delta.days == 0:
-        return f'{delta.seconds // 3600}h ago'
-    return f'{delta.days}d ago'
+    return f'{delta.seconds // 3600}h ago'
 
 
 def _run_strategy(commands: list[list[str]]):
@@ -5898,244 +5899,201 @@ def render_sidebar() -> str:
 #  HOME PAGE
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def render_home(m: dict, i: dict, mo: dict):
-    # ── SaaS Dashboard header ──────────────────────────────────────────────
-    st.markdown("""
-    <div class="lib-header">
-        <div>
-            <h1>Choose what you want to research</h1>
-            <p class="lib-subtitle">Explore companies, understand the rules and review the evidence.</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+HOME_STRATEGIES = {
+    # index id: (plain title, one-line purpose, nav destination, sample unit)
+    'monthly_rotation': ('Monthly stock rotation',
+                         'Holds the 5 strongest Nifty 50 stocks by recent strength; changes the selection monthly.',
+                         'Monthly Rotation', 'rebalances'),
+    'ipo_edge': ('Newly listed stocks (IPO)',
+                 'Studies recent listings whose price rises above an early trading range.',
+                 'IPO Edge', 'trades'),
+    'momentum_edge': ('Price strength (Momentum)',
+                      'Stocks that dipped below the 220-day trend, recovered, then made new highs.',
+                      'Momentum Edge', 'trades'),
+    'pead': ('After earnings (PEAD)',
+             'Compares a company’s latest earnings with its recent history, then checks financial strength.',
+             'PEAD', 'trades'),
+}
 
-    options = [
-        ('After earnings (PEAD)', 'Compare company earnings with recent history, then examine financial strength and price.', 'PEAD', 'pead_data/events.parquet'),
-        ('Monthly stock rotation', 'Explore the strongest stocks in the saved Nifty rankings. The model changes its selection monthly.', 'Monthly Rotation', 'live_rankings.csv'),
-        ('Newly listed stocks (IPO)', 'Study newly listed companies whose prices rise above an early trading range.', 'IPO Edge', 'ipo_edge_equity.csv'),
-        ('Price strength (Momentum)', 'Review stocks making new price highs and the trend checks behind each setup.', 'Momentum Edge', 'momentum_edge_signals.csv'),
-    ]
-    for start in (0, 2):
-        for col, (title, purpose, route, source) in zip(st.columns(2), options[start:start+2]):
-            with col, st.container(border=True):
-                st.markdown(f'**{title}**')
-                st.write(purpose)
-                st.caption(f'Saved file: {_file_age(source)} · review result dates on the strategy page')
-                st.button(f'Explore {title}', key=f'explore_{route}', on_click=_navigate, args=(route,))
-    st.subheader('Saved historical results')
-    research_notice()
-    st.caption('These summaries describe different saved tests. They are not a ranking of what will perform best next.')
-    with st.expander('How to read the performance summaries'):
-        st.write('CAGR is annualized growth. Max drawdown is the largest fall below an earlier peak. '
-                 'Win rate is the percentage of completed trades that made money. Sharpe compares return with variability. '
-                 'Live and Paper are strategy labels, not confirmation of a connected brokerage account.')
 
-    # ── KPI strip (top of fold) ────────────────────────────────────────────
-    _strats = _load_strategies_index()
-    n_strats = len(_strats)
-    n_live = sum(1 for s in _strats if s.get('status') == 'Live')
-    n_paper = sum(1 for s in _strats if s.get('status') == 'Paper')
-    cagrs = [s.get('kpis_inline', {}).get('cagr', 0) for s in _strats]
-    avg_cagr = (sum(cagrs) / len(cagrs)) if cagrs else 0
-    best_cagr = max(cagrs) if cagrs else 0
-    win_rates = [wr for s in _strats
-                  if (wr := s.get('kpis_inline', {}).get('win_rate')) is not None and wr > 0]
-    avg_win = (sum(win_rates) / len(win_rates)) if win_rates else 0
-    n_trades = sum(s.get('kpis_inline', {}).get('num_trades', 0) for s in _strats)
+def _open_backtest_results(strat_id: str) -> None:
+    st.session_state['_view_strategy'] = strat_id
+    st.session_state['_page_override'] = 'backtest_results'
 
-    k1, k2, k3, k4 = st.columns(4, gap='medium')
-    with k1: st.metric('Total Strategies', f'{n_strats}', f'{n_live} live · {n_paper} paper')
-    with k2: st.metric('Avg CAGR', f'{avg_cagr*100:+.2f}%', f'Best {best_cagr*100:+.2f}%')
-    with k3: st.metric('Avg Win Rate', f'{avg_win*100:.1f}%')
-    with k4: st.metric('Total Trades', f'{n_trades:,}')
 
-    # ── Recent backtests (compact card-style table) ────────────────────────
-    st.markdown('<div class="section-spacer-lg"></div>', unsafe_allow_html=True)
-    st.subheader('Recent Backtests')
+def _render_home_headline(n_candidates: int) -> None:
+    snap = _regime_snapshot()
+    fresh = _data_freshness()
+    status = snap.get('status', 'Unknown')
+    lead, emphasis, tone = {
+        'Bull': ('Market trend filter is', 'on — Nifty passes all trend conditions', 'gain'),
+        'Bear': ('Market trend filter is', 'off — at least one Nifty trend condition is failing', 'warn'),
+    }.get(status, ('Market trend is', 'unknown — benchmark data unavailable', 'muted'))
+    meta = []
+    if snap.get('bars_since_flip'):
+        meta.append(f'in this state for {snap["bars_since_flip"]} sessions')
+    age_h = fresh.get('age_hours')
+    if fresh.get('latest_bar') not in (None, '—'):
+        age_txt = ui.freshness_label(int(age_h // 24)) if age_h is not None else 'age unknown'
+        meta.append(f'prices up to {fresh["latest_bar"]} ({age_txt})')
+    meta.append(f'{n_candidates} candidates in saved files')
+    meta.append('research only — nothing here places orders')
+    _md(ui.headline(lead, emphasis, tone, meta))
 
-    recent = sorted(_strats, key=lambda s: s.get('last_run', ''), reverse=True)[:5]
-    if recent:
-        rec_rows = []
-        for s in recent:
-            k = s.get('kpis_inline', {})
-            rec_rows.append({
-                'Strategy': s['name'],
-                'Type': s.get('type', '—'),
-                'Status': s.get('status', '—'),
-                'CAGR': f"{k.get('cagr', 0)*100:+.2f}%",
-                'Sharpe': f"{k.get('sharpe', 0):.2f}",
-                'Max DD': f"{k.get('max_dd', 0)*100:+.2f}%",
-                'Trades': int(k.get('num_trades', 0)),
-                'Last run': _human_time_ago(s.get('last_run', '')),
-            })
-        st.markdown(_modern_table(
-            pd.DataFrame(rec_rows),
-            numeric_cols=['CAGR', 'Sharpe', 'Max DD', 'Trades'],
-            status_col='Status'), unsafe_allow_html=True)
+
+def _home_candidates(m: dict, i: dict, mo: dict) -> pd.DataFrame:
+    """Collect the candidates the strategy pages already show into one table (no new rules)."""
+    rows = []
+    ranks = m.get('rankings', pd.DataFrame())
+    if ranks is not None and not ranks.empty:
+        age = ui.freshness_label(_file_age_days('live_rankings.csv'))
+        for _, r in ranks.head(5).iterrows():
+            rows.append({'Strategy': S_MONTHLY, 'Ticker': str(r['Ticker']).replace('.NS', ''),
+                         'Company': r.get('Company', ''), 'Status': f"Top 5 · rank {int(r['Rank'])}",
+                         'Key measure': f"RS {r.get('RS_Score', 0):+.1f}% vs Nifty",
+                         'Data': f'ranking {age}', '_route': 'Monthly Rotation'})
+    sigs = i.get('signals', pd.DataFrame())
+    if sigs is not None and not sigs.empty and 'Signal' in sigs.columns:
+        for _, r in sigs[sigs['Signal'].isin(['Live Breakout', 'Watch Zone'])].iterrows():
+            rows.append({'Strategy': S_IPO, 'Ticker': str(r['Ticker']).replace('.NS', ''),
+                         'Company': r.get('Company', ''), 'Status': r['Signal'],
+                         'Key measure': f"{r.get('Stage', '')} · volume {r.get('Vol Ratio', 0):.1f}× avg",
+                         'Data': 'calculated from saved IPO prices', '_route': 'IPO Edge'})
+    msigs = mo.get('signals', pd.DataFrame())
+    if msigs is not None and not msigs.empty and 'Signal' in msigs.columns:
+        age = ui.freshness_label(_file_age_days('momentum_edge_signals.csv'))
+        keep = msigs[msigs['Signal'].isin(['Breakout Today', 'Near Breakout', 'Watch Zone'])]
+        for _, r in keep.iterrows():
+            dist = pd.to_numeric(r.get('Dist ATH%'), errors='coerce')
+            score = pd.to_numeric(r.get('Score'), errors='coerce')
+            measure = []
+            if pd.notna(dist):
+                measure.append(f'{dist:+.1f}% from high')
+            if pd.notna(score):
+                measure.append(f'score {score:.0f}')
+            rows.append({'Strategy': S_MOMENTUM, 'Ticker': str(r['Ticker']).replace('.NS', ''),
+                         'Company': r.get('Company', ''), 'Status': r['Signal'],
+                         'Key measure': ' · '.join(measure) or '—',
+                         'Data': f'signals {age}', '_route': 'Momentum Edge'})
+    return pd.DataFrame(rows, columns=['Strategy', 'Ticker', 'Company', 'Status',
+                                       'Key measure', 'Data', '_route'])
+
+
+def _render_home_candidates(cands: pd.DataFrame) -> None:
+    _md(ui.section_label('Candidates in saved files', 'Monthly · IPO · Momentum'))
+    pead_file = Path(BASE_DIR) / 'pead_data' / 'live_signals.csv'
+    pead_note = ('PEAD has no saved signals (its signal file is empty); open the PEAD page to screen companies.'
+                 if not pead_file.exists() or pead_file.stat().st_size < 10 else
+                 'PEAD candidates are reviewed on the PEAD page.')
+    if cands.empty:
+        _md(ui.empty_state('No candidates in the saved files',
+                           'The saved rankings and signal files contain no current candidates. '
+                           'Use Refresh Data in the sidebar to rebuild them.'))
+        st.caption(pead_note)
+        return
+    st.caption('Each row comes from a strategy page and keeps that page’s own label. '
+               'Labels are model output, not advice. ' + pead_note)
+    event = st.dataframe(
+        cands.drop(columns=['_route']), hide_index=True, width='stretch',
+        height=min(38 + 35 * len(cands), 640),
+        on_select='rerun', selection_mode='single-row', key='home_candidates',
+        column_config={
+            'Strategy': st.column_config.TextColumn(width=130),
+            'Ticker': st.column_config.TextColumn(width=110),
+            'Company': st.column_config.TextColumn(width=200),
+            'Status': st.column_config.TextColumn(width=140, help='Label from the strategy’s own rules'),
+            'Key measure': st.column_config.TextColumn(width=220),
+        },
+    )
+    sel = event.selection.rows if event and event.selection else []
+    if sel:
+        row = cands.iloc[sel[0]]
+        st.button(f'Open {row["Strategy"]} page for {row["Ticker"]} →', key='home_open_candidate',
+                  type='primary', on_click=_navigate, args=(row['_route'],))
     else:
-        st.info('No strategies yet — head to **Builder** to create one.')
+        st.caption('Select a row to open its strategy page.')
 
-    # ── Top-performing strategy cards (compact grid, 3 cols) ───────────────
-    st.markdown('<div class="section-spacer-lg"></div>', unsafe_allow_html=True)
-    st.subheader('Top Performers')
 
-    top = sorted(_strats, key=lambda s: s.get('kpis_inline', {}).get('sharpe', 0),
-                  reverse=True)[:3]
-    if top:
-        cols = st.columns(3, gap='medium')
-        for col, strat in zip(cols, top):
+def _render_home_strategies() -> None:
+    _md(ui.section_label('Strategies', 'saved backtest results · gross, before costs'))
+    strats = _load_strategies_index()
+    if not strats:
+        _md(ui.empty_state('No strategies saved', 'Create one under “Create a strategy”.'))
+        return
+    ratios = [3.2, 1, 1, 1, 1, 1, 1.3]
+    with st.container(key='rd_strat_header'):
+        for col, label in zip(st.columns(ratios), ['Strategy', 'Avg yearly', 'Worst fall', 'Sharpe',
+                                                   'Win rate', 'Sample', 'Results saved']):
             with col:
-                _render_strategy_card(strat)
-    else:
-        st.caption('No data yet.')
+                _md(f'<div class="rd-strat-head">{label}</div>')
+    for s in strats:
+        k = s.get('kpis_inline', {}) or {}
+        title, purpose, route, unit = HOME_STRATEGIES.get(
+            s['id'], (s.get('name', s['id']), s.get('description', ''), None, 'trades'))
+        tone = 'gain' if (k.get('cagr') or 0) >= 0 else 'loss'
+        n = int(k.get('num_trades') or 0)
+        wr = k.get('win_rate')
+        age = _file_age_days(s.get('equity_csv', ''))
+        status = str(s.get('status', '—'))
+        cols = st.columns(ratios, vertical_alignment='center')
+        with cols[0]:
+            _md(f'<div class="rd-strat-name">{_h.escape(title)} '
+                f'{ui.status_pill(status, "info" if status == "Live" else "muted")}</div>'
+                f'<div class="rd-strat-desc">{_h.escape(purpose)}</div>')
+        with cols[1]:
+            _md('<span class="rd-num__label">Avg yearly</span>'
+                f'<span class="rd-num rd-num--{tone}">{(k.get("cagr") or 0) * 100:+.1f}%</span>'
+                f'<span class="rd-num__sub">total {(k.get("total_return") or 0) * 100:+.0f}%</span>')
+        with cols[2]:
+            _md('<span class="rd-num__label">Worst fall</span>'
+                f'<span class="rd-num rd-num--loss">{(k.get("max_dd") or 0) * 100:.1f}%</span>')
+        with cols[3]:
+            _md('<span class="rd-num__label">Sharpe</span>'
+                f'<span class="rd-num">{(k.get("sharpe") or 0):.2f}</span>')
+        with cols[4]:
+            _md('<span class="rd-num__label">Win rate</span>'
+                + (f'<span class="rd-num">{wr * 100:.0f}%</span>' if wr is not None
+                   else '<span class="rd-num">—</span><span class="rd-num__sub">not recorded</span>'))
+        with cols[5]:
+            warn = '<span class="rd-num__warn">small sample</span>' if n < ui.LOW_SAMPLE_TRADES else ''
+            _md('<span class="rd-num__label">Sample</span>'
+                f'<span class="rd-num">{n:,}</span><span class="rd-num__sub">{unit}</span>{warn}')
+        with cols[6]:
+            _md(ui.status_pill(ui.freshness_label(age), ui.freshness_tone(age)))
+            if route:
+                st.button('Explore', key=f'explore_{route}', on_click=_navigate, args=(route,),
+                          width='stretch')
+            else:
+                st.button('Open results', key=f'home_open_{s["id"]}', on_click=_open_backtest_results,
+                          args=(s['id'],), width='stretch')
+    with st.expander('How to read these figures'):
+        st.write('Avg yearly return (CAGR) is annualised growth; "total" is growth over the whole test. '
+                 'Worst fall is the largest drop below an earlier peak. Win rate is the share of completed trades '
+                 'that made money; a high win rate does not by itself mean a strategy was profitable. '
+                 'Sample is the number of completed trades (rebalances for Monthly); fewer than '
+                 f'{ui.LOW_SAMPLE_TRADES} is too few to rely on. The strategies were tested over different '
+                 'periods, so this list is not a ranking of what will perform best next. '
+                 'Live and Paper are strategy labels, not a connected brokerage account.')
 
-    STRATEGY_DESC = {
-        S_MONTHLY: {
-            'plain':  'Buy the 5 strongest Nifty 50 stocks every month. Switch when better ones emerge.',
-            'how':    'Every month we rank all 50 Nifty stocks by recent performance and hold the top 5. No guessing — pure data.',
-            'good_for': 'Anyone who wants a simple, low-effort strategy. One decision per month.',
-        },
-        S_IPO: {
-            'plain':  'Buy newly listed stocks when they break out of their first trading base.',
-            'how':    'After an IPO settles for 40 days, we wait for a price breakout with strong volume. Early movers win big.',
-            'good_for': 'Higher risk, higher reward. Works best when market sentiment is positive.',
-        },
-        S_MOMENTUM: {
-            'plain':  'Buy large-cap stocks that dipped below trend, recovered, and hit new all-time highs.',
-            'how':    'We use the 220-day moving average as the trend line. Stock must dip below it, recover fast, then make new highs.',
-            'good_for': 'Best in bull markets. Tends to sit in cash during downturns automatically.',
-        },
-    }
 
-    cards = [
-        (S_MONTHLY,  m,  'Portfolio_Value', 'Benchmark_Value'),
-        (S_IPO,      i,  'Portfolio_Value', None),
-        (S_MOMENTUM, mo, 'Equity',          None),
-    ]
-    c1, c2, c3 = st.columns(3)
-    for col, (strategy, data, eq_col, _) in zip([c1, c2, c3], cards):
-        th      = THEME[strategy]
-        eq      = data.get('equity')
-        m_eq    = _equity_metrics(eq, eq_col, eq_col) if eq is not None else {}
-        cagr    = f"{m_eq['cagr']:+.1f}%" if m_eq else '—'
-        ret     = f"{m_eq['total_ret']:+.1f}%" if m_eq else '—'
-        dd      = f"{m_eq['max_dd']:.1f}%" if m_eq else '—'
-        trades_df = data.get('trades')
-        n_tr    = len(trades_df) if trades_df is not None else '—'
-        wr      = (f"{(trades_df['Result']=='Win').mean()*100:.0f}%"
-                   if trades_df is not None and len(trades_df) else '—')
-        desc    = STRATEGY_DESC[strategy]
-        dd_color = '#ff5555' if m_eq and m_eq.get('max_dd', 0) < -20 else '#f9c200' if m_eq and m_eq.get('max_dd', 0) < -10 else '#00c853'
+def render_home(m: dict, i: dict, mo: dict):
+    cands = _home_candidates(m, i, mo)
+    _render_home_headline(len(cands))
+    research_notice()
 
-        with col:
-            st.markdown(f"""
-            <div class="hub-card" style="border-top: 3px solid {th['color']};">
-              <div class="strategy-name" style="color:{th['color']}">
-                {th['icon']} {strategy}
-              </div>
-              <div class="big-num" style="color:{th['color']}">{cagr}</div>
-              <div class="plain-label">Avg yearly return &nbsp;·&nbsp; Total: {ret}</div>
-              <div class="divider"></div>
-              <div class="row">
-                <div class="kv-block">
-                  <div class="kv-l">Worst loss ever</div>
-                  <div class="kv-v" style="color:{dd_color}">{dd}</div>
-                  <div class="kv-explain">Max Drawdown</div>
-                </div>
-                <div class="kv-block">
-                  <div class="kv-l">Trades done</div>
-                  <div class="kv-v">{n_tr}</div>
-                  <div class="kv-explain">Total trades</div>
-                </div>
-                <div class="kv-block">
-                  <div class="kv-l">Profitable trades</div>
-                  <div class="kv-v" style="color:#00c853">{wr}</div>
-                  <div class="kv-explain">Win Rate</div>
-                </div>
-              </div>
-              <div class="desc-box">
-                <b style="color:#b0b8cc">In plain English:</b><br>{desc['plain']}<br><br>
-                <b style="color:#6a748a">Good for:</b> {desc['good_for']}
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
+    _render_home_candidates(cands)
+    _render_home_strategies()
 
-    st.markdown('<br>', unsafe_allow_html=True)
+    _md(ui.section_label('Growth since each test began', 'Monthly · IPO · Momentum'))
+    fig = chart_combined_equity(m, i, mo)
+    fig.update_layout(title=dict(text=''), margin=dict(l=10, r=10, t=30, b=10))
+    st.caption('Each line starts at 0% on its own first test date, so the lines cover different periods '
+               'and are not a like-for-like comparison. Flat stretches are periods with no open positions. '
+               'PEAD is not shown (4 completed trades). For side-by-side figures, open “Compare past results”.')
+    _plot(fig, width='stretch')
+    st.button('Compare past results →', key='home_to_compare', on_click=_navigate,
+              args=('History & Proof',))
 
-    st.markdown('<div class="sec-hdr">All 3 Strategies vs Nifty — Growth of ₹5 Lakh</div>',
-                unsafe_allow_html=True)
-    st.markdown("""
-    <div style="font-size:11px;color:#3d4a60;margin:-4px 0 10px 2px;">
-      Each line shows how ₹5 lakh would have grown if invested at the start of that strategy's backtest.
-    </div>""", unsafe_allow_html=True)
-    _plot(chart_combined_equity(m, i, mo), width='stretch')
-
-    st.markdown('<br>', unsafe_allow_html=True)
-    st.markdown('<div class="sec-hdr">Today\'s Signals — What to Watch</div>', unsafe_allow_html=True)
-    left, mid, right = st.columns(3)
-
-    def _sig_card(ticker, company, signal, signal_color, extra_line=''):
-        return f"""
-        <div class="sig-card" style="border-left: 3px solid {signal_color};">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-            <div>
-              <div style="font-size:14px;font-weight:800;color:var(--fg-primary)">{ticker}</div>
-              <div style="font-size:11px;color:var(--fg-muted);margin-top:1px">{company}</div>
-            </div>
-            <span class="badge" style="background:transparent;color:{signal_color};
-                  border:1px solid {signal_color}44;font-size:10px;">{signal}</span>
-          </div>
-          {f'<div style="font-size:10px;color:#4a5470;margin-top:6px;">{extra_line}</div>' if extra_line else ''}
-        </div>"""
-
-    with left:
-        st.markdown(f'<div style="font-size:11px;font-weight:700;color:{THEME[S_MONTHLY]["color"]};margin-bottom:8px;">🔄 Monthly — Saved ranking leaders</div>', unsafe_allow_html=True)
-        ranks = m.get('rankings', pd.DataFrame())
-        if not ranks.empty:
-            for _, row in ranks.head(3).iterrows():
-                rs = row.get('RS_Score', 0)
-                st.markdown(_sig_card(
-                    row['Ticker'].replace('.NS', ''), row['Company'],
-                    'Top Pick', THEME[S_MONTHLY]['color'],
-                    f"Strength score: {rs:+.1f}% &nbsp;·&nbsp; Rank #{int(row['Rank'])}"
-                ), unsafe_allow_html=True)
-        else:
-            st.markdown('<div style="font-size:12px;color:#3d4a60;padding:12px;">Run Monthly update to see picks</div>', unsafe_allow_html=True)
-
-    with mid:
-        st.markdown(f'<div style="font-size:11px;font-weight:700;color:{THEME[S_IPO]["color"]};margin-bottom:8px;">🚀 IPO Edge — Live Breakouts</div>', unsafe_allow_html=True)
-        sigs = i.get('signals', pd.DataFrame())
-        shown = sigs[sigs['Signal'].isin(['Live Breakout', 'Watch Zone'])].head(3) if not sigs.empty and 'Signal' in sigs.columns else pd.DataFrame()
-        sig_c = {'Live Breakout': '#00c853', 'Watch Zone': '#f9c200'}
-        if not shown.empty:
-            for _, row in shown.iterrows():
-                sc = sig_c.get(row['Signal'], '#888')
-                setup = row.get('Setup', '')
-                st.markdown(_sig_card(
-                    row['Ticker'], row['Company'], row['Signal'], sc,
-                    f"Stage: {row.get('Stage','')} &nbsp;·&nbsp; Setup: {setup} &nbsp;·&nbsp; Vol: {row.get('Vol Ratio',0):.1f}×"
-                ), unsafe_allow_html=True)
-        else:
-            st.markdown('<div style="font-size:12px;color:#3d4a60;padding:12px;">No active IPO breakouts right now</div>', unsafe_allow_html=True)
-
-    with right:
-        st.markdown(f'<div style="font-size:11px;font-weight:700;color:{THEME[S_MOMENTUM]["color"]};margin-bottom:8px;">📈 Momentum — Breakouts Today</div>', unsafe_allow_html=True)
-        msigs = mo.get('signals', pd.DataFrame())
-        shown = msigs[msigs['Signal'].isin(['Breakout Today', 'Near Breakout'])].head(3) if not msigs.empty and 'Signal' in msigs.columns else pd.DataFrame()
-        sig_c = {'Breakout Today': '#00c853', 'Near Breakout': '#f9c200'}
-        if not shown.empty:
-            for _, row in shown.iterrows():
-                sc  = sig_c.get(row['Signal'], '#888')
-                rec = row.get('Recovery', '—')
-                qual = row.get('Chart Qual', '—')
-                st.markdown(_sig_card(
-                    row['Ticker'], row['Company'], row['Signal'], sc,
-                    f"Recovery: {rec} &nbsp;·&nbsp; Chart: {qual}"
-                ), unsafe_allow_html=True)
-        else:
-            st.markdown('<div style="font-size:12px;color:#3d4a60;padding:12px;">No momentum breakouts today</div>', unsafe_allow_html=True)
-
-    st.markdown('<br>', unsafe_allow_html=True)
     _glossary_expander()
 
 

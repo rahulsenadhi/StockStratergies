@@ -115,6 +115,14 @@ def section_label(text: str, meta: str | None = None) -> str:
     return f'<div class="rd-sec"><span class="rd-sec__text">{escape(text)}</span>{m}</div>'
 
 
+def headline(lead: str, emphasis: str, tone: str, meta: list[str] | None = None) -> str:
+    """One plain-language sentence about the current situation, e.g. market trend + data age."""
+    meta_html = "".join(f'<span class="rd-headline__meta">{escape(m)}</span>' for m in (meta or []))
+    return (f'<div class="rd-headline"><div class="rd-headline__text">{escape(lead)} '
+            f'<span class="rd-headline__em rd-headline__em--{_check_tone(tone)}">{escape(emphasis)}</span>'
+            f'</div><div class="rd-headline__metas">{meta_html}</div></div>')
+
+
 # ── Freshness ────────────────────────────────────────────────────────────────
 
 def freshness_tone(age_days: int | None) -> str:
@@ -255,7 +263,34 @@ COMPONENT_CSS = """
   text-transform:uppercase; color:var(--rd-text); }
 .rd-sec__meta { margin-left:auto; font-size:var(--rd-fs-xs); color:var(--rd-text-muted); }
 
+.rd-headline { padding:var(--rd-sp-4) 0 var(--rd-sp-3); margin:0 0 var(--rd-sp-2);
+  border-bottom:1px solid var(--rd-line); }
+.rd-headline__text { font-size:var(--rd-fs-xl); line-height:1.3; font-weight:500; color:var(--rd-text);
+  letter-spacing:-.01em; }
+.rd-headline__em { font-weight:700; }
+.rd-headline__em--gain { color:var(--rd-gain); } .rd-headline__em--loss { color:var(--rd-loss); }
+.rd-headline__em--warn { color:var(--rd-warn); } .rd-headline__em--info { color:var(--rd-info); }
+.rd-headline__em--muted { color:var(--rd-text-muted); }
+.rd-headline__metas { display:flex; flex-wrap:wrap; gap:var(--rd-sp-1) var(--rd-sp-4); margin-top:var(--rd-sp-2); }
+.rd-headline__meta { font-size:var(--rd-fs-sm); color:var(--rd-text-muted); }
+
+.rd-strat-head { padding:var(--rd-sp-1) 0; font-size:var(--rd-fs-xs); color:var(--rd-text-muted);
+  text-transform:uppercase; letter-spacing:.06em; border-bottom:1px solid var(--rd-line); }
+.rd-strat-name { font-weight:700; font-size:var(--rd-fs-base); color:var(--rd-text); }
+.rd-strat-desc { font-size:var(--rd-fs-sm); color:var(--rd-text-muted); line-height:1.4; }
+.rd-num { font-family:var(--rd-mono); font-variant-numeric:tabular-nums; font-size:var(--rd-fs-base);
+  color:var(--rd-text); }
+.rd-num--gain { color:var(--rd-gain); } .rd-num--loss { color:var(--rd-loss); }
+.rd-num__sub { display:block; font-family:inherit; font-size:var(--rd-fs-xs); color:var(--rd-text-muted); }
+.rd-num__warn { display:block; font-size:var(--rd-fs-xs); color:var(--rd-warn); font-weight:600; }
+.rd-num__label { display:none; font-size:var(--rd-fs-xs); color:var(--rd-text-muted);
+  text-transform:uppercase; letter-spacing:.06em; }
+
 @media (max-width: 700px) {
+  .rd-strat-head, .st-key-rd_strat_header { display:none; }
+  .rd-num__label { display:inline-block; min-width:96px; }
+  .rd-num, .rd-num__sub, .rd-num__warn { display:inline; margin-right:6px; }
+  .rd-headline__text { font-size:var(--rd-fs-lg); }
   .rd-kpi { border-right:0; border-bottom:1px solid var(--rd-line); }
   .rd-check { grid-template-columns:1fr auto; }
   .rd-check__note { grid-column:1 / -1; }

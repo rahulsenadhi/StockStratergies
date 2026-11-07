@@ -115,6 +115,21 @@ def test_empty_state_has_title_and_reason():
     assert 'role="status"' in html
 
 
+# ── headline band ────────────────────────────────────────────────────────────
+
+def test_headline_renders_lead_emphasis_and_meta():
+    html = ui.headline("Market trend filter is", "off", "warn",
+                       meta=["Prices up to 06 Oct 2026", "31 days old"])
+    assert "Market trend filter is" in html and "off" in html
+    assert "rd-headline__em--warn" in html
+    assert html.index("Prices up to 06 Oct 2026") < html.index("31 days old")
+
+
+def test_headline_escapes_text():
+    html = ui.headline("<i>x</i>", "<b>y</b>", "info")
+    assert "<i>" not in html and "<b>y" not in html
+
+
 # ── freshness ────────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("days,tone", [(0, "gain"), (7, "gain"), (8, "warn"),
