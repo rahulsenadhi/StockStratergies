@@ -1,63 +1,72 @@
-import { getStrategies, getEquityCurve, rebaseToReturn, getLiveSignals } from "@/lib/data/strategies";
-import { LiveSignals, type LivePanel } from "@/components/live-signals";
-import { summarizeStrategies } from "@/lib/summary";
-import { HomeKpiStrip } from "@/components/home-kpi-strip";
-import { MultiLineChart, type Series } from "@/components/multi-line-chart";
-import { TopPerformers } from "@/components/top-performers";
-import { RecentBacktests } from "@/components/recent-backtests";
+import { CandidatesCard, GrowthCard, StrategiesCard } from "@/components/desk/home/home-cards";
+import { ResearchNotice } from "@/components/desk/notices";
+import { ChangePill, EmptyState, PageHeader, RailList, StatusPill } from "@/components/desk/primitives";
+import { freshnessLabel, freshnessTone } from "@/lib/desk/format";
+import { HOW_TO_READ, headerSub, headerTrend, marketRows, priceAge } from "@/lib/desk/home";
+import { savedDataAges } from "@/lib/desk/saved-ages";
+import { loadSnapshot } from "@/lib/desk/snapshot";
+import { GLOSSARY } from "@/lib/glossary";
 
 export const dynamic = "force-dynamic";
 
-const PALETTE = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7", "#14b8a6"];
+const NOT_READY: Record<"missing" | "invalid" | "version", string> = {
+  missing: "No saved results file (ui_snapshot.json) was found.",
+  invalid: "The saved results file could not be read; it may be mid-update.",
+  version: "The saved results file was written by a newer version of the update script.",
+};
 
 export default async function Home() {
-  const strategies = await getStrategies();
-  const summary = summarizeStrategies(strategies);
-  const top = [...strategies]
-    .sort((a, b) => (b.kpis.sharpe ?? -Infinity) - (a.kpis.sharpe ?? -Infinity))
-    .slice(0, 3);
-  const recent = [...strategies]
-    .sort((a, b) => (b.lastRun ?? "").localeCompare(a.lastRun ?? ""))
-    .slice(0, 5);
-  const panels: LivePanel[] = (
-    await Promise.all(
-      strategies.map(async (s) => ({
-        name: s.name,
-        picks: s.liveSignalsCsv ? await getLiveSignals(s.liveSignalsCsv) : [],
-      })),
-    )
-  ).filter((p) => p.picks.length > 0);
-
-  const series: Series[] = (
-    await Promise.all(
-      strategies.map(async (s, i) => ({
-        name: s.name,
-        color: PALETTE[i % PALETTE.length],
-        points: rebaseToReturn(await getEquityCurve(s.equityCsv)),
-      })),
-    )
-  ).filter((x) => x.points.length > 0);
+  const [snap, ages] = await Promise.all([loadSnapshot(), savedDataAges()]);
+  if (!snap.ok) {
+    return (
+      <>
+        <PageHeader title="Overview" />
+        <EmptyState title="Saved results for this page are not ready. Run Update all data." reason={NOT_READY[snap.reason]} />
+      </>
+    );
+  }
+  const { frame, home } = snap.snapshot;
+  const trend = headerTrend(frame.regime.status);
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6 px-6 py-4">
-      <h1 className="text-2xl font-bold">NSE Strategy Hub</h1>
-      <HomeKpiStrip summary={summary} />
-      <section>
-        <h2 className="mb-2 text-lg font-semibold">Combined Equity (rebased to start)</h2>
-        <MultiLineChart series={series} />
-      </section>
-      <section>
-        <h2 className="mb-2 text-lg font-semibold">Top Performers</h2>
-        <TopPerformers items={top} />
-      </section>
-      <section>
-        <h2 className="mb-2 text-lg font-semibold">Recent Backtests</h2>
-        <RecentBacktests items={recent} />
-      </section>
-      <section>
-        <h2 className="mb-2 text-lg font-semibold">Live Signals</h2>
-        <LiveSignals panels={panels} />
-      </section>
-    </main>
+    <>
+      <PageHeader
+        title="Overview"
+        sub={headerSub(home.candidates.length)}
+        right={<><StatusPill label={trend.label} tone={trend.tone} />{" "}
+          Prices up to {frame.freshness.latest_bar ?? "—"} · {priceAge(frame.freshness.age_hours)}</>}
+      />
+      <div className="desk-split">
+        <div className="desk-stack" style={{ gap: 18 }}>
+          <CandidatesCard candidates={home.candidates} peadHasSignals={home.pead_has_signals} />
+          <GrowthCard growth={home.growth} />
+        </div>
+        <div className="desk-stack">
+          <RailList title="Market" meta="Nifty" items={marketRows(frame.regime).map((r) => ({
+            key: r.title, title: r.title, sub: r.sub || undefined,
+            value: r.pill ? <StatusPill label={r.pill.label} tone={r.pill.tone} />
+              : r.change !== undefined ? <ChangePill value={r.change} />
+                : <span className="rd-li__val">{r.text}</span>,
+          }))} />
+          <StrategiesCard strategies={home.strategies} />
+          <RailList title="Saved data" meta="Refresh data in the sidebar" items={ages.map((a) => ({
+            key: a.name, title: a.name, value: <StatusPill label={freshnessLabel(a.ageDays)} tone={freshnessTone(a.ageDays)} />,
+          }))} />
+        </div>
+      </div>
+      <ResearchNotice />
+      <details className="desk-disclosure">
+        <summary>How to read these figures</summary>
+        <div>{HOW_TO_READ}</div>
+      </details>
+      <details className="desk-disclosure">
+        <summary>Glossary — What do these words mean?</summary>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "10px 24px" }}>
+          {Object.entries(GLOSSARY).map(([key, g]) => (
+            <p key={key} className="rd-note" style={{ margin: 0 }}><b style={{ color: "var(--rd-text)" }}>{g.label}</b> — {g.explain}</p>
+          ))}
+        </div>
+      </details>
+    </>
   );
 }
