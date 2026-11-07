@@ -66,7 +66,7 @@ def _read_frame(path: Path, **kwargs) -> pd.DataFrame:
     except (OSError, ValueError, pd.errors.ParserError) as exc:
         st.warning("Some saved information could not be opened. Other sections may still be available.")
         with st.expander("Details of the unavailable information"):
-            st.code(f"{path.name}: {exc}")
+            st.code(f"{path.name}: {exc}", wrap_lines=True)
         return pd.DataFrame()
 
 
@@ -204,7 +204,7 @@ def _refresh_strip() -> None:
                 st.warning("The last update failed. You can still explore previously saved results.")
                 with st.expander("Why the update failed"):
                     st.write("The data provider could not supply an update. Your previously saved results are still available.")
-                    st.code(str(s["error"]))
+                    st.code(str(s["error"]), wrap_lines=True)
             if s:
                 st.caption(f"Last update attempt: {s.get('run_date') or 'Date not recorded'}")
                 if not s.get("error"):
@@ -222,7 +222,7 @@ def _refresh_strip() -> None:
             else:
                 st.caption("Update process finished. Its saved outcome is shown above; process completion alone does not confirm new data.")
             with st.expander("Update details"):
-                st.code(details)
+                st.code(details, wrap_lines=True)
 
 
 def _tab_live_open() -> None:

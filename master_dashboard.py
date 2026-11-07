@@ -724,8 +724,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
     font-size: 13px; color: var(--muted-foreground); margin: 0 0 16px 0; line-height: 1.6;
 }
 .health-hero .health-grid {
-    display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 10px;
+    /* auto-fit: 5 across on desktop, wraps to fewer columns on narrow screens. */
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-top: 10px;
 }
+.health-hero .health-grid > div { min-width: 0; }
 .health-hero .h-num {
     font-size: 22px; font-weight: 600; letter-spacing: -.025em; color: var(--foreground);
     font-variant-numeric: tabular-nums;
@@ -890,6 +892,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 
 /* Wizard body container */
 .wizard-step-body { padding: 6px 0 4px 0; }
+
+/* Narrow screens: steps share the row instead of a fixed 90px each (6 steps
+   overflowed a phone by ~340px). */
+@media (max-width: 1100px) {
+    .step { min-width: 0; flex: 1 1 0; }
+    .step-line { margin: 16px 2px 0 2px; }
+}
+@media (max-width: 640px) {
+    .step-label { font-size: 9px; letter-spacing: 0; }
+    .step-dot { width: 26px; height: 26px; font-size: 12px; }
+    .step-line { margin-top: 13px; }
+}
 .wizard-step-body h3 {
     font-size: 20px; font-weight: 600; letter-spacing: -0.02em;
     margin: 0 0 4px 0; color: var(--foreground);
@@ -1251,10 +1265,16 @@ hr {
     margin: 16px 0 !important;
 }
 
-/* ── Sidebar: 256px + shadcn nav styling ─────────────────────────────── */
-[data-testid="stSidebar"] {
-    width: 256px !important;
-    min-width: 256px !important;
+/* ── Sidebar: 272px + shadcn nav styling ─────────────────────────────── */
+/* Fixed width only while open; a forced min-width on the collapsed sidebar
+   left an empty column beside the page. 272px fits the longest nav label. */
+[data-testid="stSidebar"][aria-expanded="true"] {
+    width: 272px !important;
+    min-width: 272px !important;
+}
+[data-testid="stSidebar"][aria-expanded="false"] {
+    width: 0 !important;
+    min-width: 0 !important;
 }
 .brand-block {
     padding: 16px 6px 22px 6px;
@@ -1579,6 +1599,8 @@ html, body, [data-testid="stApp"] {
     border: 1px solid var(--glass-border) !important;
     border-radius: 16px !important;
     margin: 12px 6px 12px 12px !important;
+    /* Subtract the vertical margins so the panel's bottom stays on screen. */
+    height: calc(100% - 24px) !important;
     box-shadow:
         0 1px 0 rgba(255,255,255,0.04) inset,
         0 18px 36px -10px rgba(0,0,0,0.5) !important;
@@ -2120,7 +2142,34 @@ html, body, [data-testid="stApp"] {
     --mtbl-text:#0f172a; --mtbl-text-muted:#5b6472;
     --mtbl-accent:#0e7c5a; --mtbl-pos:#15803d; --mtbl-neg:#b91c1c; --mtbl-warn:#b45309;
 }
-.mtbl-wrap{ width:100%; border:1px solid var(--mtbl-border); border-radius:10px; overflow:auto; margin:4px 0 8px; }
+.mtbl-wrap{ width:100%; border:1px solid var(--mtbl-border); border-radius:10px; overflow-x:auto; overflow-y:hidden; margin:4px 0 8px; }
+/* Long tables: no inner scroll box (it captured the mouse wheel and stopped the
+   page from scrolling). Extra rows stay hidden until "Show all" is opened. */
+.mtbl-extra{ display:none; }
+.mtbl-block:has(> details.mtbl-more[open]) .mtbl-extra{ display:table-row; }
+.mtbl-more{ margin:-2px 0 10px; }
+.mtbl-more summary{ cursor:pointer; color:var(--mtbl-accent); font-size:12.5px; font-weight:600; list-style:none; }
+.mtbl-more summary::-webkit-details-marker{ display:none; }
+.mtbl-more .mtbl-less, .mtbl-more[open] .mtbl-all{ display:none; }
+.mtbl-more[open] .mtbl-less{ display:inline; }
+/* Detail rail beside a long list stays in view while the page scrolls. */
+[data-testid="stLayoutWrapper"]:has(> .st-key-rd_sticky_rail){ position:sticky; top:72px; }
+/* Sidebar refresh controls stay pinned to the sidebar bottom while the nav scrolls. */
+[data-testid="stSidebar"] [data-testid="stLayoutWrapper"]:has(> .st-key-rd_sb_refresh){
+    position:sticky; bottom:0; z-index:3;
+    background:var(--card); border-top:1px solid var(--sidebar-border);
+    padding:10px 0 12px;
+}
+.st-key-rd_sb_refresh{ gap:8px !important; }
+.st-key-rd_sb_refresh [data-testid="stCaptionContainer"]{ margin:0; }
+/* Below 1200px a list + side panel no longer fit side by side: stack them. */
+@media (max-width: 1200px) {
+    [class*="st-key-rd_split_"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        flex: 1 1 100% !important; width: 100% !important; min-width: 100% !important;
+    }
+    [class*="st-key-rd_split_"] > [data-testid="stLayoutWrapper"] > [data-testid="stHorizontalBlock"] { flex-wrap: wrap; }
+    [data-testid="stLayoutWrapper"]:has(> .st-key-rd_sticky_rail){ position: static; }
+}
 /* Full-bleed: break a table out of the constrained page column to span the
    whole viewport (used by the screener's Expand toggle). */
 .mtbl-fullbleed{ width:100vw; position:relative; left:50%; right:50%;
@@ -2129,17 +2178,33 @@ html, body, [data-testid="stApp"] {
 .mtbl{ width:100%; border-collapse:collapse; font-family:var(--font-sans); font-size:12.5px; color:var(--mtbl-text); background:var(--mtbl-surface); }
 .mtbl thead th{ position:sticky; top:0; z-index:1; background:var(--mtbl-surface-2); color:var(--mtbl-text-muted);
     text-align:left; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em;
-    padding:9px 12px; border-bottom:1px solid var(--mtbl-border); white-space:nowrap; }
-.mtbl tbody td{ padding:8px 12px; border-bottom:1px solid var(--mtbl-border); }
+    padding:8px 10px; border-bottom:1px solid var(--mtbl-border); vertical-align:bottom;
+    /* Headers wrap at spaces so long names ("PROMOTER BACKED") don't widen the table past the screen. */
+    white-space:normal; overflow-wrap:normal; }
+.mtbl tbody td{ padding:7px 10px; border-bottom:1px solid var(--mtbl-border); }
 .mtbl tbody tr:last-child td{ border-bottom:none; }
 .mtbl tbody tr:hover{ background:color-mix(in srgb, var(--mtbl-accent) 7%, transparent); }
 .mtbl-num{ text-align:right; font-family:var(--font-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.mtbl-nw{ white-space:nowrap; }
+[data-testid="stLayoutWrapper"]:has(> .st-key-rd_sort_js), .st-key-rd_sort_js{ display:none !important; }
+.mtbl-sortable th[data-sort]{ cursor:pointer; user-select:none; }
+.mtbl-sortable th[data-sort]:hover{ color:var(--mtbl-text); }
+.mtbl-sortable th[data-sort]:focus-visible{ outline:2px solid var(--mtbl-accent); outline-offset:-2px; }
+.mtbl-sortable th[data-asc="1"]::after{ content:" ▲"; font-size:9px; }
+.mtbl-sortable th[data-asc="0"]::after{ content:" ▼"; font-size:9px; }
 .mtbl-pill{ display:inline-block; padding:2px 9px; border-radius:999px; font-size:10.5px; font-weight:600; }
 .mtbl-pill-pos{ background:color-mix(in srgb,var(--mtbl-pos) 16%,transparent); color:var(--mtbl-pos); }
 .mtbl-pill-neg{ background:color-mix(in srgb,var(--mtbl-neg) 16%,transparent); color:var(--mtbl-neg); }
 .mtbl-pill-warn{ background:color-mix(in srgb,var(--mtbl-warn) 16%,transparent); color:var(--mtbl-warn); }
 .mtbl-pill-muted{ background:color-mix(in srgb,var(--mtbl-text-muted) 18%,transparent); color:var(--mtbl-text-muted); }
 [data-testid="stMetricValue"]{ font-variant-numeric:tabular-nums; }
+/* Denser tables so more columns fit on common laptop (1280–1366px) and tablet
+   screens. Must stay after the base .mtbl rules above to take effect. */
+@media (max-width: 1366px) {
+    .mtbl{ font-size:11.5px; }
+    .mtbl thead th{ padding:7px 8px; font-size:10.5px; letter-spacing:.02em; }
+    .mtbl tbody td{ padding:6px 8px; }
+}
 
 </style>
 """, unsafe_allow_html=True)
@@ -4920,12 +4985,29 @@ def chart_equity(eq_df: pd.DataFrame, col: str, name: str,
     return fig
 
 
+TABLE_PREVIEW_ROWS = 15
+_DATE_CELL = re.compile(r'^\d{4}-\d{2}-\d{2}$')
+
+
+def _summarize_filter_detail(detail) -> str:
+    """'F1✓ F2✗ … V✓' -> 'All 8 pass' or '6/8 · failed F2, V'. Keeps table rows one line high."""
+    tokens = str(detail).split() if pd.notna(detail) else []
+    if not tokens:
+        return '—'
+    failed = [tok[:-1] for tok in tokens if tok.endswith('✗')]
+    if not failed:
+        return f'All {len(tokens)} pass'
+    return f'{len(tokens) - len(failed)}/{len(tokens)} · failed {", ".join(failed)}'
+
+
 def _modern_table(df, *, numeric_cols=None, status_col=None,
                   sortable=False, max_height=None):
     """Theme-aware modern HTML table. Replaces st.dataframe / chart_plotly_table.
     Uses CSS classes (theme tokens) so it works in light & dark. numeric_cols get
     tabular-nums + right align + mono. status_col renders semantic pills.
-    sortable adds client-side column sort; max_height adds a scroll region."""
+    sortable adds client-side column sort. max_height (kept for existing callers)
+    now marks a long table: it shows the first TABLE_PREVIEW_ROWS rows and a
+    "Show all" toggle instead of an inner scroll box, so the page scrolls freely."""
     import html as _h
     import re as _re
     cols = list(df.columns)
@@ -4954,10 +5036,11 @@ def _modern_table(df, *, numeric_cols=None, status_col=None,
 
     thead = ''.join(
         f'<th class="{"mtbl-num" if c in numeric_cols else ""}" '
-        f'{"data-sort=1" if sortable else ""}>{_h.escape(str(c))}</th>'
+        f'{"data-sort=1 tabindex=0" if sortable else ""}>{_h.escape(str(c).replace("_", " "))}</th>'
         for c in cols)
+    is_collapsible = bool(max_height) and len(df) > TABLE_PREVIEW_ROWS
     rows = []
-    for _, r in df.iterrows():
+    for row_no, (_, r) in enumerate(df.iterrows()):
         tds = []
         for c in cols:
             v = r[c]
@@ -4965,29 +5048,62 @@ def _modern_table(df, *, numeric_cols=None, status_col=None,
                 tds.append(f'<td>{_pill(v)}</td>')
             elif c in numeric_cols:
                 tds.append(f'<td class="mtbl-num">{_h.escape(str(v))}</td>')
+            elif _DATE_CELL.match(str(v)):
+                tds.append(f'<td class="mtbl-nw">{_h.escape(str(v))}</td>')
             else:
                 tds.append(f'<td>{_h.escape(str(v))}</td>')
-        rows.append(f'<tr>{"".join(tds)}</tr>')
-    wrap_style = f'style="max-height:{max_height}px;overflow-y:auto"' if max_height else ''
-    sort_js = _MTBL_SORT_JS if sortable else ''
-    return (f'<div class="mtbl-wrap" {wrap_style}>'
-            f'<table class="mtbl{" mtbl-sortable" if sortable else ""}">'
-            f'<thead><tr>{thead}</tr></thead><tbody>{"".join(rows)}</tbody>'
-            f'</table></div>{sort_js}')
+        row_cls = ' class="mtbl-extra"' if is_collapsible and row_no >= TABLE_PREVIEW_ROWS else ''
+        rows.append(f'<tr{row_cls}>{"".join(tds)}</tr>')
+    preview_attr = f' data-preview="{TABLE_PREVIEW_ROWS}"' if is_collapsible else ''
+    table = (f'<div class="mtbl-wrap">'
+             f'<table class="mtbl{" mtbl-sortable" if sortable else ""}"{preview_attr}>'
+             f'<thead><tr>{thead}</tr></thead><tbody>{"".join(rows)}</tbody>'
+             f'</table></div>')
+    if not is_collapsible:
+        return table
+    toggle = (f'<details class="mtbl-more"><summary>'
+              f'<span class="mtbl-all">Show all {len(df):,} rows</span>'
+              f'<span class="mtbl-less">Show first {TABLE_PREVIEW_ROWS} rows</span>'
+              f'</summary></details>')
+    return f'<div class="mtbl-block">{table}{toggle}</div>'
 
 
-_MTBL_SORT_JS = """<script>
-(function(){document.querySelectorAll('table.mtbl-sortable th[data-sort]').forEach(function(th){
- th.style.cursor='pointer';th.addEventListener('click',function(){
-  var t=th.closest('table'),tb=t.tBodies[0],idx=Array.from(th.parentNode.children).indexOf(th);
-  var asc=th.getAttribute('data-asc')!=='1';th.setAttribute('data-asc',asc?'1':'0');
-  var rows=Array.from(tb.rows);rows.sort(function(a,b){
-   var x=a.cells[idx].innerText.replace(/[₹,%+]/g,''),y=b.cells[idx].innerText.replace(/[₹,%+]/g,'');
-   var nx=parseFloat(x),ny=parseFloat(y);
-   if(!isNaN(nx)&&!isNaN(ny))return asc?nx-ny:ny-nx;
-   return asc?x.localeCompare(y):y.localeCompare(x);});
-  rows.forEach(function(r){tb.appendChild(r);});});});
+# Column sort for every table.mtbl-sortable. Streamlit does not run <script>
+# tags inside st.markdown, so this is installed once per page through st.html
+# (see _install_table_sort). One delegated listener also covers tables that
+# Streamlit redraws after a rerun. After sorting, a collapsible table re-picks
+# its first N rows (data-preview) so "Show all" still hides the tail.
+_MTBL_SORT_JS = r"""<script>
+(function(){
+ if (window.__mtblSortInstalled) return; window.__mtblSortInstalled = true;
+ var doc = window.parent && window.parent.document ? window.parent.document : document;
+ var DATE = /^\d{4}-\d{2}-\d{2}$/;
+ function key(cell){ return (cell ? cell.innerText : '').trim(); }
+ function num(v){ var n = parseFloat(v.replace(/[₹$,%+\s]/g,'').replace('−','-')); return isNaN(n) ? null : n; }
+ function sortBy(th){
+  var t = th.closest('table'), tb = t.tBodies[0], idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+  var asc = th.getAttribute('data-asc') !== '1';
+  th.parentNode.querySelectorAll('th[data-asc]').forEach(function(h){ h.removeAttribute('data-asc'); });
+  th.setAttribute('data-asc', asc ? '1' : '0');
+  var rows = Array.prototype.slice.call(tb.rows);
+  rows.sort(function(a, b){
+   var x = key(a.cells[idx]), y = key(b.cells[idx]);
+   if (!(DATE.test(x) && DATE.test(y))) { var nx = num(x), ny = num(y); if (nx !== null && ny !== null) return asc ? nx - ny : ny - nx; }
+   return asc ? x.localeCompare(y) : y.localeCompare(x);
+  });
+  var keep = parseInt(t.getAttribute('data-preview') || '0', 10);
+  rows.forEach(function(r, i){ if (keep) r.classList.toggle('mtbl-extra', i >= keep); tb.appendChild(r); });
+ }
+ function hit(e){ return e.target.closest && e.target.closest('table.mtbl-sortable th[data-sort]'); }
+ doc.addEventListener('click', function(e){ var th = hit(e); if (th) sortBy(th); });
+ doc.addEventListener('keydown', function(e){ var th = hit(e); if (th && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); sortBy(th); } });
 })();</script>"""
+
+
+def _install_table_sort() -> None:
+    """Install the table sort handler (safe to call every run; it installs once)."""
+    with st.container(key='rd_sort_js'):  # hidden via CSS; holds no visible content
+        st.html(_MTBL_SORT_JS, unsafe_allow_javascript=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -5847,6 +5963,44 @@ def _saved_data_ages() -> list[tuple[str, int | None]]:
             ('PEAD', _file_age_days('pead_data/live_signals.csv'))]
 
 
+def _render_sidebar_refresh() -> None:
+    """Data-refresh controls, pinned to the bottom of the sidebar (see CSS
+    .st-key-rd_sb_refresh) so "Update all" stays visible on short screens."""
+    ages = _saved_data_ages()
+    known = [a for _, a in ages if a is not None]
+    oldest = max(known) if known else None
+    with st.container(key='rd_sb_refresh'):
+        if oldest == 0:
+            st.caption('All saved data updated today')
+        elif oldest is not None:
+            oldest_name = next((name for name, age in ages if age == oldest), '')
+            st.caption(f'Oldest saved data: {oldest_name}, {ui.freshness_label(oldest)}')
+        if st.button('Update all data', width='stretch', type='primary', icon=':material/sync:',
+                     key='sb_update_all'):
+            _refresh_all()
+        with st.popover(':material/tune: Update one strategy', width='stretch'):
+            st.caption('Monthly, IPO and Momentum update prices and simulations. '
+                       'PEAD requests earnings data and updates its saved candidates.')
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button('Monthly', width='stretch', icon=':material/autorenew:'):
+                    _refresh_strategy('Monthly')
+                if st.button('Momentum', width='stretch', icon=':material/trending_up:'):
+                    _refresh_strategy('Momentum')
+            with col_b:
+                if st.button('IPO', width='stretch', icon=':material/rocket_launch:'):
+                    _refresh_strategy('IPO')
+                if st.button('PEAD', width='stretch', icon=':material/event_note:'):
+                    _refresh_strategy('PEAD')
+            rows = ''.join(
+                f'<div class="rd-li"><span class="rd-li__title">{name}</span>'
+                f'{ui.status_pill(ui.freshness_label(age), ui.freshness_tone(age))}</div>'
+                for name, age in ages)
+            st.markdown(f'<div class="rd-list"><div class="rd-list__head">Last updated</div>{rows}</div>',
+                        unsafe_allow_html=True)
+            st.caption('Appearance: choose light or dark in the ⋮ menu at the top right.')
+
+
 def render_sidebar() -> str:
     with st.sidebar:
         st.markdown("""
@@ -5875,38 +6029,9 @@ def render_sidebar() -> str:
         )
 
         st.markdown('<div style="height:18px"></div>', unsafe_allow_html=True)
-        ages = _saved_data_ages()
-        known = [a for _, a in ages if a is not None]
-        oldest = max(known) if known else None
-        with st.popover(':material/sync: Refresh data', width='stretch'):
-            st.caption('Monthly, IPO and Momentum update prices and simulations. '
-                       'PEAD requests earnings data and updates its saved candidates.')
-            col_a, col_b = st.columns(2)
-            with col_a:
-                if st.button('Monthly', width='stretch', icon=':material/autorenew:'):
-                    _refresh_strategy('Monthly')
-                if st.button('Momentum', width='stretch', icon=':material/trending_up:'):
-                    _refresh_strategy('Momentum')
-            with col_b:
-                if st.button('IPO', width='stretch', icon=':material/rocket_launch:'):
-                    _refresh_strategy('IPO')
-                if st.button('PEAD', width='stretch', icon=':material/event_note:'):
-                    _refresh_strategy('PEAD')
-            if st.button('Update all', width='stretch', type='primary', icon=':material/sync:'):
-                _refresh_all()
-            rows = ''.join(
-                f'<div class="rd-li"><span class="rd-li__title">{name}</span>'
-                f'{ui.status_pill(ui.freshness_label(age), ui.freshness_tone(age))}</div>'
-                for name, age in ages)
-            st.markdown(f'<div class="rd-list"><div class="rd-list__head">Last updated</div>{rows}</div>',
-                        unsafe_allow_html=True)
-            st.caption('Appearance: choose light or dark in the ⋮ menu at the top right.')
-        st.markdown(
-            f'<div class="rd-note" style="padding:6px 2px 0">'
-            f'{ui.status_pill("Oldest saved data: " + ui.freshness_label(oldest), ui.freshness_tone(oldest))}'
-            f'</div>' if oldest is not None else '', unsafe_allow_html=True)
         st.caption('Research only. Review a company, its rules and the historical evidence. '
                    'No orders are placed here.')
+        _render_sidebar_refresh()
 
     return page.split('  ', 1)[-1].strip()
 
@@ -6148,15 +6273,16 @@ def render_home(m: dict, i: dict, mo: dict):
     cands = _home_candidates(m, i, mo)
     _render_home_header(len(cands))
 
-    main, rail = st.columns([2.2, 1], gap='large')
-    with main:
-        _render_home_candidates(cands)
-        st.markdown('<div style="height:18px"></div>', unsafe_allow_html=True)
-        _render_home_growth(m, i, mo)
-    with rail:
-        _render_home_market()
-        _render_home_strategies()
-        _render_home_freshness()
+    with st.container(key='rd_split_home'):  # stacks below 1200px, see CSS
+        main, rail = st.columns([2.2, 1], gap='large')
+        with main:
+            _render_home_candidates(cands)
+            st.markdown('<div style="height:18px"></div>', unsafe_allow_html=True)
+            _render_home_growth(m, i, mo)
+        with rail:
+            _render_home_market()
+            _render_home_strategies()
+            _render_home_freshness()
 
     st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
     research_notice()
@@ -6314,8 +6440,9 @@ def _render_monthly_ranking(ranks: pd.DataFrame):
         {'key': 'label', 'label': 'Model label', 'kind': 'tag', 'hide_sm': True},
     ], rows, selected=selected, sorted_key='rs',
        empty=f'No stocks match “{choice}” in the saved ranking.')
-    with st.container(key='rd_scroll_monthly', height=560, border=False):
-        clickable_table(html, key='monthly_ranks')
+    # No fixed-height box: a nested scroll region captured the mouse wheel and
+    # stopped the page from scrolling. The detail rail is sticky instead.
+    clickable_table(html, key='monthly_ranks')
     _md('<div class="rd-note" style="margin-top:6px">RS score = the stock’s return since last month end '
         'minus the Nifty benchmark return. The top 5 are the model’s current candidates, not your '
         'holdings. The model label is written by the ranking script and does not consider market '
@@ -6453,11 +6580,13 @@ def render_monthly(m: dict):
     _render_monthly_summary(eq, mx, b_ret, b_cagr, alpha, n_months, color)
     st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
 
-    main, rail = st.columns([2.1, 1], gap='large')
-    with main:
-        row = _render_monthly_ranking(ranks)
-    with rail:
-        _render_monthly_detail(row, ranks)
+    with st.container(key='rd_split_monthly'):  # stacks below 1200px, see CSS
+        main, rail = st.columns([2.1, 1], gap='large')
+        with main:
+            row = _render_monthly_ranking(ranks)
+        with rail:
+            with st.container(key='rd_sticky_rail'):
+                _render_monthly_detail(row, ranks)
 
     st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
     tab_reb, tab_rules, tab_exit = st.tabs(['Rebalance log', 'Rules and checks', 'Exit research'])
@@ -6466,7 +6595,7 @@ def render_monthly(m: dict):
     with tab_rules:
         _render_monthly_rules(color)
     with tab_exit:
-        _exit_playbook_card(_pick_rec('monthly_rotation'), title='Monthly Rotation')
+        _exit_playbook_card(_pick_rec('monthly_rotation'), title='Monthly stock rotation')
 
     research_notice()
     st.caption('Daily rankings are research candidates. The backtest rotates monthly; actual holdings are not tracked here.')
@@ -6480,9 +6609,8 @@ def render_monthly(m: dict):
 def render_ipo(i: dict):
     research_notice()
     color  = THEME[S_IPO]['color']
-    st.markdown(f'<div class="page-title" style="color:{color}">🚀 IPO Edge</div>'
-                '<div class="page-sub">Review newly listed companies moving above an early trading range.</div><br>',
-                unsafe_allow_html=True)
+    _md('<div class="rd-page"><div class="rd-page__title">Newly listed stocks (IPO)</div>'
+        '<div class="rd-page__sub">Review newly listed companies moving above an early trading range.</div></div>')
 
     st.markdown(_explain_box(
         '<b>How it works:</b> When a stock lists on NSE, it often trades sideways for ~40 days (the "<b>base</b>"). '
@@ -6494,7 +6622,7 @@ def render_ipo(i: dict):
     section_help('How to read this page', 'A breakout means price moved above the model’s reference range. A watch-zone company is near that level. '
                  'Trading volume counts shares traded. Signals identify setups to research; the historical charts show simulated outcomes.')
 
-    _exit_playbook_card(_pick_rec('ipo_edge'), title='IPO Edge')
+    _exit_playbook_card(_pick_rec('ipo_edge'), title='Newly listed stocks (IPO)')
 
     eq     = i.get('equity')
     trades = i.get('trades')
@@ -6625,17 +6753,26 @@ def render_ipo(i: dict):
         hold_col   = 'Holding_Days' if 'Holding_Days' in trades.columns else 'Hold_Days'
         result_col = 'Result' if 'Result' in trades.columns else None
         want_cols  = ['Ticker', 'Entry_Date', 'Entry_Price', 'Exit_Date',
-                      'Exit_Price', 'PnL_Pct', hold_col, 'Exit_Reason', 'Status']
-        if result_col:
-            want_cols.append(result_col)
+                      'Exit_Price', 'PnL_Pct', hold_col, 'Exit_Reason']
+        # Result already says Win/Loss/Open, so Status (Closed/Open) only repeats it.
+        want_cols.append(result_col or 'Status')
+        # Skip columns that hold one value on every row (e.g. all "Liquid") —
+        # they add width without information.
         extra = [c for c in ('Entry_Stage', 'Setup_Type', 'Partial_Booked', 'Liquidity_Status', 'Promoter_Backed')
-                 if c in trades.columns]
+                 if c in trades.columns and trades[c].nunique(dropna=False) > 1]
         avail = [c for c in want_cols + extra if c in trades.columns]
         t = trades[avail].copy()
         t['Ticker']      = t['Ticker'].str.replace('.NS', '', regex=False)
         t['Entry_Price'] = t['Entry_Price'].apply(lambda x: f'₹{x:,.2f}')
         t['Exit_Price']  = t['Exit_Price'].apply(lambda x: f'₹{x:,.2f}')
         t['PnL_Pct']     = t['PnL_Pct'].apply(lambda x: f'{x:+.2f}%')
+        if 'Partial_Booked' in t.columns:
+            # Accept bools or 'True'/'False' strings (CSV round-trips can give either).
+            t['Partial_Booked'] = (t['Partial_Booked'].astype(str).str.strip().str.lower()
+                                   .map({'true': 'Yes', 'false': 'No'}).fillna('—'))
+        if 'Entry_Stage' in t.columns:
+            # 'Stage 3 — Breakout' -> 'Breakout': the stage name alone fits the column.
+            t['Entry_Stage'] = t['Entry_Stage'].astype(str).str.split('—').str[-1].str.strip()
         if result_col and result_col in trades.columns:
             row_colors = ['rgba(0,200,83,0.08)' if r == 'Win' else
                           'rgba(136,146,164,0.05)' if r == 'Open' else
@@ -6800,15 +6937,12 @@ def render_momentum(mo: dict):
                  '220-day weighted average queues an exit at the next opening price. The 15% rule takes precedence; '
                  'losses can exceed that level. Proposed targets and stops elsewhere are separate research.')
     color  = THEME[S_MOMENTUM]['color']
-    st.markdown(
-        f'<div class="page-title" style="color:{color}">📈 Momentum Edge</div>'
-        '<div class="page-sub">Study stocks making new highs and the trend checks behind each saved setup.</div><br>',
-        unsafe_allow_html=True,
-    )
+    _md('<div class="rd-page"><div class="rd-page__title">Price strength (Momentum)</div>'
+        '<div class="rd-page__sub">Study stocks making new highs and the trend checks behind each saved setup.</div></div>')
     section_help('How to read this page', 'A breakout is a move above a previous price high. Trend checks compare price with longer-term averages. '
                  'Use the company details to inspect each check; the historical test shows what happened to earlier model trades.')
 
-    _exit_playbook_card(_pick_rec('momentum_edge'), title='Momentum Edge')
+    _exit_playbook_card(_pick_rec('momentum_edge'), title='Price strength (Momentum)')
 
     eq     = mo.get('equity')
     trades = mo.get('trades')
@@ -7367,6 +7501,19 @@ def render_momentum(mo: dict):
         t['Entry_Date']  = pd.to_datetime(t['Entry_Date']).dt.strftime('%Y-%m-%d')
         t['Exit_Date']   = pd.to_datetime(t['Exit_Date']).dt.strftime('%Y-%m-%d')
         t['PnL_Pct']     = t['PnL_Pct'].apply(lambda x: f'{x:+.2f}%')
+        if 'Filter_Detail' in t.columns:
+            t['Filter_Detail'] = t['Filter_Detail'].apply(_summarize_filter_detail)
+        # Fit the table on a laptop screen (it had 15 columns, ~1250px):
+        # plain-word entry type, one Recovery column, and no Result column
+        # (Win/Loss always matches the sign of PnL Pct).
+        if 'Entry_Type' in t.columns:
+            t['Entry_Type'] = t['Entry_Type'].replace({'52W_HIGH_FALLBACK': '52W high', 'ATH': 'All-time high'})
+        if {'Recovery_Speed', 'Recovery_Days'} <= set(t.columns):
+            # Recovery_Days is -1 for 'No Reclaim'; show the label alone then.
+            t['Recovery'] = [f'{s} · {int(d)}d' if pd.notna(d) and d > 0 else str(s)
+                             for s, d in zip(t['Recovery_Speed'], t['Recovery_Days'])]
+            t = t.drop(columns=['Recovery_Speed', 'Recovery_Days'])
+        t = t.drop(columns=['Result'], errors='ignore')
         # Rename for compactness
         t = t.rename(columns={
             'Prior_52W_High':      'Prior 52W High',
@@ -7383,7 +7530,8 @@ def render_momentum(mo: dict):
             '<div style="font-size:11px;color:var(--muted-foreground);margin-top:6px;line-height:1.6;">'
             '<b>BK Margin</b> = how much the signal-day close exceeded the prior 52-week close high. '
             'Margins under +1% (like AXISBANK +0.25% on 14 Jan 2026) are knife-edge breakouts that often fail. '
-            'Strict mode hides them. <b>Filters</b> column shows pass/fail of every condition at signal day: '
+            'Strict mode hides them. <b>Filters</b> column shows how many conditions passed on signal day '
+            'and names any that failed: '
             'F1 trend · F2 close>SMA50 · F3 MA align · F4 vs 52W low · F5 dip · F6 choppiness · BK breakout · V volume.'
             '</div>',
             unsafe_allow_html=True,
@@ -7862,17 +8010,15 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
     st.markdown('### 🎯 Optimal Entry — what predicts winners?')
     st.caption('Win rate and average PnL grouped by entry feature. Larger Count = more reliable signal.')
 
-    cols = st.columns(2)
-    with cols[0]:
-        df = report.get('by_entry_type', pd.DataFrame())
-        if not df.empty:
-            st.markdown('**By Entry Type**')
-            st.markdown(_modern_table(df), unsafe_allow_html=True)
-    with cols[1]:
-        df = report.get('by_recovery_speed', pd.DataFrame())
-        if not df.empty:
-            st.markdown('**By Recovery Speed**')
-            st.markdown(_modern_table(df), unsafe_allow_html=True)
+    # Tabs, not half-width columns: each table needs the full width to fit.
+    feature_tables = [(label, report.get(key, pd.DataFrame()))
+                      for label, key in (('By Entry Type', 'by_entry_type'),
+                                         ('By Recovery Speed', 'by_recovery_speed'))]
+    feature_tables = [(label, df) for label, df in feature_tables if not df.empty]
+    if feature_tables:
+        for tab, (_, df) in zip(st.tabs([label for label, _ in feature_tables]), feature_tables):
+            with tab:
+                st.markdown(_modern_table(df), unsafe_allow_html=True)
 
     df = report.get('by_regime', pd.DataFrame())
     if not df.empty and (df['Regime_At_Entry'] != 'Unknown').any():
@@ -8057,13 +8203,12 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
         st.markdown('### 📜 Past Stocks — which tickers earned/lost the most')
         st.caption('Every closed trade aggregated by stock. Total_PnL = sum of all PnL% from this ticker.')
 
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown('**🏆 Top 10 winners (by total return)**')
+        # Tabs, not half-width columns: each table needs the full width to fit.
+        tab_win, tab_lose = st.tabs(['🏆 Top 10 winners (by total return)', '💀 Top 10 losers'])
+        with tab_win:
             st.markdown(_modern_table(th.head(10)), unsafe_allow_html=True)
-        with c2:
+        with tab_lose:
             losers = th.sort_values('Total_PnL').head(10)
-            st.markdown('**💀 Top 10 losers**')
             st.markdown(_modern_table(losers), unsafe_allow_html=True)
 
         with st.expander(f'All {len(th)} traded tickers'):
@@ -9337,10 +9482,10 @@ def render_add_strategy() -> None:
                         )
                     if proc.returncode == 0:
                         st.success('Backtest complete ✓ — check the Library card for KPIs')
-                        st.code(proc.stdout[-800:])
+                        st.code(proc.stdout[-800:], wrap_lines=True)
                     else:
                         st.warning('Backtest had issues — strategy saved as Research')
-                        st.code((proc.stderr or proc.stdout)[-1500:])
+                        st.code((proc.stderr or proc.stdout)[-1500:], wrap_lines=True)
                     st.session_state['_wizard_step'] = 1
                     st.session_state['_wizard_data'] = {}
                     st.session_state['_page_override'] = 'library'
@@ -9555,6 +9700,7 @@ def main():
     native_theme()
     page = render_sidebar()
     core_glossary.render_sidebar(st)
+    _install_table_sort()
 
     with st.spinner('Loading data…'):
         m  = load_monthly()
