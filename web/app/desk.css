@@ -19,7 +19,9 @@
   --rd-surface: var(--rd-card);
   --desk-sidebar-w: 272px;
 }
+:root { color-scheme: light; }
 [data-theme="dark"] {
+  color-scheme: dark; /* native scrollbars and form controls follow the theme */
   --rd-bg: #191A1A; --rd-card: #202222; --rd-sidebar: #1C1D1D; --rd-line: #2E3131;
   --rd-hover: rgba(255,255,255,.04); --rd-active: #2B2D2D; --rd-tint: rgba(255,255,255,.03);
   --rd-text: #ECECEA; --rd-text-2: #C9C9C5; --rd-text-muted: #91918C;
@@ -107,7 +109,11 @@ html, body { font-family: var(--rd-font); background: var(--rd-bg); color: var(-
 .rd-li__val { text-align:right; font-variant-numeric: tabular-nums; color: var(--rd-text); white-space:nowrap; }
 
 /* ── Desk frame (Next.js) ──────────────────────────────────────────────── */
-.desk { display: flex; height: 100dvh; overflow: hidden; }
+/* position:relative on .desk and .desk-main: absolutely positioned children (e.g. sr-only
+   table captions) must stay inside the scroll area, or they stretch the document and
+   give the page a second scrollbar. */
+.desk { position: relative; display: flex; height: 100dvh; overflow: hidden; }
+.desk-main { position: relative; }
 .desk-sidebar { width: var(--desk-sidebar-w); flex: 0 0 var(--desk-sidebar-w); display: flex; flex-direction: column;
   min-height: 0; background: var(--rd-sidebar); border-right: 1px solid var(--rd-line); transition: margin-left 160ms ease; }
 .desk-sidebar[data-collapsed="true"] { margin-left: calc(-1 * var(--desk-sidebar-w)); }
