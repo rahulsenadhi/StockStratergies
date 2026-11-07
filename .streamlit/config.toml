@@ -8,16 +8,37 @@ gatherUsageStats = false
 
 [theme]
 base = "dark"
-primaryColor = "#10b981"
-font = "sans serif"
+primaryColor = "#1F6F78"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+baseRadius = "8px"
+showSidebarBorder = true
 
 [theme.dark]
-backgroundColor = "#0f172a"
-secondaryBackgroundColor = "#1e293b"
-textColor = "#f1f5f9"
+primaryColor = "#57BCC4"
+backgroundColor = "#191A1A"
+secondaryBackgroundColor = "#232525"
+textColor = "#ECECEA"
+borderColor = "#2E3131"
+dataframeBorderColor = "#2A2D2D"
+dataframeHeaderBackgroundColor = "#202222"
+greenColor = "#3DBE8B"
+redColor = "#F06C80"
+
+[theme.dark.sidebar]
+backgroundColor = "#1C1D1D"
+secondaryBackgroundColor = "#232525"
 
 [theme.light]
-primaryColor = "#047857"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f1f5f9"
-textColor = "#172033"
+primaryColor = "#1F6F78"
+backgroundColor = "#F7F6F3"
+secondaryBackgroundColor = "#EFEDE8"
+textColor = "#1D1D1B"
+borderColor = "#E7E4DD"
+dataframeBorderColor = "#ECEAE4"
+dataframeHeaderBackgroundColor = "#FBFAF8"
+greenColor = "#12805C"
+redColor = "#C2364B"
+
+[theme.light.sidebar]
+backgroundColor = "#F2F1EC"
+secondaryBackgroundColor = "#E8E6E0"

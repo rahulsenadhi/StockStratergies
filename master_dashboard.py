@@ -61,6 +61,7 @@ import streamlit as st
 from core.workflow_ui import workflow_style, research_notice, section_help, native_theme
 from core.ui_components import adapt_figure_to_theme
 from core import ui_components as ui
+from core.ui_table import clickable_table, selected_row
 from core import analytics as core_analytics
 from core.refresh_ui import render_staleness_banner
 from core import data_io as core_data_io
@@ -5825,9 +5826,28 @@ def _navigate(destination: str) -> None:
     st.session_state['_page_override'] = None
 
 
+NAV_ICONS = {
+    '📊  Dashboard': ':material/space_dashboard:', '📚  Strategy Library': ':material/folder_open:',
+    '🛠  Builder': ':material/add_circle:', '🔄  Monthly Rotation': ':material/autorenew:',
+    '🚀  IPO Edge': ':material/rocket_launch:', '📈  Momentum Edge': ':material/trending_up:',
+    '⚡  PEAD': ':material/event_note:', '🎯  Suggestions': ':material/checklist:',
+    '🔬  Insights': ':material/insights:', '📑  History & Proof': ':material/compare_arrows:',
+}
+
+
+def _nav_label(key: str) -> str:
+    return f'{NAV_ICONS.get(key, "")} {NAV_LABELS[key]}'.strip()
+
+
+def _saved_data_ages() -> list[tuple[str, int | None]]:
+    return [('Monthly', _file_age_days('live_rankings.csv')),
+            ('IPO Edge', _file_age_days('ipo_edge_equity.csv')),
+            ('Momentum', _file_age_days('momentum_edge_equity.csv')),
+            ('PEAD', _file_age_days('pead_data/live_signals.csv'))]
+
+
 def render_sidebar() -> str:
     with st.sidebar:
-        # Brand: logo icon + 2-line title (shadcn-style)
         st.markdown("""
         <div class="brand-block">
             <div class="brand-row">
@@ -5849,48 +5869,43 @@ def render_sidebar() -> str:
 
         page = st.radio(
             'Navigate',
-            list(NAV_LABELS), format_func=NAV_LABELS.get,
+            list(NAV_LABELS), format_func=_nav_label,
             label_visibility='collapsed', key='hub_page',
         )
 
-        # Native theme selection also updates tables, charts and dropdowns.
-        st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
-        st.caption('Appearance: choose light or dark in the ⋮ menu at the top right.')
-
-        st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-hdr">Refresh Data</div>', unsafe_allow_html=True)
-
-        st.caption('Monthly, IPO and Momentum update prices and simulations. PEAD requests earnings data and updates its saved candidates.')
-
-        col_a, col_b = st.columns(2)
-        with col_a:
-            if st.button('🔄 Monthly', width='stretch'):
-                _refresh_strategy('Monthly')
-            if st.button('📈 Momentum', width='stretch'):
-                _refresh_strategy('Momentum')
-        with col_b:
-            if st.button('🚀 IPO', width='stretch'):
-                _refresh_strategy('IPO')
-            if st.button('⚡ PEAD', width='stretch'):
-                _refresh_strategy('PEAD')
-
-        if st.button('↻ Update ALL', width='stretch', type='primary'):
-            _refresh_all()
-
-        st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-hdr">Last Updated</div>', unsafe_allow_html=True)
-        st.markdown(f"""
-        <div style="font-size:11px;line-height:2.2;color:#3d4a60;">
-          🔄 Monthly &nbsp;&nbsp;<b style="color:#7c9cff">{_file_age('live_rankings.csv')}</b><br>
-          🚀 IPO Edge &nbsp;&nbsp;<b style="color:#00c853">{_file_age('ipo_edge_equity.csv')}</b><br>
-          📈 Momentum &nbsp;<b style="color:#f9c200">{_file_age('momentum_edge_equity.csv')}</b><br>
-          ⚡ PEAD &nbsp;&nbsp;&nbsp;&nbsp;<b style="color:#c084fc">{_file_age('pead_data/live_signals.csv')}</b>
-        </div>
-        """, unsafe_allow_html=True)
-
-        st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
-        st.markdown('<div class="sec-hdr">Quick Guide</div>', unsafe_allow_html=True)
-        st.caption('Start at Home to choose a strategy. Review a company, understand its rules, then examine the historical evidence. No orders are placed here.')
+        st.markdown('<div style="height:18px"></div>', unsafe_allow_html=True)
+        ages = _saved_data_ages()
+        known = [a for _, a in ages if a is not None]
+        oldest = max(known) if known else None
+        with st.popover(':material/sync: Refresh data', width='stretch'):
+            st.caption('Monthly, IPO and Momentum update prices and simulations. '
+                       'PEAD requests earnings data and updates its saved candidates.')
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button('Monthly', width='stretch', icon=':material/autorenew:'):
+                    _refresh_strategy('Monthly')
+                if st.button('Momentum', width='stretch', icon=':material/trending_up:'):
+                    _refresh_strategy('Momentum')
+            with col_b:
+                if st.button('IPO', width='stretch', icon=':material/rocket_launch:'):
+                    _refresh_strategy('IPO')
+                if st.button('PEAD', width='stretch', icon=':material/event_note:'):
+                    _refresh_strategy('PEAD')
+            if st.button('Update all', width='stretch', type='primary', icon=':material/sync:'):
+                _refresh_all()
+            rows = ''.join(
+                f'<div class="rd-li"><span class="rd-li__title">{name}</span>'
+                f'{ui.status_pill(ui.freshness_label(age), ui.freshness_tone(age))}</div>'
+                for name, age in ages)
+            st.markdown(f'<div class="rd-list"><div class="rd-list__head">Last updated</div>{rows}</div>',
+                        unsafe_allow_html=True)
+            st.caption('Appearance: choose light or dark in the ⋮ menu at the top right.')
+        st.markdown(
+            f'<div class="rd-note" style="padding:6px 2px 0">'
+            f'{ui.status_pill("Oldest saved data: " + ui.freshness_label(oldest), ui.freshness_tone(oldest))}'
+            f'</div>' if oldest is not None else '', unsafe_allow_html=True)
+        st.caption('Research only. Review a company, its rules and the historical evidence. '
+                   'No orders are placed here.')
 
     return page.split('  ', 1)[-1].strip()
 
@@ -5900,45 +5915,21 @@ def render_sidebar() -> str:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 HOME_STRATEGIES = {
-    # index id: (plain title, one-line purpose, nav destination, sample unit)
-    'monthly_rotation': ('Monthly stock rotation',
-                         'Holds the 5 strongest Nifty 50 stocks by recent strength; changes the selection monthly.',
-                         'Monthly Rotation', 'rebalances'),
-    'ipo_edge': ('Newly listed stocks (IPO)',
-                 'Studies recent listings whose price rises above an early trading range.',
-                 'IPO Edge', 'trades'),
-    'momentum_edge': ('Price strength (Momentum)',
-                      'Stocks that dipped below the 220-day trend, recovered, then made new highs.',
-                      'Momentum Edge', 'trades'),
-    'pead': ('After earnings (PEAD)',
-             'Compares a company’s latest earnings with its recent history, then checks financial strength.',
-             'PEAD', 'trades'),
+    # index id: (plain title, nav destination, sample unit, series colour)
+    'monthly_rotation': ('Monthly stock rotation', 'Monthly Rotation', 'rebalances', '#3B6FD8'),
+    'ipo_edge': ('Newly listed stocks (IPO)', 'IPO Edge', 'trades', '#12805C'),
+    'momentum_edge': ('Price strength (Momentum)', 'Momentum Edge', 'trades', '#C98A1B'),
+    'pead': ('After earnings (PEAD)', 'PEAD', 'trades', '#8A5CD8'),
 }
+_SHORT = {S_MONTHLY: 'Monthly', S_IPO: 'IPO', S_MOMENTUM: 'Momentum'}
+_ROUTE = {S_MONTHLY: 'Monthly Rotation', S_IPO: 'IPO Edge', S_MOMENTUM: 'Momentum Edge'}
+_STATUS_TONE = {'Live Breakout': 'gain', 'Breakout Today': 'gain', 'Near Breakout': 'info',
+                'Watch Zone': 'warn'}
 
 
 def _open_backtest_results(strat_id: str) -> None:
     st.session_state['_view_strategy'] = strat_id
     st.session_state['_page_override'] = 'backtest_results'
-
-
-def _render_home_headline(n_candidates: int) -> None:
-    snap = _regime_snapshot()
-    fresh = _data_freshness()
-    status = snap.get('status', 'Unknown')
-    lead, emphasis, tone = {
-        'Bull': ('Market trend filter is', 'on — Nifty passes all trend conditions', 'gain'),
-        'Bear': ('Market trend filter is', 'off — at least one Nifty trend condition is failing', 'warn'),
-    }.get(status, ('Market trend is', 'unknown — benchmark data unavailable', 'muted'))
-    meta = []
-    if snap.get('bars_since_flip'):
-        meta.append(f'in this state for {snap["bars_since_flip"]} sessions')
-    age_h = fresh.get('age_hours')
-    if fresh.get('latest_bar') not in (None, '—'):
-        age_txt = ui.freshness_label(int(age_h // 24)) if age_h is not None else 'age unknown'
-        meta.append(f'prices up to {fresh["latest_bar"]} ({age_txt})')
-    meta.append(f'{n_candidates} candidates in saved files')
-    meta.append('research only — nothing here places orders')
-    _md(ui.headline(lead, emphasis, tone, meta))
 
 
 def _home_candidates(m: dict, i: dict, mo: dict) -> pd.DataFrame:
@@ -5949,16 +5940,16 @@ def _home_candidates(m: dict, i: dict, mo: dict) -> pd.DataFrame:
         age = ui.freshness_label(_file_age_days('live_rankings.csv'))
         for _, r in ranks.head(5).iterrows():
             rows.append({'Strategy': S_MONTHLY, 'Ticker': str(r['Ticker']).replace('.NS', ''),
-                         'Company': r.get('Company', ''), 'Status': f"Top 5 · rank {int(r['Rank'])}",
+                         'Company': r.get('Company', ''), 'Status': f"Top 5 · #{int(r['Rank'])}",
                          'Key measure': f"RS {r.get('RS_Score', 0):+.1f}% vs Nifty",
-                         'Data': f'ranking {age}', '_route': 'Monthly Rotation'})
+                         'Change': pd.to_numeric(r.get('Return_%'), errors='coerce'), 'Data': age})
     sigs = i.get('signals', pd.DataFrame())
     if sigs is not None and not sigs.empty and 'Signal' in sigs.columns:
         for _, r in sigs[sigs['Signal'].isin(['Live Breakout', 'Watch Zone'])].iterrows():
             rows.append({'Strategy': S_IPO, 'Ticker': str(r['Ticker']).replace('.NS', ''),
                          'Company': r.get('Company', ''), 'Status': r['Signal'],
                          'Key measure': f"{r.get('Stage', '')} · volume {r.get('Vol Ratio', 0):.1f}× avg",
-                         'Data': 'calculated from saved IPO prices', '_route': 'IPO Edge'})
+                         'Change': None, 'Data': 'from saved prices'})
     msigs = mo.get('signals', pd.DataFrame())
     if msigs is not None and not msigs.empty and 'Signal' in msigs.columns:
         age = ui.freshness_label(_file_age_days('momentum_edge_signals.csv'))
@@ -5966,134 +5957,214 @@ def _home_candidates(m: dict, i: dict, mo: dict) -> pd.DataFrame:
         for _, r in keep.iterrows():
             dist = pd.to_numeric(r.get('Dist ATH%'), errors='coerce')
             score = pd.to_numeric(r.get('Score'), errors='coerce')
-            measure = []
-            if pd.notna(dist):
-                measure.append(f'{dist:+.1f}% from high')
-            if pd.notna(score):
-                measure.append(f'score {score:.0f}')
             rows.append({'Strategy': S_MOMENTUM, 'Ticker': str(r['Ticker']).replace('.NS', ''),
                          'Company': r.get('Company', ''), 'Status': r['Signal'],
-                         'Key measure': ' · '.join(measure) or '—',
-                         'Data': f'signals {age}', '_route': 'Momentum Edge'})
-    return pd.DataFrame(rows, columns=['Strategy', 'Ticker', 'Company', 'Status',
-                                       'Key measure', 'Data', '_route'])
+                         'Key measure': f'score {score:.0f}' if pd.notna(score) else '—',
+                         'Change': dist, 'Data': age})
+    return pd.DataFrame(rows, columns=['Strategy', 'Ticker', 'Company', 'Status', 'Key measure',
+                                       'Change', 'Data'])
+
+
+def _section_head(title: str, meta: str = '') -> None:
+    m = f'<span>{_h.escape(meta)}</span>' if meta else ''
+    _md(f'<div class="rd-list__head" style="border:0;padding:0 0 6px">{_h.escape(title)} {m}</div>')
+
+
+def _render_home_header(n_candidates: int) -> None:
+    snap = _regime_snapshot()
+    fresh = _data_freshness()
+    trend = {'Bull': ('Trend filter on', 'gain'), 'Bear': ('Trend filter off', 'warn')}.get(
+        snap.get('status', 'Unknown'), ('Trend unknown', 'muted'))
+    age_h = fresh.get('age_hours')
+    price_age = ui.freshness_label(int(age_h // 24)) if age_h is not None else 'age unknown'
+    left, right = st.columns([3, 2], vertical_alignment='bottom')
+    with left:
+        _md('<div class="rd-page"><div class="rd-page__title">Overview</div>'
+            f'<div class="rd-page__sub">{n_candidates} candidates in saved files · '
+            'research only, nothing here places orders</div></div>')
+    with right:
+        _md(f'<div class="rd-page" style="text-align:right">{ui.status_pill(trend[0], trend[1])}'
+            f'<span class="rd-note">&nbsp; Prices up to {_h.escape(str(fresh.get("latest_bar", "—")))}'
+            f' · {price_age}</span></div>')
 
 
 def _render_home_candidates(cands: pd.DataFrame) -> None:
-    _md(ui.section_label('Candidates in saved files', 'Monthly · IPO · Momentum'))
+    head_l, head_r = st.columns([1, 1.3], vertical_alignment='center')
+    with head_l:
+        _section_head('Candidates', 'from saved rankings and signals')
+    with head_r:
+        pick = st.segmented_control('Filter candidates', ['All', 'Monthly', 'IPO', 'Momentum'],
+                                    default='All', key='home_cand_filter', label_visibility='collapsed')
+    pick = pick or 'All'
+    shown = cands if pick == 'All' else cands[cands['Strategy'].map(_SHORT) == pick]
+    rows = []
+    for _, r in shown.iterrows():
+        change = r['Change']
+        rows.append({'id': f"{r['Strategy']}|{r['Ticker']}", 'cells': {
+            'company': (r['Company'] or r['Ticker'], f"{r['Ticker']} · {_SHORT.get(r['Strategy'], r['Strategy'])}"),
+            'status': ui.status_pill(r['Status'], _STATUS_TONE.get(r['Status'], 'info')),
+            'measure': r['Key measure'],
+            'change': ui.change_pill(None if change is None or pd.isna(change) else float(change)),
+        }})
+    columns = [
+        {'key': 'company', 'label': 'Company', 'kind': 'name'},
+        {'key': 'status', 'label': 'Status', 'kind': 'tag'},
+        {'key': 'measure', 'label': 'Key measure', 'kind': 'text', 'hide_sm': True},
+        {'key': 'change', 'label': 'Move', 'kind': 'html'},
+    ]
+    html = ui.data_table(columns, rows, selected=selected_row('home_cands'),
+                         empty='No candidates in the saved files for this filter.')
+    picked = clickable_table(html, key='home_cands')
+    note = ('Move: month return for Monthly, distance from the all-time high for Momentum. '
+            'Labels come from each strategy’s own rules; they are model output, not advice.')
     pead_file = Path(BASE_DIR) / 'pead_data' / 'live_signals.csv'
-    pead_note = ('PEAD has no saved signals (its signal file is empty); open the PEAD page to screen companies.'
-                 if not pead_file.exists() or pead_file.stat().st_size < 10 else
-                 'PEAD candidates are reviewed on the PEAD page.')
-    if cands.empty:
-        _md(ui.empty_state('No candidates in the saved files',
-                           'The saved rankings and signal files contain no current candidates. '
-                           'Use Refresh Data in the sidebar to rebuild them.'))
-        st.caption(pead_note)
-        return
-    st.caption('Each row comes from a strategy page and keeps that page’s own label. '
-               'Labels are model output, not advice. ' + pead_note)
-    event = st.dataframe(
-        cands.drop(columns=['_route']), hide_index=True, width='stretch',
-        height=min(38 + 35 * len(cands), 640),
-        on_select='rerun', selection_mode='single-row', key='home_candidates',
-        column_config={
-            'Strategy': st.column_config.TextColumn(width=130),
-            'Ticker': st.column_config.TextColumn(width=110),
-            'Company': st.column_config.TextColumn(width=200),
-            'Status': st.column_config.TextColumn(width=140, help='Label from the strategy’s own rules'),
-            'Key measure': st.column_config.TextColumn(width=220),
-        },
-    )
-    sel = event.selection.rows if event and event.selection else []
-    if sel:
-        row = cands.iloc[sel[0]]
-        st.button(f'Open {row["Strategy"]} page for {row["Ticker"]} →', key='home_open_candidate',
-                  type='primary', on_click=_navigate, args=(row['_route'],))
+    if not pead_file.exists() or pead_file.stat().st_size < 10:
+        note += ' PEAD has no saved signals; screen companies on the PEAD page.'
+    _md(f'<div class="rd-note" style="margin-top:6px">{_h.escape(note)}</div>')
+    if picked and '|' in picked:
+        strat, ticker = picked.split('|', 1)
+        if strat in _ROUTE:
+            st.button(f'Open {ticker} in {strat} →', key='home_open_candidate', type='primary',
+                      on_click=_navigate, args=(_ROUTE[strat],))
+
+
+def _home_growth_figure(m: dict, i: dict, mo: dict, window: str) -> tuple[go.Figure, list]:
+    """Saved equity curves rebased to 0% at the start of the window (display only)."""
+    series = [(m, 'Portfolio_Value', 'monthly_rotation'), (i, 'Portfolio_Value', 'ipo_edge'),
+              (mo, 'Equity', 'momentum_edge')]
+    fig, legend = go.Figure(), []
+    for data, col, sid in series:
+        eq = data.get('equity')
+        if eq is None or col not in eq.columns:
+            continue
+        s = eq[col].dropna()
+        if window != 'Max' and len(s):
+            s = s[s.index >= s.index[-1] - pd.DateOffset(years={'1Y': 1, '3Y': 3, '5Y': 5}[window])]
+        if len(s) < 2:
+            continue
+        s = _downsample_series(s)
+        ret = (s / s.iloc[0] - 1) * 100
+        title, _, _, colour = HOME_STRATEGIES[sid]
+        fig.add_trace(go.Scatter(x=ret.index, y=ret.values, name=title, mode='lines',
+                                 line=dict(color=colour, width=1.8),
+                                 hovertemplate='%{y:+.1f}%<extra>' + title + '</extra>'))
+        legend.append((title, colour, float(ret.iloc[-1]), s.index[0].strftime('%b %Y')))
+    fig.add_hline(y=0, line=dict(color='rgba(120,120,120,.45)', dash='dot', width=1))
+    fig.update_layout(**_plotly_base())
+    fig.update_layout(height=290, margin=dict(l=4, r=4, t=8, b=4), showlegend=False,
+                      hovermode='x unified', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                      yaxis=dict(ticksuffix='%', gridcolor='rgba(120,120,120,.14)', zeroline=False),
+                      xaxis=dict(showgrid=False))
+    return fig, legend
+
+
+def _render_home_growth(m: dict, i: dict, mo: dict) -> None:
+    head_l, head_r = st.columns([1, 1.3], vertical_alignment='center')
+    with head_l:
+        _section_head('Growth of each strategy', 'saved backtests · gross')
+    with head_r:
+        window = st.segmented_control('Window', ['1Y', '3Y', '5Y', 'Max'], default='Max',
+                                      key='home_growth_window', label_visibility='collapsed')
+    fig, legend = _home_growth_figure(m, i, mo, window or 'Max')
+    with st.container(key='rd_card_growth'):
+        _plot(fig, width='stretch', config={'displayModeBar': False})
+        items = ''.join(
+            f'<div class="rd-li"><span class="rd-li__main"><span class="rd-li__title">'
+            f'<span class="rd-dot" style="background:{c}"></span>{_h.escape(t)}</span>'
+            f'<span class="rd-li__sub">change since {start}</span></span>'
+            f'{ui.change_pill(v, fmt="{:.1f}%")}</div>'
+            for t, c, v, start in legend)
+        _md(items)
+    _md('<div class="rd-note" style="margin-top:6px">Each line starts at 0% at the start of the window, '
+        'or at its own first test date if later, so lines can cover different periods. '
+        'PEAD is not shown (4 completed trades).</div>')
+
+
+def _render_home_market() -> None:
+    snap = _regime_snapshot()
+    pill = {'Bull': ui.status_pill('On', 'gain'), 'Bear': ui.status_pill('Off', 'warn')}.get(
+        snap.get('status', 'Unknown'), ui.status_pill('Unknown', 'muted'))
+    rows = [('Trend filter', 'all Nifty trend conditions must pass', pill)]
+    if snap.get('close'):
+        rows += [
+            ('Nifty close', snap.get('date', ''), f'<span class="rd-li__val">{snap["close"]:,.2f}</span>'),
+            ('50-day average', '', f'<span class="rd-li__val">{snap["sma50"]:,.2f}</span>'),
+            ('200-day average', '', f'<span class="rd-li__val">{snap["sma200"]:,.2f}</span>'),
+            ('From 52-week high', '', ui.change_pill(snap.get('pct_from_high'))),
+        ]
+    if snap.get('bars_since_flip'):
+        rows.append(('In this state', '', f'<span class="rd-li__val">{snap["bars_since_flip"]} sessions</span>'))
+    items = ''.join(
+        f'<div class="rd-li"><span class="rd-li__main"><span class="rd-li__title">{_h.escape(t)}</span>'
+        + (f'<span class="rd-li__sub">{_h.escape(sub)}</span>' if sub else '')
+        + f'</span>{val}</div>' for t, sub, val in rows)
+    _md(f'<div class="rd-list"><div class="rd-list__head">Market <span>Nifty</span></div>{items}</div>')
+
+
+def _open_strategy_from_home(strat_id: str) -> None:
+    """Widget callback: open a strategy page (built-in) or its saved results (custom)."""
+    st.session_state.pop('home_strats__selected', None)
+    route = HOME_STRATEGIES.get(strat_id, (None, None))[1]
+    if route:
+        _navigate(route)
     else:
-        st.caption('Select a row to open its strategy page.')
+        _open_backtest_results(strat_id)
 
 
 def _render_home_strategies() -> None:
-    _md(ui.section_label('Strategies', 'saved backtest results · gross, before costs'))
-    strats = _load_strategies_index()
-    if not strats:
-        _md(ui.empty_state('No strategies saved', 'Create one under “Create a strategy”.'))
-        return
-    ratios = [3.2, 1, 1, 1, 1, 1, 1.3]
-    with st.container(key='rd_strat_header'):
-        for col, label in zip(st.columns(ratios), ['Strategy', 'Avg yearly', 'Worst fall', 'Sharpe',
-                                                   'Win rate', 'Sample', 'Results saved']):
-            with col:
-                _md(f'<div class="rd-strat-head">{label}</div>')
-    for s in strats:
+    rows = []
+    for s in _load_strategies_index():
         k = s.get('kpis_inline', {}) or {}
-        title, purpose, route, unit = HOME_STRATEGIES.get(
-            s['id'], (s.get('name', s['id']), s.get('description', ''), None, 'trades'))
-        tone = 'gain' if (k.get('cagr') or 0) >= 0 else 'loss'
+        title, _, unit, _ = HOME_STRATEGIES.get(s['id'], (s.get('name', s['id']), None, 'trades', ''))
         n = int(k.get('num_trades') or 0)
-        wr = k.get('win_rate')
-        age = _file_age_days(s.get('equity_csv', ''))
-        status = str(s.get('status', '—'))
-        cols = st.columns(ratios, vertical_alignment='center')
-        with cols[0]:
-            _md(f'<div class="rd-strat-name">{_h.escape(title)} '
-                f'{ui.status_pill(status, "info" if status == "Live" else "muted")}</div>'
-                f'<div class="rd-strat-desc">{_h.escape(purpose)}</div>')
-        with cols[1]:
-            _md('<span class="rd-num__label">Avg yearly</span>'
-                f'<span class="rd-num rd-num--{tone}">{(k.get("cagr") or 0) * 100:+.1f}%</span>'
-                f'<span class="rd-num__sub">total {(k.get("total_return") or 0) * 100:+.0f}%</span>')
-        with cols[2]:
-            _md('<span class="rd-num__label">Worst fall</span>'
-                f'<span class="rd-num rd-num--loss">{(k.get("max_dd") or 0) * 100:.1f}%</span>')
-        with cols[3]:
-            _md('<span class="rd-num__label">Sharpe</span>'
-                f'<span class="rd-num">{(k.get("sharpe") or 0):.2f}</span>')
-        with cols[4]:
-            _md('<span class="rd-num__label">Win rate</span>'
-                + (f'<span class="rd-num">{wr * 100:.0f}%</span>' if wr is not None
-                   else '<span class="rd-num">—</span><span class="rd-num__sub">not recorded</span>'))
-        with cols[5]:
-            warn = '<span class="rd-num__warn">small sample</span>' if n < ui.LOW_SAMPLE_TRADES else ''
-            _md('<span class="rd-num__label">Sample</span>'
-                f'<span class="rd-num">{n:,}</span><span class="rd-num__sub">{unit}</span>{warn}')
-        with cols[6]:
-            _md(ui.status_pill(ui.freshness_label(age), ui.freshness_tone(age)))
-            if route:
-                st.button('Explore', key=f'explore_{route}', on_click=_navigate, args=(route,),
-                          width='stretch')
-            else:
-                st.button('Open results', key=f'home_open_{s["id"]}', on_click=_open_backtest_results,
-                          args=(s['id'],), width='stretch')
-    with st.expander('How to read these figures'):
-        st.write('Avg yearly return (CAGR) is annualised growth; "total" is growth over the whole test. '
-                 'Worst fall is the largest drop below an earlier peak. Win rate is the share of completed trades '
-                 'that made money; a high win rate does not by itself mean a strategy was profitable. '
-                 'Sample is the number of completed trades (rebalances for Monthly); fewer than '
-                 f'{ui.LOW_SAMPLE_TRADES} is too few to rely on. The strategies were tested over different '
-                 'periods, so this list is not a ranking of what will perform best next. '
-                 'Live and Paper are strategy labels, not a connected brokerage account.')
+        small = ' · small sample' if n < ui.LOW_SAMPLE_TRADES else ''
+        rows.append({'id': s['id'], 'cells': {
+            'name': (title, f"{s.get('status', '—')} · {n:,} {unit}{small} · "
+                             f"worst fall {(k.get('max_dd') or 0) * 100:.1f}%"),
+            'cagr': ui.change_pill((k.get('cagr') or 0) * 100, fmt='{:.1f}%'),
+        }})
+    html = ui.data_table([
+        {'key': 'name', 'label': 'Strategy', 'kind': 'name'},
+        {'key': 'cagr', 'label': 'Per year', 'kind': 'html'},
+    ], rows, empty='No strategies saved yet.')
+    st.markdown('<div style="height:14px"></div>', unsafe_allow_html=True)
+    _section_head('Strategies', 'click to open')
+    clickable_table(html, key='home_strats', on_select=_open_strategy_from_home)
+    _md('<div class="rd-note" style="margin-top:6px">Gross results over different test periods; '
+        'not a ranking of future performance.</div>')
+
+
+def _render_home_freshness() -> None:
+    items = ''.join(
+        f'<div class="rd-li"><span class="rd-li__title">{name}</span>'
+        f'{ui.status_pill(ui.freshness_label(age), ui.freshness_tone(age))}</div>'
+        for name, age in _saved_data_ages())
+    _md(f'<div class="rd-list" style="margin-top:14px"><div class="rd-list__head">Saved data '
+        f'<span>Refresh data in the sidebar</span></div>{items}</div>')
 
 
 def render_home(m: dict, i: dict, mo: dict):
     cands = _home_candidates(m, i, mo)
-    _render_home_headline(len(cands))
+    _render_home_header(len(cands))
+
+    main, rail = st.columns([2.2, 1], gap='large')
+    with main:
+        _render_home_candidates(cands)
+        st.markdown('<div style="height:18px"></div>', unsafe_allow_html=True)
+        _render_home_growth(m, i, mo)
+    with rail:
+        _render_home_market()
+        _render_home_strategies()
+        _render_home_freshness()
+
+    st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
     research_notice()
-
-    _render_home_candidates(cands)
-    _render_home_strategies()
-
-    _md(ui.section_label('Growth since each test began', 'Monthly · IPO · Momentum'))
-    fig = chart_combined_equity(m, i, mo)
-    fig.update_layout(title=dict(text=''), margin=dict(l=10, r=10, t=30, b=10))
-    st.caption('Each line starts at 0% on its own first test date, so the lines cover different periods '
-               'and are not a like-for-like comparison. Flat stretches are periods with no open positions. '
-               'PEAD is not shown (4 completed trades). For side-by-side figures, open “Compare past results”.')
-    _plot(fig, width='stretch')
-    st.button('Compare past results →', key='home_to_compare', on_click=_navigate,
-              args=('History & Proof',))
-
+    with st.expander('How to read these figures'):
+        st.write('Per year (CAGR) is annualised growth over each strategy’s whole test. Worst fall is the '
+                 'largest drop below an earlier peak. Win rates and full figures are on each strategy page; '
+                 'a high win rate does not by itself mean a strategy was profitable. Fewer than '
+                 f'{ui.LOW_SAMPLE_TRADES} completed trades is too few to rely on. '
+                 'Live and Paper are strategy labels, not a connected brokerage account.')
     _glossary_expander()
 
 

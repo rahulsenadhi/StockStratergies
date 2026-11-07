@@ -115,6 +115,62 @@ def section_label(text: str, meta: str | None = None) -> str:
     return f'<div class="rd-sec"><span class="rd-sec__text">{escape(text)}</span>{m}</div>'
 
 
+def change_pill(value: float | None, *, fmt: str = "{:.2f}%", arrow: bool = True) -> str:
+    """Tinted change chip: green up, red down, muted when missing. Value is shown, never altered."""
+    if value is None or value != value:  # None or NaN
+        return '<span class="rd-chg rd-chg--flat">—</span>'
+    direction = "up" if value > 0 else "down" if value < 0 else "flat"
+    shown = fmt.format(abs(value) if arrow else value)
+    icon = {"up": "↗ ", "down": "↘ ", "flat": ""}[direction] if arrow else ""
+    return f'<span class="rd-chg rd-chg--{direction}">{icon}{escape(shown)}</span>'
+
+
+def _cell_html(kind: str, value) -> str:
+    if kind == "name":
+        title, sub = value if isinstance(value, (tuple, list)) else (value, "")
+        sub_html = f'<span class="rd-name__sub">{escape(str(sub))}</span>' if sub else ""
+        return f'<span class="rd-name"><span class="rd-name__title">{escape(str(title))}</span>{sub_html}</span>'
+    if kind in ("html", "tag"):
+        return str(value or "")          # caller-built markup from this module's builders
+    return escape(str(value if value is not None else "—"))
+
+
+def data_table(columns: list[dict], rows: list[dict], *, selected: str | None = None,
+               sorted_key: str | None = None, empty: str = "No rows") -> str:
+    """Research table: hairline rows, two-line names, right-aligned numbers, clickable rows.
+
+    columns: [{"key", "label", "kind": name|num|text|html|tag}]; rows: [{"id", "cells": {key: value}}].
+    "html" (right-aligned) and "tag" (left-aligned) cells must be markup produced by this module
+    (e.g. change_pill, status_pill); all other cells are escaped.
+    """
+    def cls(col):
+        c = ["rd-td"]
+        if col.get("kind") in ("num", "html"):
+            c.append("rd-td--num")
+        if col.get("kind") == "name":
+            c.append("rd-td--name")
+        if col.get("hide_sm"):
+            c.append("rd-col--hide-sm")
+        if col["key"] == sorted_key:
+            c.append("rd-col--sorted")
+        return " ".join(c)
+
+    head = "".join(f'<th class="{cls(c).replace("rd-td", "rd-th")}" scope="col">{escape(c["label"])}</th>'
+                   for c in columns)
+    if not rows:
+        return (f'<div class="rd-table-wrap"><table class="rd-table"><thead><tr>{head}</tr></thead></table>'
+                f'<div class="rd-table__empty">{escape(empty)}</div></div>')
+    body = []
+    for r in rows:
+        rid = escape(str(r["id"]))
+        sel = " rd-tr--sel" if selected is not None and str(r["id"]) == str(selected) else ""
+        tds = "".join(f'<td class="{cls(c)}">{_cell_html(c.get("kind", "text"), r["cells"].get(c["key"]))}</td>'
+                      for c in columns)
+        body.append(f'<tr class="rd-tr{sel}" data-row="{rid}" tabindex="0">{tds}</tr>')
+    return (f'<div class="rd-table-wrap"><table class="rd-table"><thead><tr>{head}</tr></thead>'
+            f'<tbody>{"".join(body)}</tbody></table></div>')
+
+
 def headline(lead: str, emphasis: str, tone: str, meta: list[str] | None = None) -> str:
     """One plain-language sentence about the current situation, e.g. market trend + data age."""
     meta_html = "".join(f'<span class="rd-headline__meta">{escape(m)}</span>' for m in (meta or []))
@@ -197,27 +253,36 @@ def adapt_figure_to_theme(fig: go.Figure | None, *, is_light: bool) -> go.Figure
 # --destructive, --info), which already switch between light and dark.
 
 COMPONENT_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 :root {
-  --rd-fs-xs: 11px; --rd-fs-sm: 12px; --rd-fs-base: 13px; --rd-fs-lg: 16px; --rd-fs-xl: 22px;
+  --rd-fs-xs: 11px; --rd-fs-sm: 12px; --rd-fs-base: 13px; --rd-fs-md: 14px; --rd-fs-lg: 16px; --rd-fs-xl: 22px;
   --rd-sp-1: 4px; --rd-sp-2: 8px; --rd-sp-3: 12px; --rd-sp-4: 16px; --rd-sp-5: 24px; --rd-sp-6: 32px;
-  --rd-radius: 6px; --rd-radius-sm: 4px;
-  --rd-text: var(--foreground, #172033);
-  --rd-text-muted: var(--muted-foreground, #5b6475);
-  --rd-surface: var(--card, transparent);
-  --rd-line: var(--border, rgba(127,127,127,.25));
-  --rd-gain: var(--success, #0a8a5f);
-  --rd-loss: var(--destructive, #c62828);
-  --rd-warn: var(--warning, #b26a00);
-  --rd-info: var(--info, #2f5bd3);
-  --rd-mono: var(--font-mono, 'IBM Plex Mono', ui-monospace, monospace);
+  --rd-radius: 10px; --rd-radius-sm: 6px;
+  --rd-font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --rd-mono: var(--rd-font);
+  /* light (default) */
+  --rd-bg: #F7F6F3; --rd-card: #FFFFFF; --rd-sidebar: #F2F1EC; --rd-line: #E7E4DD;
+  --rd-hover: rgba(29,29,27,.04); --rd-active: #E8E6E0; --rd-tint: rgba(29,29,27,.025);
+  --rd-text: #1D1D1B; --rd-text-2: #45443F; --rd-text-muted: #77756E;
+  --rd-gain: #12805C; --rd-loss: #C2364B; --rd-warn: #A86200; --rd-info: #1F6F78;
+  --rd-gain-bg: #E4F3EC; --rd-loss-bg: #FBE8EB; --rd-warn-bg: #FBF0DF; --rd-info-bg: #E3F0F1;
+  --rd-surface: var(--rd-card);
+}
+[data-theme="dark"] {
+  --rd-bg: #191A1A; --rd-card: #202222; --rd-sidebar: #1C1D1D; --rd-line: #2E3131;
+  --rd-hover: rgba(255,255,255,.04); --rd-active: #2B2D2D; --rd-tint: rgba(255,255,255,.03);
+  --rd-text: #ECECEA; --rd-text-2: #C9C9C5; --rd-text-muted: #91918C;
+  --rd-gain: #3DBE8B; --rd-loss: #F06C80; --rd-warn: #E3A44A; --rd-info: #57BCC4;
+  --rd-gain-bg: rgba(61,190,139,.14); --rd-loss-bg: rgba(240,108,128,.14);
+  --rd-warn-bg: rgba(227,164,74,.14); --rd-info-bg: rgba(87,188,196,.14);
 }
 .rd-pill { display:inline-flex; align-items:center; gap:4px; padding:1px 8px; border-radius:999px;
   font-size:var(--rd-fs-xs); font-weight:600; line-height:18px; white-space:nowrap;
-  border:1px solid currentColor; }
-.rd-pill--gain { color:var(--rd-gain); background:color-mix(in oklch, var(--rd-gain) 10%, transparent); }
-.rd-pill--loss { color:var(--rd-loss); background:color-mix(in oklch, var(--rd-loss) 10%, transparent); }
-.rd-pill--warn { color:var(--rd-warn); background:color-mix(in oklch, var(--rd-warn) 12%, transparent); }
-.rd-pill--info { color:var(--rd-info); background:color-mix(in oklch, var(--rd-info) 10%, transparent); }
+  border:0; }
+.rd-pill--gain { color:var(--rd-gain); background:var(--rd-gain-bg); }
+.rd-pill--loss { color:var(--rd-loss); background:var(--rd-loss-bg); }
+.rd-pill--warn { color:var(--rd-warn); background:var(--rd-warn-bg); }
+.rd-pill--info { color:var(--rd-info); background:var(--rd-info-bg); }
 .rd-pill--muted { color:var(--rd-text-muted); background:transparent; }
 
 .rd-ctx { display:flex; flex-wrap:wrap; align-items:center; gap:var(--rd-sp-2) var(--rd-sp-5);
@@ -305,5 +370,112 @@ COMPONENT_CSS = """
 """
 
 
+# Shell layer: restyles Streamlit's own containers to the research-desk look
+# (warm off-white canvas, white hairline cards, icon sidebar). Loaded after the
+# legacy CSS in master_dashboard.py, so it uses !important where that CSS does.
+SHELL_CSS = """
+html, body, [data-testid="stApp"], [data-testid="stSidebar"], button, input, textarea, select,
+[data-testid="stMarkdownContainer"] { font-family: var(--rd-font) !important; }
+html body [data-testid="stApp"], html body [data-theme] [data-testid="stApp"] { background: var(--rd-bg) !important; }
+[data-testid="stApp"]::before, [data-testid="stApp"]::after { display:none !important; }
+html body [data-testid="stHeader"], html body [data-theme] [data-testid="stHeader"] { background: var(--rd-bg) !important; }
+[data-testid="stMainBlockContainer"] { padding-top: 1.25rem !important; max-width: 1360px; }
+
+/* Sidebar: quiet icon list */
+html body [data-testid="stSidebar"] > div:first-child, html body [data-theme] [data-testid="stSidebar"] > div:first-child { background: var(--rd-sidebar) !important; }
+[data-testid="stSidebar"] { border-right: 1px solid var(--rd-line) !important; }
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] { gap: 1px !important; }
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label { position:relative; width:100% !important;
+  margin:0 !important; padding:6px 10px !important; border:0 !important; border-radius:8px !important;
+  background:transparent !important; box-shadow:none !important; min-height:0 !important; }
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label > div:first-child { display:none !important; }
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:hover { background: var(--rd-hover) !important; }
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:has(input:checked) { background: var(--rd-active) !important; }
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label p { font-size: var(--rd-fs-md) !important; font-weight:500 !important;
+  color: var(--rd-text-2) !important; display:flex; align-items:center; gap:10px; }
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:has(input:checked) p { color: var(--rd-text) !important; font-weight:600 !important; }
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label p span[data-testid="stIconMaterial"] { font-size:18px; color: var(--rd-text-muted); }
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(2),
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(4),
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(9) { margin-top: 26px !important; }
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(2)::before,
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(4)::before,
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(9)::before {
+  position:absolute; top:-20px; left:10px; font-size: var(--rd-fs-xs); font-weight:600;
+  letter-spacing:.06em; text-transform:uppercase; color: var(--rd-text-muted); }
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(2)::before { content:"Strategies"; }
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(4)::before { content:"Find stocks"; }
+html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child(9)::before { content:"Evaluate"; }
+
+/* Cards, tabs, buttons, expanders */
+[class*="st-key-rd_card"] { background: var(--rd-card) !important; border:1px solid var(--rd-line) !important;
+  border-radius: 12px !important; box-shadow: none !important; padding: 14px 16px !important; }
+[data-testid="stExpander"] details { background: var(--rd-card) !important; border:1px solid var(--rd-line) !important;
+  border-radius: 10px !important; box-shadow:none !important; }
+[data-testid="stTabs"] [role="tablist"] { gap: 4px; border-bottom: 1px solid var(--rd-line); }
+[data-testid="stTabs"] button[role="tab"] { background:transparent !important; border-radius:0 !important;
+  padding: 6px 2px !important; margin-right: 18px; }
+[data-testid="stTabs"] button[role="tab"] p { font-size: var(--rd-fs-md) !important; font-weight:500 !important; color: var(--rd-text-muted) !important; }
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] p { color: var(--rd-text) !important; font-weight:600 !important; }
+.stButton button[kind="secondary"], [data-testid="stPopover"] button {
+  background: var(--rd-card) !important; border:1px solid var(--rd-line) !important; color: var(--rd-text) !important;
+  border-radius: 8px !important; box-shadow:none !important; min-height: 34px; }
+.stButton button[kind="secondary"]:hover { background: var(--rd-hover) !important; }
+.stButton button p { font-size: var(--rd-fs-base) !important; font-weight:500 !important; }
+[data-testid="stCaptionContainer"], .stCaption { color: var(--rd-text-muted) !important; }
+
+/* Page header */
+.rd-page { margin: 0 0 var(--rd-sp-3); }
+.rd-page__title { font-size: 24px; font-weight: 600; letter-spacing:-.015em; color: var(--rd-text); line-height:1.2; }
+.rd-page__sub { font-size: var(--rd-fs-md); color: var(--rd-text-muted); margin-top: 4px; }
+.rd-note { font-size: var(--rd-fs-sm); color: var(--rd-text-muted); }
+
+/* Research table */
+.rd-table-wrap { border:1px solid var(--rd-line); border-radius: 10px; background: var(--rd-card); overflow:auto; }
+.rd-table { width:100%; border-collapse: collapse; font-size: var(--rd-fs-base); color: var(--rd-text);
+  font-variant-numeric: tabular-nums; }
+.rd-th { text-align:left; font-weight:500; font-size: var(--rd-fs-sm); color: var(--rd-text-muted);
+  padding: 9px 12px; border-bottom:1px solid var(--rd-line); white-space:nowrap; background: var(--rd-card);
+  position: sticky; top: 0; z-index: 1; }
+.rd-td { padding: 9px 12px; border-bottom:1px solid var(--rd-line); vertical-align: middle; white-space: nowrap; }
+.rd-th.rd-td--num, .rd-th--num, .rd-td--num { text-align:right; }
+.rd-table tbody tr:last-child .rd-td { border-bottom: 0; }
+.rd-td--name { white-space: normal; min-width: 140px; }
+@media (max-width: 700px) { .rd-col--hide-sm { display:none; } .rd-td, .rd-th { padding: 8px 10px; } }
+.rd-td--num { width: 1%; }
+.rd-col--sorted { background: var(--rd-tint); }
+.rd-tr { cursor: pointer; }
+.rd-tr:hover .rd-td { background: var(--rd-hover); }
+.rd-tr:focus-visible { outline: 2px solid var(--rd-info); outline-offset: -2px; }
+.rd-tr--sel .rd-td { background: var(--rd-info-bg) !important; }
+.rd-tr--sel .rd-td:first-child { box-shadow: inset 3px 0 0 var(--rd-info); }
+.rd-name { display:flex; flex-direction:column; line-height:1.25; }
+.rd-name__title { font-weight: 500; color: var(--rd-text); }
+.rd-name__sub { font-size: var(--rd-fs-xs); color: var(--rd-text-muted); margin-top: 1px; }
+.rd-table__empty { padding: 18px 14px; color: var(--rd-text-muted); font-size: var(--rd-fs-sm); }
+.rd-chg { display:inline-block; padding: 2px 7px; border-radius: 6px; font-size: var(--rd-fs-sm);
+  font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rd-chg--up { color: var(--rd-gain); background: var(--rd-gain-bg); }
+.rd-chg--down { color: var(--rd-loss); background: var(--rd-loss-bg); }
+.rd-chg--flat { color: var(--rd-text-muted); background: var(--rd-tint); }
+
+/* Rail list (right column) */
+.rd-list { border:1px solid var(--rd-line); border-radius:10px; background: var(--rd-card); }
+.rd-list__head { padding: 10px 14px; font-size: var(--rd-fs-md); font-weight:600; color: var(--rd-text);
+  border-bottom: 1px solid var(--rd-line); display:flex; justify-content:space-between; align-items:baseline; }
+.rd-list__head span { font-size: var(--rd-fs-xs); font-weight:400; color: var(--rd-text-muted); }
+.rd-li { display:flex; align-items:center; justify-content:space-between; gap: 10px; padding: 8px 14px;
+  border-bottom:1px solid var(--rd-line); font-size: var(--rd-fs-base); }
+.rd-li:last-child { border-bottom:0; }
+.rd-li__main { display:flex; flex-direction:column; min-width:0; }
+.rd-li__title { color: var(--rd-text); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rd-li__sub { color: var(--rd-text-muted); font-size: var(--rd-fs-xs); }
+.rd-li__val { text-align:right; font-variant-numeric: tabular-nums; color: var(--rd-text); white-space:nowrap; }
+.rd-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+[class*="st-key-rd_card"] [data-testid="stPlotlyChart"] { border:0 !important; box-shadow:none !important; background:transparent !important; }
+html body [data-testid="stSidebar"] [data-testid="stPopover"] button p { font-size: var(--rd-fs-md) !important; }
+"""
+
+
 def component_css() -> str:
-    return f"<style>{COMPONENT_CSS}</style>"
+    return f"<style>{COMPONENT_CSS}{SHELL_CSS}</style>"

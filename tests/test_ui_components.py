@@ -183,3 +183,85 @@ def test_adapt_figure_keeps_non_dark_colors():
 
 def test_adapt_figure_handles_none():
     assert ui.adapt_figure_to_theme(None, is_light=True) is None
+
+
+# ── change pill ──────────────────────────────────────────────────────────────
+
+def test_change_pill_up_and_down():
+    assert "rd-chg--up" in ui.change_pill(4.59) and "4.59%" in ui.change_pill(4.59)
+    down = ui.change_pill(-1.25)
+    assert "rd-chg--down" in down and "1.25%" in down
+
+
+def test_change_pill_none_is_muted_dash():
+    html = ui.change_pill(None)
+    assert "rd-chg--flat" in html and "—" in html
+
+
+def test_change_pill_custom_format():
+    assert "+20.9%" in ui.change_pill(20.9, fmt="{:+.1f}%", arrow=False)
+
+
+# ── data table ───────────────────────────────────────────────────────────────
+
+COLS = [
+    {"key": "name", "label": "Company", "kind": "name"},
+    {"key": "price", "label": "Price", "kind": "num"},
+    {"key": "chg", "label": "Month", "kind": "html"},
+]
+
+
+def test_data_table_renders_two_line_name_and_numbers():
+    html = ui.data_table(COLS, [{"id": "KOTAK", "cells": {
+        "name": ("Kotak Mahindra Bank", "KOTAKBANK · Monthly"), "price": "₹440.20",
+        "chg": ui.change_pill(5.56)}}])
+    assert "Kotak Mahindra Bank" in html and "KOTAKBANK · Monthly" in html
+    assert 'data-row="KOTAK"' in html
+    assert "rd-td--num" in html
+
+
+def test_data_table_marks_selected_row():
+    rows = [{"id": "A", "cells": {"name": ("A", ""), "price": "1", "chg": ""}},
+            {"id": "B", "cells": {"name": ("B", ""), "price": "2", "chg": ""}}]
+    html = ui.data_table(COLS, rows, selected="B")
+    assert html.count("rd-tr--sel") == 1
+    assert html.index('data-row="B"') > html.index("rd-tr--sel") - 200
+
+
+def test_data_table_escapes_text_cells_but_not_html_kind():
+    html = ui.data_table(COLS, [{"id": "<x>", "cells": {
+        "name": ("<b>bad</b>", "<i>"), "price": "<p>", "chg": '<span class="ok">1</span>'}}])
+    assert "<b>bad</b>" not in html and "<p>" not in html
+    assert '<span class="ok">1</span>' in html
+    assert 'data-row="&lt;x&gt;"' in html
+
+
+def test_data_table_highlights_sorted_column():
+    html = ui.data_table(COLS, [{"id": "a", "cells": {"name": ("a", ""), "price": "1", "chg": ""}}],
+                         sorted_key="price")
+    assert "rd-col--sorted" in html
+
+
+def test_data_table_empty_rows_shows_message():
+    html = ui.data_table(COLS, [], empty="Nothing saved")
+    assert "Nothing saved" in html
+
+
+def test_data_table_tag_cells_render_markup_left_aligned():
+    cols = [{"key": "s", "label": "Status", "kind": "tag"}]
+    html = ui.data_table(cols, [{"id": "a", "cells": {"s": ui.status_pill("Watch Zone", "warn")}}])
+    assert 'rd-pill--warn' in html and "&lt;span" not in html
+    assert "rd-td--num" not in html
+
+
+def test_data_table_name_cells_can_wrap():
+    html = ui.data_table([{"key": "n", "label": "Name", "kind": "name"}],
+                         [{"id": "a", "cells": {"n": ("Long company name", "sub")}}])
+    assert "rd-td--name" in html
+
+
+def test_data_table_marks_columns_hidden_on_small_screens():
+    cols = [{"key": "a", "label": "A", "kind": "text"},
+            {"key": "b", "label": "B", "kind": "text", "hide_sm": True}]
+    html = ui.data_table(cols, [{"id": "1", "cells": {"a": "x", "b": "y"}}])
+    assert html.count("rd-col--hide-sm") == 2   # header + cell
