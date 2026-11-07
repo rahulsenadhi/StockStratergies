@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 from pathlib import Path
 
 import math
@@ -13,7 +11,7 @@ import pandas as pd
 import streamlit as st
 
 
-from core.workflow_ui import TRENDLYNE_CHECKS, research_notice, workflow_style, section_help
+from core.workflow_ui import TRENDLYNE_CHECKS, UPDATES_MOVED_NOTE, research_notice, workflow_style, section_help
 
 BASE = Path(__file__).resolve().parent
 DATA = BASE / "pead_data"
@@ -139,7 +137,7 @@ def _overview() -> None:
     ev = _read_frame(DATA / "events.parquet")
     st.subheader("What information is available?")
     if ev.empty:
-        st.info("No earnings events saved. Use Update earnings data to request company results.")
+        st.info("No earnings events saved. Update all data in the new app (http://localhost:3000) to request company results.")
     else:
         if "ticker" in ev:
             count = ev['ticker'].nunique()
@@ -176,22 +174,8 @@ def _glossary_expander() -> None:
 
 def _refresh_strip() -> None:
     status_path = DATA / "last_run_status.json"
-    cols = st.columns([3, 1])
-    feedback = None
-    # Run a requested update before reading its outcome, so the same render
-    # cannot retain an earlier failure next to newly saved results.
-    with cols[1]:
-        if st.button("Update earnings data", width="stretch"):
-            try:
-                with st.spinner("Requesting company results…"):
-                    proc = subprocess.run(
-                        [sys.executable, "pead_downloader.py"],
-                        capture_output=True, text=True, timeout=600, cwd=BASE,
-                    )
-                feedback = (proc.returncode != 0, proc.stdout[-2000:] or proc.stderr[-2000:] or "No details returned.")
-            except (OSError, subprocess.TimeoutExpired) as exc:
-                feedback = (True, str(exc))
-    with cols[0]:
+    # Updates run from the Next.js app (web/) only, so two apps never write pead_data at once.
+    with st.container():
         if status_path.exists():
             try:
                 s = json.loads(status_path.read_text())
@@ -215,14 +199,7 @@ def _refresh_strip() -> None:
                     st.caption(" · ".join(counts) if counts else "Update outcome and result counts were not recorded.")
         else:
             st.caption("No update history available. Saved results, if any, can still be explored.")
-        if feedback:
-            failed, details = feedback
-            if failed:
-                st.error("The update could not finish. Previously saved results remain available.")
-            else:
-                st.caption("Update process finished. Its saved outcome is shown above; process completion alone does not confirm new data.")
-            with st.expander("Update details"):
-                st.code(details, wrap_lines=True)
+        st.caption(UPDATES_MOVED_NOTE)
 
 
 def _tab_live_open() -> None:
@@ -231,7 +208,7 @@ def _tab_live_open() -> None:
                  "not recommendations confirmed today. Check the result dates and update status.")
     live = DATA / "live_signals.csv"
     if not live.exists():
-        st.info("No saved candidates available. Use Update earnings data to request new results.")
+        st.info("No saved candidates available. Update all data in the new app (http://localhost:3000) to request new results.")
     else:
         df = _read_frame(live)
         if df.empty:

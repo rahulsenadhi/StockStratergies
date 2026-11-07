@@ -116,24 +116,26 @@ def test_missing_run_counts_are_not_assumed_zero(tmp_path, monkeypatch):
     assert not any("0" in c.value for c in app.caption if "counts" in c.value)
 
 
-@pytest.mark.parametrize("provider_fails", [False, True])
-def test_update_shows_new_saved_outcome_not_old_status(tmp_path, monkeypatch, provider_fails):
+def test_refresh_strip_points_updates_to_new_app(tmp_path, monkeypatch):
+    """Updates run from the Next.js app only, so two apps never write pead_data at once."""
+    from core.workflow_ui import UPDATES_MOVED_NOTE
+    monkeypatch.setattr(dashboard, "DATA", tmp_path)
+    (tmp_path / "last_run_status.json").write_text('{"run_date":"2026-11-06","rows_written":3,"qualified_long":1}')
+
+    def no_update(*a, **k):
+        raise AssertionError("Streamlit must not start the PEAD downloader")
+
+    monkeypatch.setattr(subprocess, "run", no_update)
+    app = AppTest.from_string("import pead_dashboard as p\np._refresh_strip()", default_timeout=20).run()
+    assert not app.exception
+    assert not app.button
+    assert any(UPDATES_MOVED_NOTE == c.value for c in app.caption)
+    assert any("3 company results saved" in c.value for c in app.caption)
+
+
+def test_empty_state_text_names_the_new_app(tmp_path, monkeypatch):
     monkeypatch.setattr(dashboard, "DATA", tmp_path)
     monkeypatch.setattr(dashboard, "BASE", tmp_path)
-    status = tmp_path / "last_run_status.json"
-    status.write_text('{"error":"previous failure"}')
-
-    def fake_update(args, **kwargs):
-        assert kwargs["cwd"] == tmp_path
-        outcome = {"error": "provider unavailable"} if provider_fails else {"rows_written": 3, "qualified_long": 1}
-        status.write_text(json.dumps({"run_date": "2026-11-06", **outcome}))
-        return subprocess.CompletedProcess(args, 0, "Request finished", "")
-
-    monkeypatch.setattr(dashboard.subprocess, "run", fake_update)
-    app = AppTest.from_string("import pead_dashboard as p\np._refresh_strip()", default_timeout=20).run()
-    next(b for b in app.button if b.label == "Update earnings data").click().run()
+    app = AppTest.from_string("import pead_dashboard as p\np.render()", default_timeout=20).run()
     assert not app.exception
-    assert any("2026-11-06" in c.value for c in app.caption)
-    assert bool(app.warning) == provider_fails
-    assert any("3 company results saved" in c.value for c in app.caption) != provider_fails
-    assert not app.success  # Exit code zero is not proof of a provider update.
+    assert not any("Use Update earnings data" in i.value for i in app.info)
