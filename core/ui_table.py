@@ -22,7 +22,15 @@ _JS = """export default function({ parentElement, data, setTriggerValue }) {
     });
 }"""
 
-_table = st.components.v2.component("rd_research_table", js=_JS, isolate_styles=False)
+_TABLE = None
+
+
+def _component():
+    """Register the component on first use (keeps imports side-effect free for tests)."""
+    global _TABLE
+    if _TABLE is None:
+        _TABLE = st.components.v2.component("rd_research_table", js=_JS, isolate_styles=False)
+    return _TABLE
 
 
 def selected_row(state_key: str) -> str | None:
@@ -48,5 +56,5 @@ def clickable_table(html: str, *, key: str, on_select=None) -> str | None:
             if on_select is not None:
                 on_select(row)
 
-    _table(key=key, data=html, on_row_change=_remember)
+    _component()(key=key, data=html, on_row_change=_remember)
     return selected_row(key)
