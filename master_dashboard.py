@@ -59,7 +59,7 @@ def apply_fintech_theme(fig: 'go.Figure') -> 'go.Figure':
     return fig
 import streamlit as st
 
-from core.workflow_ui import workflow_style, research_notice, section_help, native_theme
+from core.workflow_ui import workflow_style, research_notice, section_help, native_theme, UPDATES_MOVED_NOTE
 from core.ui_components import adapt_figure_to_theme
 from core import ui_components as ui
 from core.ui_table import clickable_table, selected_row
@@ -5965,8 +5965,9 @@ def _saved_data_ages() -> list[tuple[str, int | None]]:
 
 
 def _render_sidebar_refresh() -> None:
-    """Data-refresh controls, pinned to the bottom of the sidebar (see CSS
-    .st-key-rd_sb_refresh) so "Update all" stays visible on short screens."""
+    """Saved-data ages, pinned to the bottom of the sidebar (see CSS .st-key-rd_sb_refresh).
+    Updates now run from the Next.js app (web/), so this shows a note instead of buttons:
+    two apps must never write the same data files at once."""
     ages = _saved_data_ages()
     known = [a for _, a in ages if a is not None]
     oldest = max(known) if known else None
@@ -5976,23 +5977,8 @@ def _render_sidebar_refresh() -> None:
         elif oldest is not None:
             oldest_name = next((name for name, age in ages if age == oldest), '')
             st.caption(f'Oldest saved data: {oldest_name}, {ui.freshness_label(oldest)}')
-        if st.button('Update all data', width='stretch', type='primary', icon=':material/sync:',
-                     key='sb_update_all'):
-            _refresh_all()
-        with st.popover(':material/tune: Update one strategy', width='stretch'):
-            st.caption('Monthly, IPO and Momentum update prices and simulations. '
-                       'PEAD requests earnings data and updates its saved candidates.')
-            col_a, col_b = st.columns(2)
-            with col_a:
-                if st.button('Monthly', width='stretch', icon=':material/autorenew:'):
-                    _refresh_strategy('Monthly')
-                if st.button('Momentum', width='stretch', icon=':material/trending_up:'):
-                    _refresh_strategy('Momentum')
-            with col_b:
-                if st.button('IPO', width='stretch', icon=':material/rocket_launch:'):
-                    _refresh_strategy('IPO')
-                if st.button('PEAD', width='stretch', icon=':material/event_note:'):
-                    _refresh_strategy('PEAD')
+        st.caption(UPDATES_MOVED_NOTE)
+        with st.popover(':material/schedule: Last updated', width='stretch'):
             rows = ''.join(
                 f'<div class="rd-li"><span class="rd-li__title">{name}</span>'
                 f'{ui.status_pill(ui.freshness_label(age), ui.freshness_tone(age))}</div>'

@@ -79,6 +79,11 @@ def workflow_style() -> None:
     st.markdown(component_css(), unsafe_allow_html=True)
 
 
+# Updates moved to the Next.js app (web/), so only one app writes the data files at a time.
+UPDATES_MOVED_NOTE = ('Updates now run from the new app: http://localhost:3000 '
+                      '(Update all data in its sidebar).')
+
+
 def research_notice() -> None:
     st.caption(
         "Historical simulation • These are model results, not your account performance. "
