@@ -5,7 +5,7 @@ import "./desk.css";
 import { DeskShell } from "@/components/desk/desk-shell";
 import { THEME_BOOT_SCRIPT } from "@/lib/desk/theme";
 import { MarketContext } from "@/components/desk/notices";
-import { loadSnapshot } from "@/lib/desk/snapshot";
+import { loadSnapshot, withLiveFreshness } from "@/lib/desk/snapshot";
 import { savedDataAges } from "@/lib/desk/saved-ages";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-inter" });
@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const [ages, snap] = await Promise.all([savedDataAges(), loadSnapshot()]);
-  const marketContext = snap.ok ? <MarketContext {...snap.snapshot.frame} /> : null;
+  const marketContext = snap.ok ? <MarketContext {...(await withLiveFreshness(snap.snapshot)).frame} /> : null;
   return (
     <html lang="en" data-theme="light" className={inter.variable} suppressHydrationWarning>
       <head>

@@ -19,6 +19,15 @@ const spawnChild = (bin: string, args: string[], o: { cwd: string }) =>
 
 /** POST { strategy: "all" | "Monthly" | "IPO" | "Momentum" | "PEAD" } → SSE progress, then results. */
 export async function POST(request: Request) {
+  // Only this app's own page may start an update: other websites open in the browser
+  // could otherwise POST here. JSON forces a CORS preflight that Next does not grant,
+  // and browsers label foreign requests with Sec-Fetch-Site.
+  if (!(request.headers.get("content-type") ?? "").includes("application/json")) {
+    return NextResponse.json({ ok: false, error: "expected application/json" }, { status: 415 });
+  }
+  if (request.headers.get("sec-fetch-site") === "cross-site") {
+    return NextResponse.json({ ok: false, error: "cross-site request refused" }, { status: 403 });
+  }
   const body = await request.json().catch(() => null);
   const strategies = parseUpdateTarget(body);
   if (!strategies) {

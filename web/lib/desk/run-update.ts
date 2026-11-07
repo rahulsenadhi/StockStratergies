@@ -39,11 +39,20 @@ export async function runUpdate(
     for (const step of UPDATE_STEPS[strategy]) {
       const name = step.find((part) => part.endsWith(".py")) ?? step[0];
       opts.onLine?.(`▸ ${name}`);
+      // Keep this step's printed output: several scripts print their error to stdout and
+      // exit 1, which runRecompute reports only as "exit 1" (Streamlit used stdout then).
+      const printed: string[] = [];
       const run = await runRecompute(spawnFn, {
-        bin: opts.pythonBin, args: step, cwd: opts.cwd, timeoutMs: opts.stepTimeoutMs, label: name, onLine: opts.onLine,
+        bin: opts.pythonBin, args: step, cwd: opts.cwd, timeoutMs: opts.stepTimeoutMs, label: name,
+        onLine: (line) => {
+          printed.push(line);
+          if (printed.length > 200) printed.shift();
+          opts.onLine?.(line);
+        },
       });
       if (run.status !== 200) {
-        const error = run.body.ok ? "" : run.body.error;
+        const reported = run.body.ok ? "" : run.body.error;
+        const error = /^exit -?\d+$/.test(reported) && printed.length ? printed.join("\n") : reported;
         failure = { strategy, ok: false, failedStep: name, errorTail: error.slice(-ERROR_TAIL_CHARS) };
         break;
       }

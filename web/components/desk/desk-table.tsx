@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type KeyboardEvent } from "react";
+import { ArrowUpRight } from "lucide-react";
 import { nextSort, previewRows, PREVIEW_ROWS, sortRows, type DeskColumn, type SortSpec } from "@/lib/desk/table";
 
 interface DeskTableProps<R> {
@@ -105,10 +106,18 @@ export function DeskTable<R>({
 }
 
 /** Two-line company/strategy name cell (Python _cell_html kind="name"). */
-export function NameCell({ title, sub }: { title: string; sub?: string }) {
+export function NameCell({ title, sub, external = false }: { title: string; sub?: string; external?: boolean }) {
   return (
-    <span className="rd-name">
-      <span className="rd-name__title">{title}</span>
+    <span className="rd-name" title={external ? "Not moved yet — opens the old Streamlit app" : undefined}>
+      <span className="rd-name__title">
+        {title}
+        {external ? (
+          <>
+            <ArrowUpRight className="desk-ext" aria-hidden="true" />
+            <span className="sr-only"> (opens old app)</span>
+          </>
+        ) : null}
+      </span>
       {sub ? <span className="rd-name__sub">{sub}</span> : null}
     </span>
   );

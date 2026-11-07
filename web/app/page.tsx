@@ -4,7 +4,7 @@ import { ChangePill, EmptyState, PageHeader, RailList, StatusPill } from "@/comp
 import { freshnessLabel, freshnessTone } from "@/lib/desk/format";
 import { HOW_TO_READ, headerSub, headerTrend, marketRows, priceAge } from "@/lib/desk/home";
 import { savedDataAges } from "@/lib/desk/saved-ages";
-import { loadSnapshot } from "@/lib/desk/snapshot";
+import { loadSnapshot, withLiveFreshness } from "@/lib/desk/snapshot";
 import { GLOSSARY } from "@/lib/glossary";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,7 @@ export default async function Home() {
       </>
     );
   }
-  const { frame, home } = snap.snapshot;
+  const { frame, home } = await withLiveFreshness(snap.snapshot);
   const trend = headerTrend(frame.regime.status);
 
   return (

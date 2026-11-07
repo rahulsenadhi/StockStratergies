@@ -136,8 +136,15 @@ html, body { font-family: var(--rd-font); background: var(--rd-bg); color: var(-
 .desk-summary::-webkit-details-marker { display: none; }
 .desk-summary::after { content: "▾"; margin-left: auto; color: var(--rd-text-muted); }
 details[open] > .desk-summary::after { content: "▴"; }
-.desk-pinned { flex: 0 0 auto; border-top: 1px solid var(--rd-line); background: var(--rd-sidebar);
-  padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 8px; }
+/* Capped so update results can never squeeze the nav to nothing on a short screen;
+   the block scrolls on its own only when results or the open menu are long. */
+.desk-pinned { flex: 0 1 auto; max-height: 60%; overflow-y: auto; border-top: 1px solid var(--rd-line);
+  background: var(--rd-sidebar); padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 8px; }
+.desk-pinned > * { flex: 0 0 auto; }
+.desk-progress { max-height: 96px; overflow: hidden; }
+.desk-wrap { white-space: pre-wrap; word-break: break-word; }
+.desk-link { all: unset; cursor: pointer; font-size: var(--rd-fs-xs); font-weight: 600; color: var(--rd-info); }
+.desk-link:focus-visible { outline: 2px solid var(--rd-info); outline-offset: 2px; border-radius: 3px; }
 .desk-main { flex: 1 1 auto; min-width: 0; height: 100dvh; overflow-y: auto; overflow-x: hidden; }
 .desk-topbar { position: sticky; top: 0; z-index: 5; display:flex; align-items:center; gap: 8px;
   padding: 8px 20px; background: var(--rd-bg); }
@@ -178,3 +185,4 @@ details[open] > .desk-summary::after { content: "▴"; }
   .desk-only-mobile { display: inline-flex; }
   .desk-only-desktop { display: none; }
 }
+.rd-name__title svg.desk-ext { width: 12px; height: 12px; margin-left: 4px; vertical-align: -1px; color: var(--rd-text-muted); }

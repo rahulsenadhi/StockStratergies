@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { loadSnapshot } from "@/lib/desk/snapshot";
+import { loadSnapshot, withLiveFreshness } from "@/lib/desk/snapshot";
 import { oldestAge, savedDataAges } from "@/lib/desk/saved-ages";
 
 const DAY = 86_400_000;
@@ -51,6 +51,26 @@ describe("loadSnapshot", () => {
   test("newer schema version", async () => {
     await fs.writeFile(path.join(dir, "ui_snapshot.json"), JSON.stringify(snapshot(2)));
     expect(await loadSnapshot(dir)).toEqual({ ok: false, reason: "version" });
+  });
+});
+
+describe("withLiveFreshness", () => {
+  test("price age is worked out now from the source file, not frozen at snapshot time", async () => {
+    const now = new Date("2026-11-10T12:00:00");
+    const rel = "data\\nse_bse\\RELIANCE.NS.csv"; // Python writes Windows separators
+    const p = path.join(dir, "data", "nse_bse", "RELIANCE.NS.csv");
+    await fs.mkdir(path.dirname(p), { recursive: true });
+    await fs.writeFile(p, "x");
+    const saved = new Date(now.getTime() - 3 * DAY);
+    await fs.utimes(p, saved, saved);
+    const s = { ...snapshot(), frame: { regime: {}, freshness: { latest_bar: "06 Nov 2026", age_hours: 1.5, source_file: rel } } };
+    const live = await withLiveFreshness(s as never, dir, now);
+    expect(live.frame.freshness.age_hours).toBeCloseTo(72, 5);
+    expect(s.frame.freshness.age_hours).toBe(1.5); // input not mutated
+  });
+  test("keeps the saved age when the source file is gone", async () => {
+    const s = { ...snapshot(), frame: { regime: {}, freshness: { age_hours: 1.5, source_file: "missing.csv" } } };
+    expect((await withLiveFreshness(s as never, dir)).frame.freshness.age_hours).toBe(1.5);
   });
 });
 

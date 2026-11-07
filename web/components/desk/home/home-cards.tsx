@@ -23,7 +23,8 @@ function useOpen() {
 
 const CANDIDATE_COLUMNS: DeskColumn<Candidate>[] = [
   { key: "company", label: "Company", kind: "name", priority: 1, sortValue: (c) => c.company || c.ticker,
-    render: (c) => <NameCell title={c.company || c.ticker} sub={`${c.ticker} · ${c.short}`} /> },
+    render: (c) => <NameCell title={c.company || c.ticker} sub={`${c.ticker} · ${c.short}`}
+      external={strategyPageHref(c.short, c.ticker).external} /> },
   { key: "status", label: "Status", kind: "pill", priority: 1, sortValue: (c) => c.status,
     render: (c) => <StatusPill label={c.status} tone={c.status_tone} /> },
   { key: "measure", label: "Key measure", kind: "text", priority: 3, render: (c) => c.key_measure },
@@ -49,7 +50,7 @@ export function CandidatesCard({ candidates, peadHasSignals }: { candidates: Can
 
 const STRATEGY_COLUMNS: DeskColumn<StrategyRow>[] = [
   { key: "name", label: "Strategy", kind: "name", priority: 1,
-    render: (s) => <NameCell title={s.title} sub={strategySub(s)} /> },
+    render: (s) => <NameCell title={s.title} sub={strategySub(s)} external={strategyPageHref(s.id).external} /> },
   { key: "cagr", label: "Per year", kind: "num", priority: 1, sortValue: (s) => s.cagr_pct,
     render: (s) => <ChangePill value={s.cagr_pct} decimals={1} /> },
 ];

@@ -37,6 +37,15 @@ export function formatChange(
   return { text: `${icon}${Math.abs(value).toFixed(decimals)}%`, direction };
 }
 
+const HEADLINE_MAX = 120;
+
+/** One short line for a failed update step: the error's last non-empty line (where Python puts the message). */
+export function errorHeadline(errorTail: string | undefined): string {
+  const last = (errorTail ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean).pop();
+  if (!last) return "no error message";
+  return last.length > HEADLINE_MAX ? `${last.slice(0, HEADLINE_MAX - 1)}…` : last;
+}
+
 /** Python `freshness_label`. */
 export function freshnessLabel(ageDays: number | null): string {
   if (ageDays == null) return "no saved file";

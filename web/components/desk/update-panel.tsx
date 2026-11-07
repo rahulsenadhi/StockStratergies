@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, SlidersHorizontal } from "lucide-react";
 import { runJobStream } from "@/lib/use-job-stream";
-import { freshnessLabel, freshnessTone } from "@/lib/desk/format";
+import { errorHeadline, freshnessLabel, freshnessTone } from "@/lib/desk/format";
 import { oldestAge, type SavedAge } from "@/lib/desk/ages";
 import { UPDATE_STRATEGIES, type UpdateStrategy } from "@/lib/desk/update-steps";
 import type { UpdateResult } from "@/lib/desk/run-update";
@@ -81,22 +81,30 @@ export function UpdatePanel({ ages }: { ages: SavedAge[] }) {
           </div>
         </div>
       </details>
-      {running || lines.length ? (
-        <div className="rd-note" aria-live="polite" style={{ maxHeight: "none" }}>
+      {running ? (
+        <div className="rd-note desk-progress" aria-live="polite">
           {lines.map((l, i) => <div key={i}>{l}</div>)}
         </div>
       ) : null}
       {error ? <p className="rd-note" role="alert" style={{ color: "var(--rd-loss)" }}>{error}</p> : null}
       {results ? (
         <div className="rd-list" role="status">
+          <div className="rd-list__head">
+            Update results
+            <button type="button" className="desk-link" onClick={() => { setResults(null); setLines([]); }}>Dismiss</button>
+          </div>
           {results.map((r) => (
             <div className="rd-li" key={r.strategy} style={{ alignItems: "flex-start" }}>
               <span className="rd-li__main">
                 <span className="rd-li__title">{r.strategy}</span>
                 {r.ok ? null : (
-                  <span className="rd-li__sub" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                    Failed at {r.failedStep}: {r.errorTail}
-                  </span>
+                  <>
+                    <span className="rd-li__sub desk-wrap">Failed at {r.failedStep}: {errorHeadline(r.errorTail)}</span>
+                    <details>
+                      <summary className="rd-li__sub" style={{ cursor: "pointer" }}>Full message</summary>
+                      <pre className="rd-li__sub desk-wrap" style={{ margin: 0, fontFamily: "inherit" }}>{r.errorTail}</pre>
+                    </details>
+                  </>
                 )}
               </span>
               <StatusPill label={r.ok ? "updated" : "failed"} tone={r.ok ? "gain" : "loss"} />

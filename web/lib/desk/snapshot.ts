@@ -84,6 +84,27 @@ function hasShape(v: Record<string, unknown>): boolean {
   return Array.isArray(home.candidates) && Array.isArray(home.strategies) && isObj(home.growth);
 }
 
+/**
+ * The snapshot stores the price file's age as of when it was written. Re-measure it now
+ * from that file (Python _data_freshness used the same file) so "Data updated …" and
+ * "Prices up to … · N days old" age between updates. Returns a new snapshot.
+ */
+export async function withLiveFreshness(
+  snapshot: UiSnapshot,
+  dataDir: string = DEFAULT_DATA_DIR,
+  now: Date = new Date(),
+): Promise<UiSnapshot> {
+  const rel = snapshot.frame.freshness.source_file;
+  if (!rel) return snapshot;
+  try {
+    const { mtimeMs } = await fs.stat(path.join(dataDir, ...rel.split(/[\\/]/)));
+    const age_hours = Math.max(0, (now.getTime() - mtimeMs) / 3_600_000);
+    return { ...snapshot, frame: { ...snapshot.frame, freshness: { ...snapshot.frame.freshness, age_hours } } };
+  } catch {
+    return snapshot;
+  }
+}
+
 /** Read and check the saved snapshot. Never throws: a broken file becomes an empty state. */
 export async function loadSnapshot(dataDir: string = DEFAULT_DATA_DIR): Promise<SnapshotResult> {
   let text: string;
