@@ -136,7 +136,7 @@ def _cell_html(kind: str, value) -> str:
 
 
 def data_table(columns: list[dict], rows: list[dict], *, selected: str | None = None,
-               sorted_key: str | None = None, empty: str = "No rows") -> str:
+               sorted_key: str | None = None, empty: str = "No rows", interactive: bool = True) -> str:
     """Research table: hairline rows, two-line names, right-aligned numbers, clickable rows.
 
     columns: [{"key", "label", "kind": name|num|text|html|tag}]; rows: [{"id", "cells": {key: value}}].
@@ -166,9 +166,28 @@ def data_table(columns: list[dict], rows: list[dict], *, selected: str | None = 
         sel = " rd-tr--sel" if selected is not None and str(r["id"]) == str(selected) else ""
         tds = "".join(f'<td class="{cls(c)}">{_cell_html(c.get("kind", "text"), r["cells"].get(c["key"]))}</td>'
                       for c in columns)
-        body.append(f'<tr class="rd-tr{sel}" data-row="{rid}" tabindex="0">{tds}</tr>')
+        if interactive:
+            body.append(f'<tr class="rd-tr{sel}" data-row="{rid}" tabindex="0">{tds}</tr>')
+        else:
+            body.append(f'<tr class="rd-tr--static">{tds}</tr>')
     return (f'<div class="rd-table-wrap"><table class="rd-table"><thead><tr>{head}</tr></thead>'
             f'<tbody>{"".join(body)}</tbody></table></div>')
+
+
+def big_value(text: str, tone: str | None = None) -> str:
+    """Large headline number with smaller decimals, e.g. +20.9% -> "+20" + ".9%"."""
+    t = str(text)
+    cls = f"rd-big rd-big--{_check_tone(tone)}" if tone else "rd-big"
+    if "." in t:
+        head, tail = t.split(".", 1)
+        return f'<span class="{cls}">{escape(head)}<span class="rd-big__dec">.{escape(tail)}</span></span>'
+    return f'<span class="{cls}">{escape(t)}</span>'
+
+
+def stat_bar(label: str, value: str, tone: str = "muted") -> str:
+    """Label/value row with a coloured left bar (summary panels)."""
+    return (f'<div class="rd-bar rd-bar--{_check_tone(tone)}"><span>{escape(label)}</span>'
+            f'<span class="rd-bar__val">{escape(str(value))}</span></div>')
 
 
 def headline(lead: str, emphasis: str, tone: str, meta: list[str] | None = None) -> str:
@@ -471,6 +490,19 @@ html body [data-testid="stSidebar"] .stRadio [role="radiogroup"] label:nth-child
 .rd-li__title { color: var(--rd-text); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .rd-li__sub { color: var(--rd-text-muted); font-size: var(--rd-fs-xs); }
 .rd-li__val { text-align:right; font-variant-numeric: tabular-nums; color: var(--rd-text); white-space:nowrap; }
+.rd-big { font-size: 34px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1;
+  color: var(--rd-text); font-variant-numeric: tabular-nums; }
+.rd-big__dec { font-size: 20px; font-weight: 500; }
+.rd-big--gain { color: var(--rd-gain); } .rd-big--loss { color: var(--rd-loss); }
+.rd-big--warn { color: var(--rd-warn); } .rd-big--info { color: var(--rd-info); } .rd-big--muted { color: var(--rd-text-muted); }
+.rd-tr--static .rd-td { cursor: default; }
+.rd-stat-label { font-size: var(--rd-fs-sm); color: var(--rd-text-muted); margin-bottom: 4px; }
+.rd-stat-sub { font-size: var(--rd-fs-sm); color: var(--rd-text-muted); margin-top: 6px; }
+.rd-bar { display:flex; justify-content:space-between; align-items:center; padding: 7px 0 7px 10px;
+  border-left: 3px solid var(--rd-line); margin-top: 8px; font-size: var(--rd-fs-base); color: var(--rd-text); }
+.rd-bar--gain { border-left-color: var(--rd-gain); } .rd-bar--loss { border-left-color: var(--rd-loss); }
+.rd-bar--info { border-left-color: var(--rd-info); } .rd-bar--muted { border-left-color: var(--rd-line); }
+.rd-bar__val { font-variant-numeric: tabular-nums; font-weight: 500; }
 .rd-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; vertical-align:middle; }
 [class*="st-key-rd_card"] [data-testid="stPlotlyChart"] { border:0 !important; box-shadow:none !important; background:transparent !important; }
 html body [data-testid="stSidebar"] [data-testid="stPopover"] button p { font-size: var(--rd-fs-md) !important; }

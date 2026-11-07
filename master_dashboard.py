@@ -7,6 +7,7 @@ Run: streamlit run master_dashboard.py --server.port 8500
 
 import html as _h
 import os
+import re
 import subprocess
 import sys
 import warnings
@@ -6206,53 +6207,6 @@ def _monthly_period_slice(eq: pd.DataFrame, window: str) -> pd.DataFrame:
     return eq[eq.index >= start]
 
 
-def _render_monthly_candidates(ranks: pd.DataFrame) -> None:
-    rank_age = _file_age_days('live_rankings.csv')
-    _md(ui.section_label('Saved ranking — all Nifty 50 stocks',
-                         f'live_rankings.csv · {ui.freshness_label(rank_age)}'))
-    if ranks.empty:
-        _md(ui.empty_state('No saved ranking',
-                           'Use “Monthly” under Refresh Data in the sidebar to download prices and rebuild the ranking.'))
-        return
-    st.caption('Ranked by RS Score: the stock’s return this month minus the Nifty benchmark return. '
-               'The top 5 are the model’s current candidates, not your holdings. Select a row to see details.')
-
-    tbl = pd.DataFrame({
-        '#': ranks['Rank'].astype(int),
-        'Top 5': ranks['Rank'].astype(int) <= 5,
-        'Ticker': ranks['Ticker'].str.replace('.NS', '', regex=False),
-        'Company': ranks['Company'],
-        'Price ₹': ranks['Current_Price'],
-        'Month %': ranks['Return_%'],
-        'RS %': ranks['RS_Score'],
-        'Model label': ranks['Signal'].astype(str).str.replace(r'^[🟢🟡🔴⚪]\s*', '', regex=True),
-    })
-    left, right = st.columns([5, 3], gap='medium')
-    with left:
-        event = st.dataframe(
-            tbl, hide_index=True, width='stretch', height=520,
-            on_select='rerun', selection_mode='single-row', key='monthly_rank_table',
-            column_config={
-                '#': st.column_config.NumberColumn(width=36, help='Rank by RS Score'),
-                'Top 5': st.column_config.CheckboxColumn(width=52, help='Current top-5 candidate'),
-                'Ticker': st.column_config.TextColumn(width=96),
-                'Company': st.column_config.TextColumn(width=150),
-                'Price ₹': st.column_config.NumberColumn(format='%.2f', width=78),
-                'Month %': st.column_config.NumberColumn(
-                    format='%+.2f', width=70, help='Stock return since the previous month end'),
-                'RS %': st.column_config.NumberColumn(
-                    format='%+.2f', width=64, help='RS Score: month return minus the benchmark return'),
-                'Model label': st.column_config.TextColumn(
-                    width=96,
-                    help='Label written by the ranking script; it does not consider market conditions'),
-            },
-        )
-    sel = event.selection.rows if event and event.selection else []
-    row = ranks.iloc[sel[0]] if sel else ranks.iloc[0]
-    with right:
-        _render_monthly_stock_detail(row, selected=bool(sel))
-
-
 @st.cache_data(ttl=3600)
 def _monthly_close_history(ticker: str) -> pd.Series | None:
     """Saved closing prices for one Nifty stock (data/{TICKER}.NS.csv has a single close column)."""
@@ -6269,53 +6223,176 @@ def _monthly_close_history(ticker: str) -> pd.Series | None:
     return pd.to_numeric(df[col], errors='coerce').dropna().sort_index()
 
 
-def _render_monthly_stock_detail(row: pd.Series, *, selected: bool) -> None:
+# RS score = month return minus one shared benchmark return, and rank follows RS score,
+# so sorting by rank, return or RS gives the same order. Offer filters instead.
+_MONTHLY_FILTERS = ['All 50', 'Top 5', 'Beating Nifty', 'Lagging Nifty']
+
+
+def _monthly_filter(ranks: pd.DataFrame, choice: str) -> pd.DataFrame:
+    if choice == 'Top 5':
+        return ranks[ranks['Rank'].astype(int) <= 5]
+    if choice == 'Beating Nifty':
+        return ranks[ranks['RS_Score'] > 0]
+    if choice == 'Lagging Nifty':
+        return ranks[ranks['RS_Score'] < 0]
+    return ranks
+
+
+def _monthly_label(signal) -> str:
+    return re.sub(r'^[🟢🟡🔴⚪]\s*', '', str(signal))
+
+
+def _monthly_tickers(value) -> str:
+    text = '' if value is None or (isinstance(value, float) and value != value) else str(value)
+    names = [t.strip().replace('.NS', '') for t in text.split(',') if t.strip()]
+    return ', '.join(names) or '—'
+
+
+def _render_monthly_summary(eq: pd.DataFrame, mx: dict, b_ret: float, b_cagr: float,
+                            alpha: float, n_months: int | None, color: str) -> None:
+    with st.container(key='rd_card_monthly_summary'):
+        left, right = st.columns([1, 2.3], gap='large')
+        with left:
+            _md('<div class="rd-stat-label">Avg yearly return (CAGR)</div>'
+                + ui.big_value(f"{mx['cagr']:+.1f}%" if mx else '—',
+                               tone='gain' if mx and mx['cagr'] >= 0 else 'loss')
+                + f'<div class="rd-stat-sub">vs Nifty {b_cagr:+.1f}% per year, same period</div>')
+            _md(ui.stat_bar('Extra vs Nifty', f'{alpha:+.1f}% / yr', 'gain' if alpha >= 0 else 'loss')
+                + ui.stat_bar('Total return', f"{mx['total_ret']:+.1f}%" if mx else '—', 'info')
+                + ui.stat_bar('Nifty total', f'{b_ret:+.1f}%', 'muted')
+                + ui.stat_bar('Worst fall from a peak', f"{mx['max_dd']:.1f}%" if mx else '—', 'loss')
+                + ui.stat_bar('Sample', f'{n_months} monthly rebalances' if n_months else '—', 'muted'))
+        with right:
+            hl, hr = st.columns([1, 1], vertical_alignment='center')
+            with hl:
+                _md('<div class="rd-stat-label">Simulated account vs Nifty</div>')
+            with hr:
+                window = st.segmented_control('Chart window', ['1Y', '3Y', 'All'], default='All',
+                                              key='monthly_window', label_visibility='collapsed')
+            shown = _monthly_period_slice(eq, window or 'All')
+            fig = chart_equity(shown, 'Portfolio_Value', S_MONTHLY, color, 'Benchmark_Value')
+            fig.update_layout(height=270, margin=dict(l=4, r=4, t=24, b=4),
+                              paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                              yaxis=dict(gridcolor='rgba(120,120,120,.14)'), xaxis=dict(showgrid=False))
+            _plot(fig, width='stretch', config={'displayModeBar': False})
+            _md('<div class="rd-note">Both lines start at 0% at the beginning of the selected window. '
+                'The figures on the left always cover the full test period.</div>')
+
+
+def _render_monthly_ranking(ranks: pd.DataFrame):
+    head_l, head_r = st.columns([1, 1.2], vertical_alignment='center')
+    with head_l:
+        _md('<div class="rd-list__head" style="border:0;padding:0 0 6px">Saved ranking '
+            '<span>Nifty 50 by RS score · click a row</span></div>')
+    with head_r:
+        choice = st.segmented_control('Show', _MONTHLY_FILTERS, default='All 50',
+                                      key='monthly_filter', label_visibility='collapsed') or 'All 50'
+    if ranks.empty:
+        _md(ui.empty_state('No saved ranking',
+                           'Use “Refresh data → Monthly” in the sidebar to download prices and rebuild the ranking.'))
+        return None
+    shown = _monthly_filter(ranks.sort_values('Rank', kind='stable'), choice)
+    rows = []
+    for _, r in shown.iterrows():
+        rank = int(r['Rank'])
+        rows.append({'id': str(r['Ticker']), 'cells': {
+            'rank': f'{rank}',
+            'company': (r['Company'], str(r['Ticker']).replace('.NS', '')
+                        + (' · top 5 candidate' if rank <= 5 else '')),
+            'price': f"₹{r['Current_Price']:,.2f}",
+            'move': ui.change_pill(float(r['Return_%'])),
+            'rs': f"{r['RS_Score']:+.2f}%",
+            'label': ui.status_pill(_monthly_label(r['Signal']), 'info' if rank <= 5 else 'muted'),
+        }})
+    selected = selected_row('monthly_ranks') or str(ranks.iloc[0]['Ticker'])
+    html = ui.data_table([
+        {'key': 'rank', 'label': '#', 'kind': 'num'},
+        {'key': 'company', 'label': 'Company', 'kind': 'name'},
+        {'key': 'price', 'label': 'Price', 'kind': 'num', 'hide_sm': True},
+        {'key': 'move', 'label': 'Month move', 'kind': 'html'},
+        {'key': 'rs', 'label': 'RS score', 'kind': 'num'},
+        {'key': 'label', 'label': 'Model label', 'kind': 'tag', 'hide_sm': True},
+    ], rows, selected=selected, sorted_key='rs',
+       empty=f'No stocks match “{choice}” in the saved ranking.')
+    with st.container(key='rd_scroll_monthly', height=560, border=False):
+        clickable_table(html, key='monthly_ranks')
+    _md('<div class="rd-note" style="margin-top:6px">RS score = the stock’s return since last month end '
+        'minus the Nifty benchmark return. The top 5 are the model’s current candidates, not your '
+        'holdings. The model label is written by the ranking script and does not consider market '
+        'conditions.</div>')
+    match = ranks[ranks['Ticker'].astype(str) == selected]
+    return match.iloc[0] if not match.empty else ranks.iloc[0]
+
+
+def _render_monthly_detail(row, ranks: pd.DataFrame) -> None:
+    if row is None:
+        return
     ticker = str(row['Ticker'])
     rank = int(row['Rank'])
-    _md(ui.section_label('Company detail', 'selected row' if selected else 'showing rank #1'))
-    st.markdown(f'### {ticker.replace(".NS", "")} · {row["Company"]}')
-    pill = ui.status_pill('Top-5 candidate', 'gain') if rank <= 5 else ui.status_pill(f'Rank {rank} of 50', 'muted')
-    _md(pill)
-    _md(ui.kpi_row([
-        ui.kpi('Price', f'₹{row["Current_Price"]:,.2f}'),
-        ui.kpi('Month return', f'{row["Return_%"]:+.2f}%',
-               tone='gain' if row['Return_%'] >= 0 else 'loss'),
-        ui.kpi('RS Score', f'{row["RS_Score"]:+.2f}%',
-               sub=f'benchmark {row["Benchmark_Return_%"]:+.2f}%' if 'Benchmark_Return_%' in row else None,
-               tone='gain' if row['RS_Score'] >= 0 else 'loss'),
-    ]))
+    status = (ui.status_pill('Top-5 candidate', 'info') if rank <= 5
+              else ui.status_pill(f'Rank {rank} of {len(ranks)}', 'muted'))
+    bench = pd.to_numeric(row.get('Benchmark_Return_%'), errors='coerce')
+    items = [
+        ('Price', '', f'<span class="rd-li__val">₹{row["Current_Price"]:,.2f}</span>'),
+        ('Month move', 'since last month end', ui.change_pill(float(row['Return_%']))),
+        ('Nifty benchmark', 'same period', ui.change_pill(None if pd.isna(bench) else float(bench))),
+        ('RS score', 'move minus benchmark', ui.change_pill(float(row['RS_Score']))),
+        ('Model label', '', ui.status_pill(_monthly_label(row['Signal']), 'muted')),
+    ]
+    body = ''.join(
+        f'<div class="rd-li"><span class="rd-li__main"><span class="rd-li__title">{_h.escape(t)}</span>'
+        + (f'<span class="rd-li__sub">{_h.escape(sub)}</span>' if sub else '') + f'</span>{v}</div>'
+        for t, sub, v in items)
+    _md(f'<div class="rd-list"><div class="rd-list__head"><span style="font-size:var(--rd-fs-md);'
+        f'font-weight:600;color:var(--rd-text)">{_h.escape(str(row["Company"]))}</span>{status}</div>'
+        f'<div class="rd-li"><span class="rd-li__sub">{_h.escape(ticker.replace(".NS", ""))} · NSE</span></div>'
+        f'{body}</div>')
+
     close = _monthly_close_history(ticker)
-    if close is None or close.empty:
-        _md(ui.empty_state('No saved price history', f'data/{ticker}.csv is missing or unreadable.'))
+    with st.container(key='rd_card_monthly_price'):
+        if close is None or close.empty:
+            _md(ui.empty_state('No saved price history', f'data/{ticker}.csv is missing or unreadable.'))
+        else:
+            close = close.iloc[-126:]
+            fig = go.Figure(go.Scatter(x=close.index, y=close.values, mode='lines', name='Close',
+                                       line=dict(color=THEME[S_MONTHLY]['color'], width=1.6),
+                                       hovertemplate='₹%{y:,.2f}<extra></extra>'))
+            fig.update_layout(**_plotly_base())
+            fig.update_layout(height=180, margin=dict(l=4, r=4, t=4, b=4), showlegend=False,
+                              paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+                              yaxis=dict(tickprefix='₹', gridcolor='rgba(120,120,120,.14)'),
+                              xaxis=dict(showgrid=False))
+            _md(f'<div class="rd-stat-label">Closing price · last {len(close)} sessions '
+                f'(saved to {close.index[-1]:%d %b %Y})</div>')
+            _plot(fig, width='stretch', config={'displayModeBar': False})
+
+    top5 = ranks.sort_values('Rank').head(5)
+    items = ''.join(
+        f'<div class="rd-li"><span class="rd-li__main"><span class="rd-li__title">{_h.escape(str(r["Company"]))}</span>'
+        f'<span class="rd-li__sub">#{int(r["Rank"])} · {_h.escape(str(r["Ticker"]).replace(".NS", ""))}</span></span>'
+        f'{ui.change_pill(float(r["RS_Score"]))}</div>' for _, r in top5.iterrows())
+    _md(f'<div class="rd-list" style="margin-top:14px"><div class="rd-list__head">Model top 5 '
+        f'<span>RS score</span></div>{items}</div>')
+
+
+def _render_monthly_rebalances(reb: pd.DataFrame) -> None:
+    if reb is None or reb.empty:
+        _md(ui.empty_state('No rebalance log saved', 'rebalance_log.csv is missing or empty.'))
         return
-    close = close.iloc[-126:]
-    fig = go.Figure(go.Scatter(x=close.index, y=close.values, mode='lines', name='Close',
-                               line=dict(color=THEME[S_MONTHLY]['color'], width=1.8)))
-    fig.update_layout(**_plotly_base(), height=220, margin=dict(l=10, r=10, t=10, b=10),
-                      showlegend=False, yaxis=dict(tickprefix='₹', gridcolor='#1a1f35'),
-                      xaxis=dict(gridcolor='#1a1f35'))
-    st.caption(f'Closing price, last {len(close)} trading sessions (saved data, last {close.index[-1]:%d %b %Y})')
-    _plot(fig, width='stretch', config={'displayModeBar': False})
-
-
-def _render_monthly_results(eq: pd.DataFrame, reb: pd.DataFrame, color: str) -> None:
-    _md(ui.section_label('Simulated account vs Nifty', 'backtest_results.csv'))
-    window = st.segmented_control('Chart window', ['1Y', '3Y', 'All'], default='All',
-                                  key='monthly_window', label_visibility='collapsed')
-    shown = _monthly_period_slice(eq, window or 'All')
-    st.caption('Both lines start at 0% at the beginning of the selected window. '
-               'The figures above always cover the full test period.')
-    _plot(chart_equity(shown, 'Portfolio_Value', S_MONTHLY, color, 'Benchmark_Value'), width='stretch')
-
-    if reb is not None and not reb.empty:
-        _md(ui.section_label('Rebalance log — what changed each month',
-                             f'last 12 of {len(reb)} rebalances'))
-        st.caption('Bought = new entrant into the top 5. Sold = fell out of the top 5.')
-        r = reb[['Date', 'Top5_Stocks', 'Stocks_Bought', 'Stocks_Sold', 'Portfolio_Value']].copy()
-        r['Date']            = r['Date'].astype(str).str[:10]
-        r['Portfolio_Value'] = r['Portfolio_Value'].apply(lambda x: f'₹{x:,.0f}')
-        st.markdown(_modern_table(r.tail(12), numeric_cols=['Portfolio_Value']),
-                    unsafe_allow_html=True)
+    rows = [{'id': str(r['Date'])[:10], 'cells': {
+        'date': str(r['Date'])[:10], 'top5': _monthly_tickers(r['Top5_Stocks']),
+        'bought': _monthly_tickers(r['Stocks_Bought']), 'sold': _monthly_tickers(r['Stocks_Sold']),
+        'value': f"₹{r['Portfolio_Value']:,.0f}",
+    }} for _, r in reb.tail(12).iloc[::-1].iterrows()]
+    _md(ui.data_table([
+        {'key': 'date', 'label': 'Date', 'kind': 'text'},
+        {'key': 'top5', 'label': 'Top 5 held', 'kind': 'name'},
+        {'key': 'bought', 'label': 'Bought', 'kind': 'name', 'hide_sm': True},
+        {'key': 'sold', 'label': 'Sold', 'kind': 'name', 'hide_sm': True},
+        {'key': 'value', 'label': 'Account value', 'kind': 'num'},
+    ], rows, interactive=False))
+    _md(f'<div class="rd-note" style="margin-top:6px">Latest 12 of {len(reb)} monthly rebalances, newest first. '
+        'Bought = new entrant into the top 5. Sold = fell out of the top 5.</div>')
 
 
 def _render_monthly_rules(color: str) -> None:
@@ -6327,26 +6404,31 @@ def _render_monthly_rules(color: str) -> None:
     ), unsafe_allow_html=True)
     section_help('How to read this page', 'Rankings compare each stock with the market. Positive relative strength means it performed better over the measured period. '
                  'The account chart and trade history describe the saved monthly simulation. Review dates before using a ranking.')
-    _md(ui.section_label('Validation status', 'what has and has not been checked'))
+    _md('<div class="rd-list__head" style="border:0;padding:12px 0 6px">Validation status '
+        '<span>what has and has not been checked</span></div>')
     _md(ui.validation_checklist(MONTHLY_CHECKS))
-    _exit_playbook_card(_pick_rec('monthly_rotation'), title='Monthly Rotation')
 
 
 def render_monthly(m: dict):
     color = THEME[S_MONTHLY]['color']
-    st.markdown('<div class="page-title">Monthly stock rotation</div>'
-                '<div class="page-sub">Ranks the Nifty 50 by recent strength; the model holds the top 5 and rebalances monthly.</div>',
-                unsafe_allow_html=True)
-    research_notice()
-    st.caption('Daily rankings are research candidates. The backtest rotates monthly; actual holdings are not tracked here.')
-
     eq = m.get('equity')
     ranks = m.get('rankings', pd.DataFrame())
     reb   = m.get('rebalance', pd.DataFrame())
+
+    rank_age = _file_age_days('live_rankings.csv')
+    left, right = st.columns([3, 2], vertical_alignment='bottom')
+    with left:
+        _md('<div class="rd-page"><div class="rd-page__title">Monthly stock rotation</div>'
+            '<div class="rd-page__sub">Ranks the Nifty 50 by recent strength; the model holds the top 5 '
+            'and rebalances monthly.</div></div>')
+    with right:
+        _md(f'<div class="rd-page" style="text-align:right">{ui.status_pill("Live", "info")} '
+            f'{ui.status_pill("Ranking " + ui.freshness_label(rank_age), ui.freshness_tone(rank_age))}</div>')
+
     if eq is None:
         _md(ui.empty_state('No monthly simulation is saved',
-                           'Use “Monthly” under Refresh Data in the sidebar to request data and rebuild the saved results.'))
-        _render_monthly_candidates(ranks)
+                           'Use “Refresh data → Monthly” in the sidebar to request data and rebuild the saved results.'))
+        _render_monthly_ranking(ranks)
         return
 
     mx = _equity_metrics(eq, 'Portfolio_Value', 'Portfolio_Value')
@@ -6363,32 +6445,31 @@ def render_monthly(m: dict):
     alpha    = mx['cagr'] - b_cagr if mx else 0
 
     _md(ui.context_bar([
-        ('Strategy', S_MONTHLY),
         ('Universe', 'Nifty 50 (current list)'),
         ('Test period', f"{mx['start']} → {mx['end']}" if mx else '—'),
-        ('Rule', 'Top 5 by RS Score, monthly'),
-        ('Ranking saved', ui.freshness_label(_file_age_days('live_rankings.csv'))),
+        ('Rule', 'Top 5 by RS score, monthly'),
     ], basis='Gross · before costs and slippage'))
 
-    _md(ui.kpi_row([
-        ui.kpi('Avg yearly return', f"{mx['cagr']:+.1f}%" if mx else '—',
-               sub=f"Total {mx['total_ret']:+.1f}%" if mx else None,
-               sample_n=n_months, sample_unit='monthly rebalances'),
-        ui.kpi('Worst fall from a peak', f"{mx['max_dd']:.1f}%" if mx else '—',
-               sub='Max drawdown', tone='loss'),
-        ui.kpi('Nifty yearly return', f'{b_cagr:+.1f}%', sub=f'Total {b_ret:+.1f}% · same period'),
-        ui.kpi('Extra vs Nifty', f'{alpha:+.1f}%', sub='per year',
-               tone='gain' if alpha >= 0 else 'loss'),
-    ]))
+    _render_monthly_summary(eq, mx, b_ret, b_cagr, alpha, n_months, color)
+    st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
 
-    tab_rank, tab_results, tab_rules = st.tabs(["Today's ranking", 'Past results', 'Rules and checks'])
-    with tab_rank:
-        _render_monthly_candidates(ranks)
-    with tab_results:
-        _render_monthly_results(eq, reb, color)
+    main, rail = st.columns([2.1, 1], gap='large')
+    with main:
+        row = _render_monthly_ranking(ranks)
+    with rail:
+        _render_monthly_detail(row, ranks)
+
+    st.markdown('<div style="height:16px"></div>', unsafe_allow_html=True)
+    tab_reb, tab_rules, tab_exit = st.tabs(['Rebalance log', 'Rules and checks', 'Exit research'])
+    with tab_reb:
+        _render_monthly_rebalances(reb)
     with tab_rules:
         _render_monthly_rules(color)
+    with tab_exit:
+        _exit_playbook_card(_pick_rec('monthly_rotation'), title='Monthly Rotation')
 
+    research_notice()
+    st.caption('Daily rankings are research candidates. The backtest rotates monthly; actual holdings are not tracked here.')
     _glossary_expander()
 
 

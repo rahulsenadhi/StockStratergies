@@ -265,3 +265,34 @@ def test_data_table_marks_columns_hidden_on_small_screens():
             {"key": "b", "label": "B", "kind": "text", "hide_sm": True}]
     html = ui.data_table(cols, [{"id": "1", "cells": {"a": "x", "b": "y"}}])
     assert html.count("rd-col--hide-sm") == 2   # header + cell
+
+
+# ── big value / static table ────────────────────────────────────────────────
+
+def test_big_value_splits_decimals():
+    html = ui.big_value("+20.9%", tone="gain")
+    assert "rd-big--gain" in html and "+20" in html and '<span class="rd-big__dec">.9%</span>' in html
+
+
+def test_big_value_without_decimal():
+    html = ui.big_value("36")
+    assert ">36<" in html and "rd-big__dec" not in html
+
+
+def test_big_value_escapes():
+    assert "<b>" not in ui.big_value("<b>1.5</b>")
+
+
+def test_static_table_rows_are_not_focusable():
+    html = ui.data_table([{"key": "a", "label": "A", "kind": "text"}],
+                         [{"id": "1", "cells": {"a": "x"}}], interactive=False)
+    assert "tabindex" not in html and "rd-tr--static" in html
+
+
+def test_stat_bar_renders_label_value_and_tone():
+    html = ui.stat_bar("Worst fall", "-12.0%", "loss")
+    assert "rd-bar--loss" in html and "Worst fall" in html and "-12.0%" in html
+
+
+def test_stat_bar_escapes():
+    assert "<i>" not in ui.stat_bar("<i>x</i>", "<b>", "muted")
