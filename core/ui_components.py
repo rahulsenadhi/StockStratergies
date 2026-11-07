@@ -63,7 +63,7 @@ def context_bar(items: list[tuple[str, str]], basis: str | None = None) -> str:
 
 
 def kpi(label: str, value: str, *, sub: str | None = None, tone: str | None = None,
-        sample_n: int | None = None) -> str:
+        sample_n: int | None = None, sample_unit: str = "trades") -> str:
     """A metric with its sample size. Small samples are labelled, never hidden."""
     low = sample_n is not None and sample_n < LOW_SAMPLE_TRADES
     cls = "rd-kpi rd-kpi--low-sample" if low else "rd-kpi"
@@ -74,12 +74,12 @@ def kpi(label: str, value: str, *, sub: str | None = None, tone: str | None = No
     if sub:
         meta.append(escape(sub))
     if sample_n is not None:
-        meta.append(f"{sample_n:,} trades")
+        meta.append(f"{sample_n:,} {escape(sample_unit)}")
     if meta:
         parts.append(f'<div class="rd-kpi__meta">{" · ".join(meta)}</div>')
     if low:
         parts.append(f'<div class="rd-kpi__warn">Small sample: fewer than '
-                     f'{LOW_SAMPLE_TRADES} trades</div>')
+                     f'{LOW_SAMPLE_TRADES} {escape(sample_unit)}</div>')
     return f'<div class="{cls}">{"".join(parts)}</div>'
 
 

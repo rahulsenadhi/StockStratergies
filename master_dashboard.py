@@ -59,6 +59,7 @@ import streamlit as st
 
 from core.workflow_ui import workflow_style, research_notice, section_help, native_theme
 from core.ui_components import adapt_figure_to_theme
+from core import ui_components as ui
 from core import analytics as core_analytics
 from core.refresh_ui import render_staleness_banner
 from core import data_io as core_data_io
@@ -6142,33 +6143,184 @@ def render_home(m: dict, i: dict, mo: dict):
 #  MONTHLY ROTATION PAGE
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def render_monthly(m: dict):
-    research_notice()
-    color = THEME[S_MONTHLY]['color']
-    st.markdown(f'<div class="page-title" style="color:{color}">🔄 Monthly Rotation</div>'
-                '<div class="page-sub">Research stock rankings and a model that changes its selection each month.</div><br>',
-                unsafe_allow_html=True)
+def _file_age_days(filename: str) -> int | None:
+    """Whole days since a saved file was written (display only)."""
+    p = Path(BASE_DIR) / filename
+    if not p.exists():
+        return None
+    return (datetime.now() - datetime.fromtimestamp(p.stat().st_mtime)).days
 
+
+def _md(html: str) -> None:
+    st.markdown(html, unsafe_allow_html=True)
+
+
+MONTHLY_CHECKS = [
+    ('Out-of-sample test', 'not_tested',
+     'Only one historical period was simulated; no separate unseen period was held back.'),
+    ('Trading costs and slippage', 'not_modelled',
+     'Returns are gross: brokerage, taxes and price slippage are not deducted.'),
+    ('Survivorship bias', 'known_risk',
+     "The universe is today's Nifty 50 list; companies that left the index earlier are missing."),
+    ('Look-ahead audit', 'not_tested', 'No formal check for use of future data has been run.'),
+    ('Market cycles covered', 'partial',
+     'About three years of monthly rebalances; one broad market cycle.'),
+]
+
+
+def _monthly_period_slice(eq: pd.DataFrame, window: str) -> pd.DataFrame:
+    """Return the rows of the saved equity curve inside a display window (no recalculation)."""
+    if window == 'All' or eq.empty:
+        return eq
+    years = {'1Y': 1, '3Y': 3}[window]
+    start = eq.index[-1] - pd.DateOffset(years=years)
+    return eq[eq.index >= start]
+
+
+def _render_monthly_candidates(ranks: pd.DataFrame) -> None:
+    rank_age = _file_age_days('live_rankings.csv')
+    _md(ui.section_label('Saved ranking — all Nifty 50 stocks',
+                         f'live_rankings.csv · {ui.freshness_label(rank_age)}'))
+    if ranks.empty:
+        _md(ui.empty_state('No saved ranking',
+                           'Use “Monthly” under Refresh Data in the sidebar to download prices and rebuild the ranking.'))
+        return
+    st.caption('Ranked by RS Score: the stock’s return this month minus the Nifty benchmark return. '
+               'The top 5 are the model’s current candidates, not your holdings. Select a row to see details.')
+
+    tbl = pd.DataFrame({
+        '#': ranks['Rank'].astype(int),
+        'Top 5': ranks['Rank'].astype(int) <= 5,
+        'Ticker': ranks['Ticker'].str.replace('.NS', '', regex=False),
+        'Company': ranks['Company'],
+        'Price ₹': ranks['Current_Price'],
+        'Month %': ranks['Return_%'],
+        'RS %': ranks['RS_Score'],
+        'Model label': ranks['Signal'].astype(str).str.replace(r'^[🟢🟡🔴⚪]\s*', '', regex=True),
+    })
+    left, right = st.columns([5, 3], gap='medium')
+    with left:
+        event = st.dataframe(
+            tbl, hide_index=True, width='stretch', height=520,
+            on_select='rerun', selection_mode='single-row', key='monthly_rank_table',
+            column_config={
+                '#': st.column_config.NumberColumn(width=36, help='Rank by RS Score'),
+                'Top 5': st.column_config.CheckboxColumn(width=52, help='Current top-5 candidate'),
+                'Ticker': st.column_config.TextColumn(width=96),
+                'Company': st.column_config.TextColumn(width=150),
+                'Price ₹': st.column_config.NumberColumn(format='%.2f', width=78),
+                'Month %': st.column_config.NumberColumn(
+                    format='%+.2f', width=70, help='Stock return since the previous month end'),
+                'RS %': st.column_config.NumberColumn(
+                    format='%+.2f', width=64, help='RS Score: month return minus the benchmark return'),
+                'Model label': st.column_config.TextColumn(
+                    width=96,
+                    help='Label written by the ranking script; it does not consider market conditions'),
+            },
+        )
+    sel = event.selection.rows if event and event.selection else []
+    row = ranks.iloc[sel[0]] if sel else ranks.iloc[0]
+    with right:
+        _render_monthly_stock_detail(row, selected=bool(sel))
+
+
+@st.cache_data(ttl=3600)
+def _monthly_close_history(ticker: str) -> pd.Series | None:
+    """Saved closing prices for one Nifty stock (data/{TICKER}.NS.csv has a single close column)."""
+    p = Path(BASE_DIR) / 'data' / f'{ticker}.csv'
+    if not p.exists():
+        return None
+    try:
+        df = pd.read_csv(p, index_col=0, parse_dates=True)
+    except Exception:
+        return None
+    if df.empty:
+        return None
+    col = ticker if ticker in df.columns else df.columns[0]
+    return pd.to_numeric(df[col], errors='coerce').dropna().sort_index()
+
+
+def _render_monthly_stock_detail(row: pd.Series, *, selected: bool) -> None:
+    ticker = str(row['Ticker'])
+    rank = int(row['Rank'])
+    _md(ui.section_label('Company detail', 'selected row' if selected else 'showing rank #1'))
+    st.markdown(f'### {ticker.replace(".NS", "")} · {row["Company"]}')
+    pill = ui.status_pill('Top-5 candidate', 'gain') if rank <= 5 else ui.status_pill(f'Rank {rank} of 50', 'muted')
+    _md(pill)
+    _md(ui.kpi_row([
+        ui.kpi('Price', f'₹{row["Current_Price"]:,.2f}'),
+        ui.kpi('Month return', f'{row["Return_%"]:+.2f}%',
+               tone='gain' if row['Return_%'] >= 0 else 'loss'),
+        ui.kpi('RS Score', f'{row["RS_Score"]:+.2f}%',
+               sub=f'benchmark {row["Benchmark_Return_%"]:+.2f}%' if 'Benchmark_Return_%' in row else None,
+               tone='gain' if row['RS_Score'] >= 0 else 'loss'),
+    ]))
+    close = _monthly_close_history(ticker)
+    if close is None or close.empty:
+        _md(ui.empty_state('No saved price history', f'data/{ticker}.csv is missing or unreadable.'))
+        return
+    close = close.iloc[-126:]
+    fig = go.Figure(go.Scatter(x=close.index, y=close.values, mode='lines', name='Close',
+                               line=dict(color=THEME[S_MONTHLY]['color'], width=1.8)))
+    fig.update_layout(**_plotly_base(), height=220, margin=dict(l=10, r=10, t=10, b=10),
+                      showlegend=False, yaxis=dict(tickprefix='₹', gridcolor='#1a1f35'),
+                      xaxis=dict(gridcolor='#1a1f35'))
+    st.caption(f'Closing price, last {len(close)} trading sessions (saved data, last {close.index[-1]:%d %b %Y})')
+    _plot(fig, width='stretch', config={'displayModeBar': False})
+
+
+def _render_monthly_results(eq: pd.DataFrame, reb: pd.DataFrame, color: str) -> None:
+    _md(ui.section_label('Simulated account vs Nifty', 'backtest_results.csv'))
+    window = st.segmented_control('Chart window', ['1Y', '3Y', 'All'], default='All',
+                                  key='monthly_window', label_visibility='collapsed')
+    shown = _monthly_period_slice(eq, window or 'All')
+    st.caption('Both lines start at 0% at the beginning of the selected window. '
+               'The figures above always cover the full test period.')
+    _plot(chart_equity(shown, 'Portfolio_Value', S_MONTHLY, color, 'Benchmark_Value'), width='stretch')
+
+    if reb is not None and not reb.empty:
+        _md(ui.section_label('Rebalance log — what changed each month',
+                             f'last 12 of {len(reb)} rebalances'))
+        st.caption('Bought = new entrant into the top 5. Sold = fell out of the top 5.')
+        r = reb[['Date', 'Top5_Stocks', 'Stocks_Bought', 'Stocks_Sold', 'Portfolio_Value']].copy()
+        r['Date']            = r['Date'].astype(str).str[:10]
+        r['Portfolio_Value'] = r['Portfolio_Value'].apply(lambda x: f'₹{x:,.0f}')
+        st.markdown(_modern_table(r.tail(12), numeric_cols=['Portfolio_Value']),
+                    unsafe_allow_html=True)
+
+
+def _render_monthly_rules(color: str) -> None:
     st.markdown(_explain_box(
         '<b>How it works:</b> Every month, we rank all 50 Nifty stocks by their recent price strength '
         '(<b>RS Score</b>). We buy the top 5 and hold them for the month. If a stock falls out of the '
         'top 5, the model replaces it with a new entrant. These are model rules, not purchases in your account.',
         color
     ), unsafe_allow_html=True)
-
-    st.caption('Daily rankings are research candidates. The backtest rotates monthly; actual holdings are not tracked here.')
     section_help('How to read this page', 'Rankings compare each stock with the market. Positive relative strength means it performed better over the measured period. '
                  'The account chart and trade history describe the saved monthly simulation. Review dates before using a ranking.')
+    _md(ui.section_label('Validation status', 'what has and has not been checked'))
+    _md(ui.validation_checklist(MONTHLY_CHECKS))
     _exit_playbook_card(_pick_rec('monthly_rotation'), title='Monthly Rotation')
 
-    eq = m.get('equity')
-    if eq is None:
-        st.info('No monthly simulation is saved. Use the Monthly update button to request data and rebuild the saved results.')
-        return
 
-    mx    = _equity_metrics(eq, 'Portfolio_Value', 'Portfolio_Value')
+def render_monthly(m: dict):
+    color = THEME[S_MONTHLY]['color']
+    st.markdown('<div class="page-title">Monthly stock rotation</div>'
+                '<div class="page-sub">Ranks the Nifty 50 by recent strength; the model holds the top 5 and rebalances monthly.</div>',
+                unsafe_allow_html=True)
+    research_notice()
+    st.caption('Daily rankings are research candidates. The backtest rotates monthly; actual holdings are not tracked here.')
+
+    eq = m.get('equity')
     ranks = m.get('rankings', pd.DataFrame())
     reb   = m.get('rebalance', pd.DataFrame())
+    if eq is None:
+        _md(ui.empty_state('No monthly simulation is saved',
+                           'Use “Monthly” under Refresh Data in the sidebar to request data and rebuild the saved results.'))
+        _render_monthly_candidates(ranks)
+        return
+
+    mx = _equity_metrics(eq, 'Portfolio_Value', 'Portfolio_Value')
 
     b_ret  = 0.0
     b_cagr = 0.0
@@ -6178,89 +6330,36 @@ def render_monthly(m: dict):
         b_yrs  = (bv.index[-1] - bv.index[0]).days / 365.25
         b_cagr = ((bv.iloc[-1] / bv.iloc[0]) ** (1 / max(b_yrs, 0.01)) - 1) * 100
 
-    n_months = len(reb) if reb is not None and not reb.empty else '—'
+    n_months = len(reb) if reb is not None and not reb.empty else None
     alpha    = mx['cagr'] - b_cagr if mx else 0
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1: st.markdown(pill('Avg Yearly Return', f"{mx['cagr']:+.1f}%" if mx else '—',
-        f"Total gain: {mx['total_ret']:+.1f}%" if mx else '', color,
-        'CAGR — how much it grew per year on average'), unsafe_allow_html=True)
-    with c2: st.markdown(pill('Worst Loss Ever', f"{mx['max_dd']:.1f}%" if mx else '—',
-        'From peak to trough', '#ff5555',
-        'Max Drawdown — if it peaked at ₹1L then fell, how low did it go?'), unsafe_allow_html=True)
-    with c3: st.markdown(pill('Nifty Return', f'{b_ret:+.1f}%',
-        f'CAGR: {b_cagr:+.1f}%', '#ff9800',
-        'What plain Nifty index gave in the same period'), unsafe_allow_html=True)
-    with c4: st.markdown(pill('Extra vs Nifty', f"{alpha:+.1f}%",
-        'Per year above Nifty', color,
-        'Alpha — the bonus return above just buying the index'), unsafe_allow_html=True)
-    with c5: st.markdown(pill('Months Tracked', str(n_months),
-        f"{mx['start']} → {mx['end']}" if mx else '', '#8892a4',
-        'How long this strategy has been running'), unsafe_allow_html=True)
+    _md(ui.context_bar([
+        ('Strategy', S_MONTHLY),
+        ('Universe', 'Nifty 50 (current list)'),
+        ('Test period', f"{mx['start']} → {mx['end']}" if mx else '—'),
+        ('Rule', 'Top 5 by RS Score, monthly'),
+        ('Ranking saved', ui.freshness_label(_file_age_days('live_rankings.csv'))),
+    ], basis='Gross · before costs and slippage'))
 
-    st.markdown('<br>', unsafe_allow_html=True)
+    _md(ui.kpi_row([
+        ui.kpi('Avg yearly return', f"{mx['cagr']:+.1f}%" if mx else '—',
+               sub=f"Total {mx['total_ret']:+.1f}%" if mx else None,
+               sample_n=n_months, sample_unit='monthly rebalances'),
+        ui.kpi('Worst fall from a peak', f"{mx['max_dd']:.1f}%" if mx else '—',
+               sub='Max drawdown', tone='loss'),
+        ui.kpi('Nifty yearly return', f'{b_cagr:+.1f}%', sub=f'Total {b_ret:+.1f}% · same period'),
+        ui.kpi('Extra vs Nifty', f'{alpha:+.1f}%', sub='per year',
+               tone='gain' if alpha >= 0 else 'loss'),
+    ]))
 
-    if not ranks.empty:
-        st.markdown(f'<div class="sec-hdr" style="color:{color}">Buy These Now — Top 5 This Month</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:11px;color:#3d4a60;margin:-4px 0 12px 2px;">These are ranked by RS Score — how much they outperformed recently. Higher = stronger stock.</div>', unsafe_allow_html=True)
-        cols = st.columns(5)
-        for col_st, (_, row) in zip(cols, ranks.head(5).iterrows()):
-            rs    = row.get('RS_Score', 0)
-            price = row.get('Current_Price', 0)
-            sig   = str(row.get('Signal', ''))
-            sig_color = '#00c853' if '🟢' in sig or 'BUY' in sig.upper() else '#ff5555'
-            with col_st:
-                st.markdown(f"""
-                <div style="background:linear-gradient(135deg,#0f1528,#131829);
-                     border:1px solid #1e2640;border-top:3px solid {color};
-                     border-radius:12px;padding:16px;text-align:center;
-                     box-shadow:0 2px 12px rgba(0,0,0,0.3);">
-                  <div style="font-size:18px;font-weight:900;color:{color};letter-spacing:-.01em;">
-                    {row['Ticker'].replace('.NS','')}
-                  </div>
-                  <div style="font-size:9px;color:#4a5470;margin:3px 0;text-transform:uppercase;letter-spacing:.04em">{row['Company'][:20]}</div>
-                  <div style="font-size:22px;font-weight:800;color:#e4e8f0;margin:8px 0">₹{price:,.0f}</div>
-                  <div style="font-size:11px;font-weight:700;color:{color}">Strength: {rs:+.1f}%</div>
-                  <div style="font-size:9px;color:#3d4a60;margin-top:2px">RS Score vs Nifty</div>
-                </div>
-                """, unsafe_allow_html=True)
+    tab_rank, tab_results, tab_rules = st.tabs(["Today's ranking", 'Past results', 'Rules and checks'])
+    with tab_rank:
+        _render_monthly_candidates(ranks)
+    with tab_results:
+        _render_monthly_results(eq, reb, color)
+    with tab_rules:
+        _render_monthly_rules(color)
 
-    st.markdown('<br>', unsafe_allow_html=True)
-
-    st.markdown(f'<div class="sec-hdr" style="color:{color}">Portfolio Growth vs Nifty</div>', unsafe_allow_html=True)
-    st.markdown('<div style="font-size:11px;color:#3d4a60;margin:-4px 0 10px 2px;">Blue line = this strategy. Orange dotted = just buying Nifty index. Bigger gap above = more profit.</div>', unsafe_allow_html=True)
-    _plot(
-        chart_equity(eq, 'Portfolio_Value', S_MONTHLY, color, 'Benchmark_Value'),
-        width='stretch',
-    )
-
-    if not ranks.empty:
-        st.markdown(f'<div class="sec-hdr" style="color:{color}">All 50 Stocks — Ranked by Strength</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:11px;color:#3d4a60;margin:-4px 0 10px 2px;">Top 5 are current ranking candidates, not your recorded holdings. RS Score = how much it outperformed recently. Higher is better.</div>', unsafe_allow_html=True)
-        tbl = ranks[['Rank', 'Ticker', 'Company', 'Current_Price',
-                      'Return_%', 'RS_Score', 'Signal']].copy()
-        tbl['Ticker']        = tbl['Ticker'].str.replace('.NS', '')
-        tbl['Current_Price'] = tbl['Current_Price'].apply(lambda x: f'₹{x:,.2f}')
-        tbl['Return_%']      = tbl['Return_%'].apply(lambda x: f'{x:+.2f}%')
-        tbl['RS_Score']      = tbl['RS_Score'].apply(lambda x: f'{x:+.2f}%')
-        tbl['Signal']        = tbl['Signal'].str.replace('🟢 ', '').str.replace('🔴 ', '')
-        if not tbl.empty:
-            tbl['Exit Plan'] = _exit_badge(_pick_rec('monthly_rotation'))
-        st.markdown(_modern_table(
-            tbl, numeric_cols=['Rank', 'Current_Price', 'Return_%', 'RS_Score'],
-            status_col='Signal', sortable=True, max_height=520),
-            unsafe_allow_html=True)
-
-    if reb is not None and not reb.empty:
-        st.markdown(f'<div class="sec-hdr" style="color:{color}">Rebalance Log — What Changed Each Month</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:11px;color:#3d4a60;margin:-4px 0 10px 2px;">Shows which stocks were bought/sold each month. Bought = new entrant. Sold = fell out of top 5.</div>', unsafe_allow_html=True)
-        r = reb[['Date', 'Top5_Stocks', 'Stocks_Bought', 'Stocks_Sold', 'Portfolio_Value']].copy()
-        r['Date']            = r['Date'].astype(str).str[:10]
-        r['Portfolio_Value'] = r['Portfolio_Value'].apply(lambda x: f'₹{x:,.0f}')
-        st.markdown(_modern_table(r.tail(12), numeric_cols=['Portfolio_Value']),
-                    unsafe_allow_html=True)
-
-    st.markdown('<br>', unsafe_allow_html=True)
     _glossary_expander()
 
 

@@ -61,6 +61,16 @@ def test_kpi_no_flag_at_threshold():
     assert "rd-kpi--low-sample" not in html
 
 
+def test_kpi_sample_unit_is_configurable():
+    html = ui.kpi("CAGR", "+20.9%", sample_n=36, sample_unit="monthly rebalances")
+    assert "36 monthly rebalances" in html and "trades" not in html
+
+
+def test_kpi_small_sample_warning_uses_unit():
+    html = ui.kpi("CAGR", "+1%", sample_n=4, sample_unit="rebalances")
+    assert "fewer than 30 rebalances" in html
+
+
 def test_kpi_without_sample_has_no_sample_text():
     html = ui.kpi("Sharpe", "1.44")
     assert "trades" not in html
