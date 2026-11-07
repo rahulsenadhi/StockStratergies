@@ -58,6 +58,7 @@ def apply_fintech_theme(fig: 'go.Figure') -> 'go.Figure':
 import streamlit as st
 
 from core.workflow_ui import workflow_style, research_notice, section_help, native_theme
+from core.ui_components import adapt_figure_to_theme
 from core import analytics as core_analytics
 from core.refresh_ui import render_staleness_banner
 from core import data_io as core_data_io
@@ -119,6 +120,14 @@ def _plotly_base() -> dict:
     return dict(paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
                 font=dict(color='#fafafa', size=12, family='IBM Plex Sans'))
 
+
+def _plot(fig: 'go.Figure', **kwargs) -> None:
+    """Render a Plotly chart with gridlines and labels readable in the active theme.
+
+    Presentation only: trace data and values are passed through unchanged.
+    """
+    st.plotly_chart(adapt_figure_to_theme(fig, is_light=_is_light_theme()), **kwargs)
+
 # Choppiness constants
 CHOPPINESS_P     = 14
 CHOPPINESS_THRESH = 61.8
@@ -163,7 +172,7 @@ st.set_page_config(
     page_title='NSE Strategy Hub',
     page_icon='⬡',
     layout='wide',
-    initial_sidebar_state='expanded',
+    initial_sidebar_state='auto',  # open on desktop, collapsed on phones
 )
 
 st.markdown("""
@@ -2470,7 +2479,7 @@ def _exit_playbook_card(rec: dict | None, *, title: str = 'Exit Playbook') -> No
         fig.update_layout(height=260, margin=dict(l=10, r=10, t=10, b=10),
                           xaxis_title='Days held', yaxis_title='Return %',
                           template='plotly_dark')
-        st.plotly_chart(fig, use_container_width=True)
+        _plot(fig, use_container_width=True)
 
 
 def _read_precomputed_momentum():
@@ -2938,7 +2947,7 @@ def _render_single_ticker_backtest(ticker: str, ath_only: bool = False) -> None:
             xaxis=dict(gridcolor='#1E293B', tickformat='%b %y'),
             yaxis=dict(gridcolor='#1E293B', ticksuffix='%', tickformat='+.0f'),
         )
-        st.plotly_chart(fig, width='stretch')
+        _plot(fig, width='stretch')
 
     # Trade log table (newest first)
     df_t_full = pd.DataFrame(trades)
@@ -3856,7 +3865,7 @@ def _render_me_detail(ticker: str, trades: pd.DataFrame | None) -> None:
         dragmode='zoom',
         barmode='overlay',
     )
-    st.plotly_chart(fig, width='stretch')
+    _plot(fig, width='stretch')
 
     # ── Mini stats bar (price/change/52W/volume) ────────────────────────────
     close_now  = float(df['Close'].iloc[-1])
@@ -5477,7 +5486,7 @@ def render_history(m: dict, i: dict, mo: dict):
         'Bars above orange = strategy beat Nifty. Bars below = Nifty won.'
         '</div>', unsafe_allow_html=True,
     )
-    st.plotly_chart(_chart_yearly_bars(ann_data, bench_ann), width='stretch')
+    _plot(_chart_yearly_bars(ann_data, bench_ann), width='stretch')
 
     # ══════════════════════════════════════════════════════════════════════════
     #  SECTION 3 — GROWTH OF ₹1 LAKH CHART
@@ -5491,7 +5500,7 @@ def render_history(m: dict, i: dict, mo: dict):
         '</div>', unsafe_allow_html=True,
     )
     bench_src = (m_eq, 'Benchmark_Value') if m_eq is not None else None
-    st.plotly_chart(
+    _plot(
         _chart_growth_of_1L(
             {S_MONTHLY:  (m_eq,  'Portfolio_Value'),
              S_IPO:      (i_eq,  'Portfolio_Value'),
@@ -5712,7 +5721,7 @@ def render_history(m: dict, i: dict, mo: dict):
         S_IPO:      (i_eq,  'Portfolio_Value'),
         S_MOMENTUM: (mo_eq, 'Equity'),
     }
-    st.plotly_chart(chart_drawdown_comparison(dd_map), width='stretch')
+    _plot(chart_drawdown_comparison(dd_map), width='stretch')
 
     # ══════════════════════════════════════════════════════════════════════════
     #  SECTION 7 — FINAL VERDICT
@@ -6058,7 +6067,7 @@ def render_home(m: dict, i: dict, mo: dict):
     <div style="font-size:11px;color:#3d4a60;margin:-4px 0 10px 2px;">
       Each line shows how ₹5 lakh would have grown if invested at the start of that strategy's backtest.
     </div>""", unsafe_allow_html=True)
-    st.plotly_chart(chart_combined_equity(m, i, mo), width='stretch')
+    _plot(chart_combined_equity(m, i, mo), width='stretch')
 
     st.markdown('<br>', unsafe_allow_html=True)
     st.markdown('<div class="sec-hdr">Today\'s Signals — What to Watch</div>', unsafe_allow_html=True)
@@ -6069,10 +6078,10 @@ def render_home(m: dict, i: dict, mo: dict):
         <div class="sig-card" style="border-left: 3px solid {signal_color};">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;">
             <div>
-              <div style="font-size:14px;font-weight:800;color:#e4e8f0">{ticker}</div>
-              <div style="font-size:10px;color:#4a5470;margin-top:1px">{company}</div>
+              <div style="font-size:14px;font-weight:800;color:var(--fg-primary)">{ticker}</div>
+              <div style="font-size:11px;color:var(--fg-muted);margin-top:1px">{company}</div>
             </div>
-            <span class="badge" style="background:rgba(0,0,0,0.3);color:{signal_color};
+            <span class="badge" style="background:transparent;color:{signal_color};
                   border:1px solid {signal_color}44;font-size:10px;">{signal}</span>
           </div>
           {f'<div style="font-size:10px;color:#4a5470;margin-top:6px;">{extra_line}</div>' if extra_line else ''}
@@ -6220,7 +6229,7 @@ def render_monthly(m: dict):
 
     st.markdown(f'<div class="sec-hdr" style="color:{color}">Portfolio Growth vs Nifty</div>', unsafe_allow_html=True)
     st.markdown('<div style="font-size:11px;color:#3d4a60;margin:-4px 0 10px 2px;">Blue line = this strategy. Orange dotted = just buying Nifty index. Bigger gap above = more profit.</div>', unsafe_allow_html=True)
-    st.plotly_chart(
+    _plot(
         chart_equity(eq, 'Portfolio_Value', S_MONTHLY, color, 'Benchmark_Value'),
         width='stretch',
     )
@@ -6327,7 +6336,7 @@ def render_ipo(i: dict):
         st.markdown(f'<div class="sec-hdr" style="color:{color}">Backtest Equity Curve</div>', unsafe_allow_html=True)
         eq_col = 'Portfolio_Value' if 'Portfolio_Value' in eq.columns else 'Equity'
         bench  = 'Benchmark_Value' if 'Benchmark_Value' in eq.columns else None
-        st.plotly_chart(chart_equity(eq, eq_col, S_IPO, color, bench), width='stretch')
+        _plot(chart_equity(eq, eq_col, S_IPO, color, bench), width='stretch')
 
     # ── Live signal table ──────────────────────────────────────────────────────
     st.markdown(f'<div class="sec-hdr" style="color:{color}">Live Screener — IPOs Listed in Last 12 Months</div>',
@@ -6727,7 +6736,7 @@ def render_momentum(mo: dict):
             'Dips = times the market corrected.'
             '</div>', unsafe_allow_html=True,
         )
-        st.plotly_chart(chart_equity(eq, 'Equity', S_MOMENTUM, color), width='stretch')
+        _plot(chart_equity(eq, 'Equity', S_MOMENTUM, color), width='stretch')
 
     # ── Live signal table ──────────────────────────────────────────────────────
     st.markdown(
@@ -6898,7 +6907,7 @@ def render_momentum(mo: dict):
                     except Exception:
                         continue
                     with (fc1 if i % 2 == 0 else fc2):
-                        st.plotly_chart(fig_f, width='stretch',
+                        _plot(fig_f, width='stretch',
                                         key=f'me_forming_setup_{tk}_{i}')
         with tab_recent:
             st.markdown(_explain_box(
@@ -6948,7 +6957,7 @@ def render_momentum(mo: dict):
                     except Exception:
                         continue
                     with (rc1 if i % 2 == 0 else rc2):
-                        st.plotly_chart(fig_g, width='stretch',
+                        _plot(fig_g, width='stretch',
                                         key=f'me_recent_growth_{tk}_{i}')
 
         st.caption(
@@ -6969,7 +6978,7 @@ def render_momentum(mo: dict):
                 is_bull = (snap.get('status') == 'Bull')
             except Exception:
                 pass
-            st.plotly_chart(_chart_me_funnel(funnel, is_bull), width='stretch')
+            _plot(_chart_me_funnel(funnel, is_bull), width='stretch')
 
         # ── Signal Detail Drawer (pick ticker → candle chart + overlays) ───────
         st.markdown('<br>', unsafe_allow_html=True)
@@ -7519,7 +7528,7 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
             yaxis=dict(title='# Trades', gridcolor='#1E293B', tickfont=dict(size=10)),
             showlegend=False,
         )
-        st.plotly_chart(fig_h, width='stretch')
+        _plot(fig_h, width='stretch')
 
         # Per-trade detail (sorted by Loss_Free_Days desc — best signals first)
         with st.expander(f'📋 Per-trade detail ({len(lfh)} signals) — sortable, see exactly what worked'):
@@ -7860,7 +7869,7 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
         'Green = profitable month, red = losing month. Patterns by month/year reveal market regimes.'
     )
     try:
-        st.plotly_chart(_chart_monthly_heatmap(trades_x), width='stretch')
+        _plot(_chart_monthly_heatmap(trades_x), width='stretch')
     except Exception as e:
         st.info(f'Could not render heatmap: {e}')
 
@@ -8564,7 +8573,7 @@ def _render_sparkline(equity_csv: str, color: str = 'rgb(34,197,94)') -> None:
             yaxis=dict(visible=False, fixedrange=True),
             showlegend=False,
         )
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False, 'staticPlot': True})
+        _plot(fig, use_container_width=True, config={'displayModeBar': False, 'staticPlot': True})
     except Exception:
         st.markdown('<div style="height:40px;color:var(--muted-foreground);font-size:11px;">'
                     'sparkline error</div>', unsafe_allow_html=True)
@@ -9293,17 +9302,17 @@ def render_backtest_results(strat_id: str) -> None:
     # Equity curve
     st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
     st.subheader('Equity Curve')
-    st.plotly_chart(_equity_curve_chart(equity), use_container_width=True,
+    _plot(_equity_curve_chart(equity), use_container_width=True,
                     config={'displayModeBar': False})
 
     # Drawdown
     st.subheader('Drawdown')
-    st.plotly_chart(_drawdown_chart(equity), use_container_width=True,
+    _plot(_drawdown_chart(equity), use_container_width=True,
                     config={'displayModeBar': False})
 
     # Monthly returns heatmap
     st.subheader('Monthly Returns')
-    st.plotly_chart(_monthly_returns_heatmap(equity), use_container_width=True,
+    _plot(_monthly_returns_heatmap(equity), use_container_width=True,
                     config={'displayModeBar': False})
 
     # Trade history

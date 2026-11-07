@@ -13,23 +13,23 @@
       "equity_csv": "backtest_results.csv",
       "live_signals_csv": "live_rankings.csv",
       "kpis_inline": {
-        "cagr": 0.2160199156633329,
-        "total_return": 0.7983747738911375,
-        "volatility": 0.13924605019255412,
-        "sharpe": 1.4830465320352826,
-        "max_dd": -0.11433567324304612,
-        "calmar": 1.8893483506598514,
+        "cagr": 0.20922498256750788,
+        "total_return": 0.7683890065424424,
+        "volatility": 0.13963125367033274,
+        "sharpe": 1.4388757631335343,
+        "max_dd": -0.12045137878416497,
+        "calmar": 1.7370077842148657,
         "win_rate": null,
         "num_trades": 36,
-        "alpha": 0.15066948279078152,
-        "final_equity": 89918.73869455687
+        "alpha": 0.15086461265860596,
+        "final_equity": 88419.45032712212
       },
       "last_run": "2026-06-01T12:42:00",
       "created": "2025-12-01",
       "page_key": "Monthly",
-      "kpis_updated": "2026-06-10T07:32:46",
+      "kpis_updated": "2026-11-07T06:55:07",
       "rank": 2,
-      "rank_score": 0.22913634816501893,
+      "rank_score": 0.3426412941955866,
       "backtest": [
         "step2_backtest_momentum.py"
       ]
@@ -46,23 +46,23 @@
       "trades_csv": "ipo_edge_trades.csv",
       "equity_csv": "ipo_edge_equity.csv",
       "kpis_inline": {
-        "cagr": 0.08961446234649162,
-        "total_return": 0.1946755548388437,
-        "volatility": 0.0843340047247838,
-        "sharpe": 1.5370440912701875,
-        "max_dd": -0.055582636998932504,
-        "calmar": 1.6122743933184156,
-        "win_rate": 0.5633802816901409,
-        "num_trades": 71,
-        "alpha": 0.06604779736940336,
-        "final_equity": 597337.7774194218
+        "cagr": 0.024249259401834422,
+        "total_return": 0.28006824838638167,
+        "volatility": 0.040797625121556394,
+        "sharpe": 0.8869417518342005,
+        "max_dd": -0.04227078198830626,
+        "calmar": 0.5736647930606704,
+        "win_rate": 0.42857142857142855,
+        "num_trades": 126,
+        "alpha": -0.07953527707366681,
+        "final_equity": 640034.1241931908
       },
       "last_run": "2026-05-29T22:00:00",
       "created": "2025-08-01",
       "page_key": "IPO",
-      "kpis_updated": "2026-06-10T07:32:46",
+      "kpis_updated": "2026-11-07T06:55:07",
       "rank": 3,
-      "rank_score": -0.2195037947842158,
+      "rank_score": -0.6212337012793099,
       "backtest": [
         "ipo_edge_backtest.py"
       ]
@@ -82,23 +82,23 @@
       "funnel_json": "momentum_edge_funnel.json",
       "recent_breakouts_csv": "momentum_edge_recent_breakouts.csv",
       "kpis_inline": {
-        "cagr": 0.09461396147472811,
-        "total_return": 1.3441372500000002,
-        "volatility": 0.178178631536805,
-        "sharpe": 0.8041361268398433,
-        "max_dd": -0.25988445454394377,
-        "calmar": 0.3640616428587877,
-        "win_rate": 0.3161764705882353,
-        "num_trades": 136,
-        "alpha": -0.02102411751518729,
-        "final_equity": 2344137.25
+        "cagr": 0.08845245264720414,
+        "total_return": 1.2897094199999999,
+        "volatility": 0.19022835456258194,
+        "sharpe": 0.7235868196805444,
+        "max_dd": -0.30522771179505315,
+        "calmar": 0.28979168413972856,
+        "win_rate": 0.3142857142857143,
+        "num_trades": 140,
+        "alpha": -0.02107273678616184,
+        "final_equity": 2289709.42
       },
       "last_run": "2026-06-01T13:55:00",
       "created": "2016-12-30",
       "page_key": "Momentum",
-      "kpis_updated": "2026-06-10T07:32:47",
+      "kpis_updated": "2026-11-07T06:55:07",
       "rank": 4,
-      "rank_score": -1.270876156281977,
+      "rank_score": -0.9681963677436748,
       "backtest": [
         "momentum_edge_backtest.py"
       ]
@@ -131,9 +131,9 @@
       "last_run": "2026-05-27T00:27:00",
       "created": "2026-05-25",
       "page_key": "PEAD",
-      "kpis_updated": "2026-06-10T07:32:47",
+      "kpis_updated": "2026-11-07T06:55:07",
       "rank": 1,
-      "rank_score": 1.2841572377176758,
+      "rank_score": 1.2810529042469565,
       "backtest": [
         "pead_backtest.py",
         "--start",

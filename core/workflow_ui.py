@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from core.ui_components import component_css
+
 
 def _theme_bridge():
     """Register in the current runtime; native Settings owns the theme."""
@@ -74,6 +76,7 @@ def workflow_style() -> None:
         [data-testid="stMain"] h1 { font-size: 1.5rem !important; }
     }
     </style>""", unsafe_allow_html=True)
+    st.markdown(component_css(), unsafe_allow_html=True)
 
 
 def research_notice() -> None:
