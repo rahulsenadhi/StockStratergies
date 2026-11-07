@@ -21,6 +21,11 @@ export function formatNumber(value: number, decimals = 2): string {
   return grouped(decimals).format(value);
 }
 
+/** Python `f"{value:,}"` for floats already rounded to 2 decimals, e.g. 23264.1 -> "23,264.1". */
+export function formatPlain(value: number): string {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
+}
+
 /** Python `change_pill`: "↗ 15.83%" / "↘ 4.93%" / "0.00%", "—" when missing. */
 export function formatChange(
   value: number | null | undefined,

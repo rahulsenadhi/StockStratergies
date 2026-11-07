@@ -124,7 +124,12 @@ html, body { font-family: var(--rd-font); background: var(--rd-bg); color: var(-
 .desk-nav__item:hover { background: var(--rd-hover); }
 .desk-nav__item[aria-current="page"] { background: var(--rd-active); color: var(--rd-text); font-weight: 600; }
 .desk-nav__item svg { width: 17px; height: 17px; color: var(--rd-text-muted); flex: 0 0 auto; }
-.desk-nav__hint { margin-left: auto; font-size: 10px; color: var(--rd-text-muted); white-space: nowrap; }
+.desk-nav__item { white-space: nowrap; }
+.desk-nav__item svg.desk-nav__hint { margin-left: auto; width: 13px; height: 13px; opacity: .7; }
+.desk-summary { display: flex; align-items: center; gap: 6px; list-style: none; font-size: var(--rd-fs-base) !important; }
+.desk-summary::-webkit-details-marker { display: none; }
+.desk-summary::after { content: "▾"; margin-left: auto; color: var(--rd-text-muted); }
+details[open] > .desk-summary::after { content: "▴"; }
 .desk-pinned { flex: 0 0 auto; border-top: 1px solid var(--rd-line); background: var(--rd-sidebar);
   padding: 10px 16px 14px; display: flex; flex-direction: column; gap: 8px; }
 .desk-main { flex: 1 1 auto; min-width: 0; height: 100dvh; overflow-y: auto; overflow-x: hidden; }
@@ -155,6 +160,7 @@ html, body { font-family: var(--rd-font); background: var(--rd-bg); color: var(-
 .desk-head { display:flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 16px; }
 .desk-row { display:flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
 .desk-scrim { display: none; }
+.desk-only-mobile { display: none; }
 
 @media (max-width: 1199px) { .desk-split { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 767px) {
@@ -163,4 +169,6 @@ html, body { font-family: var(--rd-font); background: var(--rd-bg); color: var(-
   .desk-sidebar[data-open="true"] { transform: none; box-shadow: 0 0 40px rgba(0,0,0,.25); }
   .desk-scrim[data-open="true"] { display: block; position: fixed; inset: 0; z-index: 29; background: rgba(0,0,0,.3); }
   .desk-content { padding: 4px 16px 32px; }
+  .desk-only-mobile { display: inline-flex; }
+  .desk-only-desktop { display: none; }
 }

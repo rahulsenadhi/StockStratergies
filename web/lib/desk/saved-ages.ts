@@ -4,11 +4,8 @@ import path from "node:path";
 const DEFAULT_DATA_DIR = process.env.DATA_DIR ?? "..";
 const DAY_MS = 86_400_000;
 
-export type SavedName = "Monthly" | "IPO Edge" | "Momentum" | "PEAD";
-export interface SavedAge {
-  name: SavedName;
-  ageDays: number | null;
-}
+import type { SavedAge, SavedName } from "@/lib/desk/ages";
+export { oldestAge, type SavedAge, type SavedName } from "@/lib/desk/ages";
 
 /** Same files and order as master_dashboard._saved_data_ages. */
 const SAVED_FILES: readonly [SavedName, string][] = [
@@ -30,13 +27,4 @@ export async function savedDataAges(dataDir: string = DEFAULT_DATA_DIR, now: Dat
       }
     }),
   );
-}
-
-/** The stalest saved file, as the sidebar line "Oldest saved data: …" reports it. */
-export function oldestAge(ages: readonly { name: string; ageDays: number | null }[]): { name: string; ageDays: number } | null {
-  let oldest: { name: string; ageDays: number } | null = null;
-  for (const a of ages) {
-    if (a.ageDays != null && (oldest === null || a.ageDays > oldest.ageDays)) oldest = { name: a.name, ageDays: a.ageDays };
-  }
-  return oldest;
 }
