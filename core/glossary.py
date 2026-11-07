@@ -94,6 +94,18 @@ TERMS: dict[str, tuple[str, str]] = {
         'Trailing Stop',
         'Stop that follows price up. IPO Edge uses EMA10 — exits when close drops below it.',
     ),
+    'T1': (
+        'Target 1 (first scale-out)',
+        "First profit target in the Exit Playbook ladder, set at the 40th percentile of past winners' peak gains. Book ~40% of the position here.",
+    ),
+    'T2': (
+        'Target 2 (second scale-out)',
+        "Second profit target, set at the 65th percentile of past winners' peak gains. Book ~35% of the position here.",
+    ),
+    'T3': (
+        'Target 3 (runner)',
+        "Final profit target, set at the 85th percentile of past winners' peak gains. Book the last ~25% — your runner.",
+    ),
 
     # ── Trade quality ────────────────────────────────────────────────────────
     'Recovery_Speed': (

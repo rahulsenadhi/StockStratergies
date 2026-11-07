@@ -2,7 +2,7 @@ pandas
 numpy
 pyarrow
 duckdb
-streamlit
+streamlit>=1.57.0
 plotly
 matplotlib
 yfinance

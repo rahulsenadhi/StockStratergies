@@ -1,6 +1,7 @@
 import importlib.util
 import sys
 import types
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -14,14 +15,15 @@ def _load_md():
     fake.cache_data = _pass
     fake.cache_resource = _pass
     fake.__getattr__ = lambda n: (lambda *a, **k: None)
-    sys.modules['streamlit'] = fake
+    replacements = {'streamlit': fake}
     for s in ('streamlit.components', 'streamlit.components.v1'):
         m = types.ModuleType(s)
         m.__getattr__ = lambda n: (lambda *a, **k: None)
-        sys.modules[s] = m
+        replacements[s] = m
     spec = importlib.util.spec_from_file_location('md', 'master_dashboard.py')
     md = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(md)
+    with patch.dict(sys.modules, replacements):
+        spec.loader.exec_module(md)
     return md
 
 

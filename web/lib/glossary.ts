@@ -85,6 +85,18 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     label: "Trailing Stop",
     explain: "Stop that follows price up. IPO Edge uses EMA10 — exits when close drops below it.",
   },
+  T1: {
+    label: "Target 1 (first scale-out)",
+    explain: "First profit target in the Exit Playbook ladder, set at the 40th percentile of past winners' peak gains. Book ~40% of the position here.",
+  },
+  T2: {
+    label: "Target 2 (second scale-out)",
+    explain: "Second profit target, set at the 65th percentile of past winners' peak gains. Book ~35% of the position here.",
+  },
+  T3: {
+    label: "Target 3 (runner)",
+    explain: "Final profit target, set at the 85th percentile of past winners' peak gains. Book the last ~25% — your runner.",
+  },
 
   // ── Trade quality ────────────────────────────────────────────────────────
   Recovery_Speed: {

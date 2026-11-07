@@ -57,6 +57,7 @@ def apply_fintech_theme(fig: 'go.Figure') -> 'go.Figure':
     return fig
 import streamlit as st
 
+from core.workflow_ui import workflow_style, research_notice, section_help, native_theme
 from core import analytics as core_analytics
 from core.refresh_ui import render_staleness_banner
 from core import data_io as core_data_io
@@ -100,10 +101,10 @@ PLOTLY_BASE = dict(paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
 
 
 def _is_light_theme() -> bool:
-    """True when the user picked Light mode (sidebar radio key '_theme_choice')."""
+    """Follow Streamlit's native theme, shared by widgets and custom surfaces."""
     try:
         import streamlit as _st
-        return _st.session_state.get('_theme_choice') == '☀️ Light'
+        return _st.session_state.get('_native_theme', _st.context.theme.type) == 'light'
     except Exception:
         return False
 
@@ -2436,10 +2437,11 @@ def _exit_playbook_card(rec: dict | None, *, title: str = 'Exit Playbook') -> No
         st.info('Exit Playbook: insufficient trade history to recommend a hold/exit plan yet.')
         return
 
-    dq = 'intraday OHLCV' if rec.get('data_quality') == 'ohlcv' else 'close-only (approx.)'
-    st.markdown(f"#### Exit Playbook - {title}")
+    dq = 'daily OHLCV' if rec.get('data_quality') == 'ohlcv' else 'close-only (approx.)'
+    st.markdown(f"#### Exit research: {title}")
+    st.caption("Exploratory historical analysis. Suggested targets and stops are not necessarily the active strategy exits; no out-of-sample winner established.")
     c1, c2, c3 = st.columns(3)
-    c1.metric('Recommended hold', f"{rec['hold_days']} days",
+    c1.metric('Exploratory hold', f"{rec['hold_days']} days",
               help='Trading days that historically maximised median return per unit of drawdown.')
     c2.metric('Median return at hold', f"{rec['hold_median_return']:.1f}%")
     c3.metric('Win rate at hold', f"{rec['hold_win_rate']*100:.0f}%")
@@ -3212,15 +3214,15 @@ def _strategy_health(trades: pd.DataFrame, signals: pd.DataFrame) -> dict:
 
     # Verdict
     if out['win_rate'] >= 65 and out['safe_20d_pct'] >= 50:
-        out['verdict_text']  = '✅ STRATEGY WORKING — safe to scale capital'
+        out['verdict_text']  = 'Longer periods above entry in this historical sample'
         out['verdict_color'] = 'var(--success)'
         out['verdict_bg']    = 'color-mix(in oklch, var(--success) 14%, transparent)'
     elif out['win_rate'] >= 50 and out['safe_20d_pct'] >= 30:
-        out['verdict_text']  = '⚠️ CONDITIONAL — works, size carefully'
+        out['verdict_text']  = 'Mixed outcomes in this historical sample'
         out['verdict_color'] = 'var(--warning)'
         out['verdict_bg']    = 'color-mix(in oklch, var(--warning) 14%, transparent)'
     else:
-        out['verdict_text']  = '❌ WEAK — do not scale up'
+        out['verdict_text']  = 'Lower historical win rate or shorter periods above entry'
         out['verdict_color'] = 'var(--destructive)'
         out['verdict_bg']    = 'color-mix(in oklch, var(--destructive) 14%, transparent)'
 
@@ -3554,11 +3556,52 @@ def _indicator_badge(label: str, value: str, sub: str, color: str = '#94A3B8') -
     )
 
 
+def _last_breakout(df: pd.DataFrame) -> dict | None:
+    """Entry breakout of the CURRENT up-cycle + how far the stock has run since.
+
+    The strategy enters on a 52W-close-high cross that comes *after* a shakeout
+    dip below the EMA220 (F5). So the meaningful "all conditions met" bar is the
+    FIRST 52W-high cross after the most recent dip below the EMA220 — not the
+    latest incremental new high (which sits at the top, ~0% growth).
+
+    Breakout bar = close[t] > prior-252-bar close max AND close[t-1] <= that max.
+    Returns that bar's date/price/days-ago plus % growth from the breakout close
+    to today, or None if no breakout follows the last dip.
+    """
+    if 'Close' not in df.columns or len(df) < ME_HIGH52_P + 2:
+        return None
+    close  = df['Close']
+    ema220 = close.ewm(span=ME_EMA220_P, adjust=False).mean()
+    res    = close.shift(1).rolling(ME_HIGH52_P).max()
+    cross  = (close > res) & (close.shift(1) <= res) & res.notna()
+
+    cross_pos = np.where(cross.values)[0]
+    if len(cross_pos) == 0:
+        return None
+    # Anchor on the most recent shakeout: the last bar that closed below EMA220.
+    below_pos  = np.where((close < ema220).values)[0]
+    last_below = int(below_pos[-1]) if len(below_pos) else -1
+    # First breakout strictly after that dip = this cycle's entry.
+    after = cross_pos[cross_pos > last_below]
+    entry = int(after[0]) if len(after) else int(cross_pos[0])
+
+    bk_price  = float(close.iloc[entry])
+    close_now = float(close.iloc[-1])
+    return {
+        'pos':      entry,
+        'date':     df.index[entry],
+        'price':    bk_price,
+        'days_ago': len(close) - 1 - entry,
+        'growth':   (close_now / bk_price - 1) * 100 if bk_price else 0.0,
+    }
+
+
 def _render_me_detail(ticker: str, trades: pd.DataFrame | None) -> None:
     """Multi-panel interactive chart: candles + Bollinger + RSI + MACD + Volume/OBV.
 
     Toggles for each panel, period selector (1M…All), synced crosshair, and
     KPI badges showing current RSI/MACD/ADX/ATR/Bollinger-width/OBV-trend.
+    Marks the most recent breakout bar and the % grown since all conditions met.
     """
     # ── Locate OHLCV file ───────────────────────────────────────────────────
     full = Path(BASE_DIR) / 'data' / 'nse_bse' / f'{ticker}.NS.csv'
@@ -3573,6 +3616,8 @@ def _render_me_detail(ticker: str, trades: pd.DataFrame | None) -> None:
     if df is None:
         st.info('Not enough bars to chart this ticker.')
         return
+
+    bk = _last_breakout(df)   # most recent breakout + growth since conditions met
 
     # ── Controls row: period selector + indicator toggles ──────────────────
     key = f'me_detail_{ticker}'
@@ -3626,6 +3671,22 @@ def _render_me_detail(ticker: str, trades: pd.DataFrame | None) -> None:
     with b4: st.markdown(_indicator_badge('ATR(14)',    f'₹{atr_now:.2f}',                                  f'Avg daily range', '#60A5FA'), unsafe_allow_html=True)
     with b5: st.markdown(_indicator_badge('OBV 20d',    obv_lbl,                                            f'BB width {bb_width:.1f}% · {bb_lbl}', obv_c), unsafe_allow_html=True)
     st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
+
+    # ── Growth since all conditions met (most recent breakout) ──────────────
+    if bk is not None:
+        g     = bk['growth']
+        arrow = '▲' if g >= 0 else '▼'
+        gcol  = '#22C55E' if g >= 0 else '#EF4444'
+        st.markdown(
+            f'<div style="font-size:13px;margin:0 0 10px;">'
+            f'<span style="color:#94A3B8;">Since all conditions met '
+            f'(broke out {bk["date"]:%d %b %Y}, {bk["days_ago"]}d ago at '
+            f'₹{bk["price"]:,.2f}):</span> '
+            f'<b style="color:{gcol};font-size:15px;">{arrow} {g:+.1f}%</b></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.caption('No 52-week-high breakout found in this stock\'s history yet.')
 
     # ── Build subplots ──────────────────────────────────────────────────────
     rows_cfg = [('price', 0.60)]
@@ -3699,6 +3760,17 @@ def _render_me_detail(ticker: str, trades: pd.DataFrame | None) -> None:
                                 line=dict(color='#fff', width=1)),
                     hovertemplate='EXIT ₹%{y:,.2f}<br>%{x}<extra></extra>',
                 ), row=1, col=1)
+
+    # Breakout marker — most recent bar where all conditions were met
+    if bk is not None and bk['date'] >= pd.Timestamp(idx[0]):
+        fig.add_vline(x=bk['date'], line_color='rgba(96,165,250,0.55)',
+                      line_dash='dash', line_width=1.2, row=1, col=1)
+        fig.add_trace(go.Scatter(
+            x=[bk['date']], y=[bk['price']], mode='markers', name='Breakout',
+            marker=dict(symbol='triangle-up', size=15, color='#60A5FA',
+                        line=dict(color='#fff', width=1)),
+            hovertemplate=f"Breakout ₹{bk['price']:,.2f}<br>%{{x}}<extra></extra>",
+        ), row=1, col=1)
 
     # Row: RSI
     if show_rsi:
@@ -4129,6 +4201,56 @@ def _scan_recent_breakouts() -> pd.DataFrame:
         return pd.DataFrame()
     out = pd.DataFrame(rows).sort_values('Days Ago').reset_index(drop=True)
     return out
+
+
+@st.cache_data(ttl=3600, show_spinner='Scanning all stocks for past breakouts…')
+def _scan_all_breakouts() -> pd.DataFrame:
+    """Most recent 52W-close-high breakout per ticker, ANY date (no 7-day cap).
+
+    Unlike _scan_recent_breakouts (last 7 days only), this finds each stock's
+    latest breakout regardless of age and how far it has run since — the full set
+    of stocks that have met all conditions, drillable in the signal detail drawer.
+    Only keeps names still trading above their EMA220 (trend intact).
+    """
+    folder = Path(BASE_DIR) / 'data' / 'nse_bse'
+    if not folder.exists():
+        return pd.DataFrame()
+
+    rows = []
+    skip_stems = {'NIFTYBEES.NS', '^NSEI'}
+    for path in folder.glob('*.NS.csv'):
+        ticker = path.stem
+        if ticker in skip_stems:
+            continue
+        try:
+            df = pd.read_csv(path, index_col=0, parse_dates=True)
+        except Exception:
+            continue
+        if len(df) < 260 or 'Close' not in df.columns:
+            continue
+
+        close  = df['Close']
+        ema220 = close.ewm(span=ME_EMA220_P, adjust=False).mean()
+        close_now  = float(close.iloc[-1])
+        ema220_now = float(ema220.iloc[-1])
+        if np.isnan(close_now) or np.isnan(ema220_now) or close_now < ema220_now:
+            continue
+
+        bk = _last_breakout(df)   # current-cycle entry breakout (same as the drawer)
+        if bk is None:
+            continue
+        rows.append({
+            'Ticker':            ticker.replace('.NS', ''),
+            'Days Ago':          bk['days_ago'],
+            'Bk Date':           bk['date'].strftime('%Y-%m-%d'),
+            'Bk Price (₹)':      round(bk['price'], 2),
+            'Close (₹)':         round(close_now, 2),
+            'Grown % since Bk':  round(bk['growth'], 2),
+            '220 EMA (₹)':       round(ema220_now, 2),
+        })
+    if not rows:
+        return pd.DataFrame()
+    return pd.DataFrame(rows).sort_values('Days Ago').reset_index(drop=True)
 
 
 def _compute_momentum_signals() -> tuple[pd.DataFrame, dict]:
@@ -5210,15 +5332,18 @@ def _chart_growth_of_1L(data_map: dict[str, tuple[pd.DataFrame, str]],
 
 
 def render_history(m: dict, i: dict, mo: dict):
+    research_notice()
     st.markdown("""
     <div style="padding:4px 0 16px 0;">
-      <div class="page-title">📊 History & Proof</div>
+      <div class="page-title">Compare past results</div>
       <div class="page-sub">
-        Simple question: <b>did these strategies actually make money?</b>
-        Here's the complete year-by-year record in plain numbers.
+        Compare saved historical simulations year by year.
+        Different dates, data coverage and assumptions can affect the comparison.
       </div>
     </div>
     """, unsafe_allow_html=True)
+    section_help('How to read this page', 'Growth charts show how the model account changed. Yearly tables break that change into calendar years. '
+                 'A fall from a previous high is a drawdown. Historical results do not establish future profitability.')
 
     # ── Pull equity series ─────────────────────────────────────────────────────
     m_eq  = m.get('equity')
@@ -5593,24 +5718,20 @@ def render_history(m: dict, i: dict, mo: dict):
     #  SECTION 7 — FINAL VERDICT
     # ══════════════════════════════════════════════════════════════════════════
     st.markdown('<br>', unsafe_allow_html=True)
-    st.markdown('<div class="sec-hdr">Should You Invest? — Final Verdict</div>',
+    st.markdown('<div class="sec-hdr">How the saved evidence is rated</div>',
                 unsafe_allow_html=True)
 
     VERDICTS = {
-        'HIGH':     ('✅ Yes — Invest with Confidence',
-                     'Strong proof that this strategy works across multiple years. '
-                     'Follow the signals with proper position sizing.'),
-        'MODERATE': ('⚠️ Yes — But Use Discipline',
-                     'Strategy shows good results but not perfect. '
-                     'Start with smaller amounts and follow the rules strictly.'),
-        'CAUTION':  ('🟠 Maybe — Paper Trade First',
-                     'Mixed results. Practice on paper for 1–2 months before '
-                     'putting real money in.'),
-        'LOW':      ('❌ No — Wait for Better Proof',
-                     'Not enough evidence this strategy works reliably. '
-                     'Do not invest real money until results improve.'),
-        'NO DATA':  ('⚪ Run Backtest First',
-                     'No historical data available yet. Run the backtest scripts first.'),
+        'HIGH':     ('Higher historical score',
+                     'The saved sample meets more of this app’s scoring criteria. This does not establish future profitability.'),
+        'MODERATE': ('Middle historical score',
+                     'The saved sample meets some scoring criteria. Review the dates, losses and assumptions.'),
+        'CAUTION':  ('Mixed historical evidence',
+                     'Results vary across the saved sample. The score is a research summary, not an investment recommendation.'),
+        'LOW':      ('Limited historical evidence',
+                     'The saved sample meets fewer scoring criteria. More reliable evidence is needed.'),
+        'NO DATA':  ('No historical evidence saved',
+                     'No historical data is available for this comparison.'),
     }
 
     v1, v2, v3 = st.columns(3)
@@ -5679,6 +5800,20 @@ def render_history(m: dict, i: dict, mo: dict):
     _glossary_expander()
 
 
+NAV_LABELS = {
+    '📊  Dashboard': 'Home', '📚  Strategy Library': 'Browse strategies',
+    '🛠  Builder': 'Create a strategy', '🔄  Monthly Rotation': 'Monthly stock rotation',
+    '🚀  IPO Edge': 'Newly listed stocks (IPO)', '📈  Momentum Edge': 'Price strength (Momentum)',
+    '⚡  PEAD': 'After earnings (PEAD)', '🎯  Suggestions': 'Stocks to review',
+    '🔬  Insights': 'Understand past trades', '📑  History & Proof': 'Compare past results',
+}
+
+
+def _navigate(destination: str) -> None:
+    st.session_state['hub_page'] = next(key for key in NAV_LABELS if key.split('  ', 1)[1] == destination)
+    st.session_state['_page_override'] = None
+
+
 def render_sidebar() -> str:
     with st.sidebar:
         # Brand: logo icon + 2-line title (shadcn-style)
@@ -5703,40 +5838,18 @@ def render_sidebar() -> str:
 
         page = st.radio(
             'Navigate',
-            ['📊  Dashboard',
-             '📚  Strategy Library',
-             '🛠  Builder',
-             '🔄  Monthly Rotation', '🚀  IPO Edge',
-             '📈  Momentum Edge', '⚡  PEAD',
-             '🎯  Suggestions', '🔬  Insights',
-             '📑  History & Proof'],
-            label_visibility='collapsed',
+            list(NAV_LABELS), format_func=NAV_LABELS.get,
+            label_visibility='collapsed', key='hub_page',
         )
 
-        # Light/Dark toggle. All data tables are now custom theme-aware HTML
-        # (_modern_table) instead of st.dataframe, so light mode no longer shows
-        # dark boxes. Explicit data-theme overrides OS auto-light leakage.
+        # Native theme selection also updates tables, charts and dropdowns.
         st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
-        theme_choice = st.radio('Theme', ['🌙 Dark', '☀️ Light'],
-                                horizontal=True, label_visibility='collapsed',
-                                key='_theme_choice')
-        _tv = 'light' if theme_choice == '☀️ Light' else 'dark'
-        st.html(
-            f"""<script>
-            (function() {{
-                var v = "{_tv}";
-                document.documentElement.setAttribute('data-theme', v);
-                if (document.body) document.body.setAttribute('data-theme', v);
-            }})();
-            </script>""",
-            unsafe_allow_javascript=True,
-        )
+        st.caption('Appearance: choose light or dark in the ⋮ menu at the top right.')
 
         st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
         st.markdown('<div class="sec-hdr">Refresh Data</div>', unsafe_allow_html=True)
 
-        st.caption('Each button re-downloads prices, re-runs that '
-                   'strategy\'s backtest, and refreshes its signals.')
+        st.caption('Monthly, IPO and Momentum update prices and simulations. PEAD requests earnings data and updates its saved candidates.')
 
         col_a, col_b = st.columns(2)
         with col_a:
@@ -5766,15 +5879,7 @@ def render_sidebar() -> str:
 
         st.markdown('<hr style="margin:16px 0;">', unsafe_allow_html=True)
         st.markdown('<div class="sec-hdr">Quick Guide</div>', unsafe_allow_html=True)
-        st.markdown("""
-        <div style="font-size:11px;color:#3d4a60;line-height:2;padding:2px 0;">
-          🏠 <b style="color:#6a748a">Home</b> — overview of all 3<br>
-          🔄 <b style="color:#7c9cff">Monthly</b> — buy top 5 stocks, hold 1 month<br>
-          🚀 <b style="color:#00c853">IPO Edge</b> — trade new listings at breakout<br>
-          📈 <b style="color:#f9c200">Momentum</b> — buy stocks at all-time highs<br>
-          📊 <b style="color:#8892a4">History</b> — see proof it worked
-        </div>
-        """, unsafe_allow_html=True)
+        st.caption('Start at Home to choose a strategy. Review a company, understand its rules, then examine the historical evidence. No orders are placed here.')
 
     return page.split('  ', 1)[-1].strip()
 
@@ -5788,11 +5893,32 @@ def render_home(m: dict, i: dict, mo: dict):
     st.markdown("""
     <div class="lib-header">
         <div>
-            <h1>Dashboard</h1>
-            <p class="lib-subtitle">Overview of your strategy library and recent backtests</p>
+            <h1>Choose what you want to research</h1>
+            <p class="lib-subtitle">Explore companies, understand the rules and review the evidence.</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+    options = [
+        ('After earnings (PEAD)', 'Compare company earnings with recent history, then examine financial strength and price.', 'PEAD', 'pead_data/events.parquet'),
+        ('Monthly stock rotation', 'Explore the strongest stocks in the saved Nifty rankings. The model changes its selection monthly.', 'Monthly Rotation', 'live_rankings.csv'),
+        ('Newly listed stocks (IPO)', 'Study newly listed companies whose prices rise above an early trading range.', 'IPO Edge', 'ipo_edge_equity.csv'),
+        ('Price strength (Momentum)', 'Review stocks making new price highs and the trend checks behind each setup.', 'Momentum Edge', 'momentum_edge_signals.csv'),
+    ]
+    for start in (0, 2):
+        for col, (title, purpose, route, source) in zip(st.columns(2), options[start:start+2]):
+            with col, st.container(border=True):
+                st.markdown(f'**{title}**')
+                st.write(purpose)
+                st.caption(f'Saved file: {_file_age(source)} · review result dates on the strategy page')
+                st.button(f'Explore {title}', key=f'explore_{route}', on_click=_navigate, args=(route,))
+    st.subheader('Saved historical results')
+    research_notice()
+    st.caption('These summaries describe different saved tests. They are not a ranking of what will perform best next.')
+    with st.expander('How to read the performance summaries'):
+        st.write('CAGR is annualized growth. Max drawdown is the largest fall below an earlier peak. '
+                 'Win rate is the percentage of completed trades that made money. Sharpe compares return with variability. '
+                 'Live and Paper are strategy labels, not confirmation of a connected brokerage account.')
 
     # ── KPI strip (top of fold) ────────────────────────────────────────────
     _strats = _load_strategies_index()
@@ -5953,7 +6079,7 @@ def render_home(m: dict, i: dict, mo: dict):
         </div>"""
 
     with left:
-        st.markdown(f'<div style="font-size:11px;font-weight:700;color:{THEME[S_MONTHLY]["color"]};margin-bottom:8px;">🔄 Monthly — Hold These Now</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-size:11px;font-weight:700;color:{THEME[S_MONTHLY]["color"]};margin-bottom:8px;">🔄 Monthly — Saved ranking leaders</div>', unsafe_allow_html=True)
         ranks = m.get('rankings', pd.DataFrame())
         if not ranks.empty:
             for _, row in ranks.head(3).iterrows():
@@ -6008,23 +6134,27 @@ def render_home(m: dict, i: dict, mo: dict):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def render_monthly(m: dict):
+    research_notice()
     color = THEME[S_MONTHLY]['color']
     st.markdown(f'<div class="page-title" style="color:{color}">🔄 Monthly Rotation</div>'
-                '<div class="page-sub">Buy the 5 strongest Nifty stocks · Switch every month · No emotion</div><br>',
+                '<div class="page-sub">Research stock rankings and a model that changes its selection each month.</div><br>',
                 unsafe_allow_html=True)
 
     st.markdown(_explain_box(
         '<b>How it works:</b> Every month, we rank all 50 Nifty stocks by their recent price strength '
         '(<b>RS Score</b>). We buy the top 5 and hold them for the month. If a stock falls out of the '
-        'top 5, we sell it and replace it with the new entrant. Simple, systematic, no guessing.',
+        'top 5, the model replaces it with a new entrant. These are model rules, not purchases in your account.',
         color
     ), unsafe_allow_html=True)
 
+    st.caption('Daily rankings are research candidates. The backtest rotates monthly; actual holdings are not tracked here.')
+    section_help('How to read this page', 'Rankings compare each stock with the market. Positive relative strength means it performed better over the measured period. '
+                 'The account chart and trade history describe the saved monthly simulation. Review dates before using a ranking.')
     _exit_playbook_card(_pick_rec('monthly_rotation'), title='Monthly Rotation')
 
     eq = m.get('equity')
     if eq is None:
-        st.error('No backtest data. Run **step1 → step2 → step3** first.')
+        st.info('No monthly simulation is saved. Use the Monthly update button to request data and rebuild the saved results.')
         return
 
     mx    = _equity_metrics(eq, 'Portfolio_Value', 'Portfolio_Value')
@@ -6097,7 +6227,7 @@ def render_monthly(m: dict):
 
     if not ranks.empty:
         st.markdown(f'<div class="sec-hdr" style="color:{color}">All 50 Stocks — Ranked by Strength</div>', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:11px;color:#3d4a60;margin:-4px 0 10px 2px;">Top 5 (highlighted) = currently held. RS Score = how much it outperformed recently. Higher is better.</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:11px;color:#3d4a60;margin:-4px 0 10px 2px;">Top 5 are current ranking candidates, not your recorded holdings. RS Score = how much it outperformed recently. Higher is better.</div>', unsafe_allow_html=True)
         tbl = ranks[['Rank', 'Ticker', 'Company', 'Current_Price',
                       'Return_%', 'RS_Score', 'Signal']].copy()
         tbl['Ticker']        = tbl['Ticker'].str.replace('.NS', '')
@@ -6130,9 +6260,10 @@ def render_monthly(m: dict):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def render_ipo(i: dict):
+    research_notice()
     color  = THEME[S_IPO]['color']
     st.markdown(f'<div class="page-title" style="color:{color}">🚀 IPO Edge</div>'
-                '<div class="page-sub">Buy newly listed stocks when they break out of their first base — early, before the crowd</div><br>',
+                '<div class="page-sub">Review newly listed companies moving above an early trading range.</div><br>',
                 unsafe_allow_html=True)
 
     st.markdown(_explain_box(
@@ -6141,6 +6272,9 @@ def render_ipo(i: dict):
         '10-day average or hits a hard stop. A partial profit is booked at +15% gain.',
         color
     ), unsafe_allow_html=True)
+
+    section_help('How to read this page', 'A breakout means price moved above the model’s reference range. A watch-zone company is near that level. '
+                 'Trading volume counts shares traded. Signals identify setups to research; the historical charts show simulated outcomes.')
 
     _exit_playbook_card(_pick_rec('ipo_edge'), title='IPO Edge')
 
@@ -6327,14 +6461,134 @@ def _chart_me_funnel(funnel: dict, is_bull: bool) -> go.Figure:
     return fig
 
 
+# Max number of recent-breakout growth charts to render (keeps the page responsive).
+RECENT_GROWTH_CHART_CAP = 24
+
+
+def _chart_recent_growth(ticker: str, df: pd.DataFrame,
+                         bk_price: float, days_ago: int) -> go.Figure:
+    """Candlestick + EMA 220 for a recent-breakout stock.
+
+    Candles from ~30 bars before the breakout to today, EMA 220 overlay, a ▲ marker
+    on the breakout bar, and a title annotating % growth since the breakout — i.e. how
+    much the stock has grown since the day all conditions were met.
+    """
+    n         = len(df)
+    bk_pos    = max(0, n - 1 - int(days_ago))   # state machine: idx = n-1-k
+    start_pos = max(0, bk_pos - 30)             # ~30 bars of pre-breakout base
+    df_w      = df.iloc[start_pos:].copy()
+    idx       = df_w.index
+    bk_date   = df.index[bk_pos]
+    close_now = float(df['Close'].iloc[-1])
+    growth    = (close_now / bk_price - 1) * 100 if bk_price else 0.0
+
+    fig = go.Figure()
+    fig.add_trace(go.Candlestick(
+        x=idx, open=df_w['Open'], high=df_w['High'],
+        low=df_w['Low'], close=df_w['Close'], name='Price', showlegend=False,
+        increasing_line_color='#22C55E', increasing_fillcolor='rgba(34,197,94,0.35)',
+        decreasing_line_color='#EF4444', decreasing_fillcolor='rgba(239,68,68,0.35)',
+    ))
+    if 'ema220' in df_w.columns:
+        fig.add_trace(go.Scatter(
+            x=idx, y=df_w['ema220'], name='EMA 220',
+            line=dict(color='#A78BFA', width=1.6, dash='dot'),
+        ))
+    # Breakout bar — vertical guide + triangle at the breakout close
+    fig.add_vline(x=bk_date, line_color='rgba(96,165,250,0.55)',
+                  line_dash='dash', line_width=1.2)
+    fig.add_trace(go.Scatter(
+        x=[bk_date], y=[bk_price], mode='markers', name='Breakout',
+        marker=dict(symbol='triangle-up', size=14, color='#60A5FA',
+                    line=dict(color='#ffffff', width=1)),
+        hovertemplate=f'Breakout  ₹{bk_price:,.2f}<br>%{{x}}<extra></extra>',
+    ))
+    arrow = '▲' if growth >= 0 else '▼'
+    col   = '#22C55E' if growth >= 0 else '#EF4444'
+    fig.update_layout(
+        title=dict(
+            text=f'{ticker} — {arrow} {growth:+.1f}% since breakout ({int(days_ago)}d ago)',
+            font=dict(size=12, color=col), x=0.0,
+        ),
+        height=280, paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
+        xaxis=dict(gridcolor='#2a2a2a', rangeslider=dict(visible=False),
+                   tickformat='%d %b %y', tickfont=dict(size=9)),
+        yaxis=dict(gridcolor='#2a2a2a', tickprefix='₹', tickformat=',.0f',
+                   tickfont=dict(size=9)),
+        legend=dict(orientation='h', y=1.02, x=0, font=dict(size=10, color='#94A3B8'),
+                    bgcolor='rgba(0,0,0,0)'),
+        font=dict(color='#e0e0e0', family='IBM Plex Sans'),
+        margin=dict(l=55, r=20, t=38, b=24), hovermode='x unified',
+    )
+    return fig
+
+
+def _chart_forming_setup(ticker: str, df: pd.DataFrame,
+                         dist_pct: float | None = None) -> go.Figure:
+    """Candlestick + EMA 220 + 52W-high level for a FORMING setup (not yet broken out).
+
+    Forming stocks have no breakout to grow from, so instead of % growth this shows
+    the 52W-high line they must clear and how far below it today's close is — i.e.
+    how close the setup is to firing.
+    """
+    df_w   = df.tail(90).copy()           # recent action — the setup as it builds
+    idx    = df_w.index
+    high52 = float(df['Close'].rolling(ME_HIGH52_P).max().iloc[-1])
+    close_now = float(df['Close'].iloc[-1])
+    if dist_pct is None:
+        dist_pct = (close_now / high52 - 1) * 100 if high52 else 0.0
+
+    fig = go.Figure()
+    fig.add_trace(go.Candlestick(
+        x=idx, open=df_w['Open'], high=df_w['High'],
+        low=df_w['Low'], close=df_w['Close'], name='Price', showlegend=False,
+        increasing_line_color='#22C55E', increasing_fillcolor='rgba(34,197,94,0.35)',
+        decreasing_line_color='#EF4444', decreasing_fillcolor='rgba(239,68,68,0.35)',
+    ))
+    if 'ema220' in df_w.columns:
+        fig.add_trace(go.Scatter(
+            x=idx, y=df_w['ema220'], name='EMA 220',
+            line=dict(color='#A78BFA', width=1.6, dash='dot'),
+        ))
+    # 52W-high resistance — the level the setup must clear to break out
+    fig.add_hline(y=high52, line_color='rgba(245,158,11,0.7)', line_dash='dash',
+                  line_width=1.3, annotation_text=f'Breakout level ₹{high52:,.2f}',
+                  annotation_position='top left',
+                  annotation_font=dict(color='#F59E0B', size=10))
+    col = '#F59E0B' if dist_pct > -3 else '#94A3B8'   # amber = near breakout
+    fig.update_layout(
+        title=dict(
+            text=f'{ticker} — {dist_pct:+.1f}% from breakout (forming)',
+            font=dict(size=12, color=col), x=0.0,
+        ),
+        height=280, paper_bgcolor='#1c1c1c', plot_bgcolor='#1c1c1c',
+        xaxis=dict(gridcolor='#2a2a2a', rangeslider=dict(visible=False),
+                   tickformat='%d %b %y', tickfont=dict(size=9)),
+        yaxis=dict(gridcolor='#2a2a2a', tickprefix='₹', tickformat=',.0f',
+                   tickfont=dict(size=9)),
+        legend=dict(orientation='h', y=1.02, x=0, font=dict(size=10, color='#94A3B8'),
+                    bgcolor='rgba(0,0,0,0)'),
+        font=dict(color='#e0e0e0', family='IBM Plex Sans'),
+        margin=dict(l=55, r=20, t=38, b=24), hovermode='x unified',
+    )
+    return fig
+
+
 def render_momentum(mo: dict):
+    research_notice()
+    st.caption('BUY NOW is the model’s signal label, not an instruction or an executed order.')
+    with st.expander('How the historical model exits a trade'):
+        st.write('A closing price more than 15% below entry triggers an exit at that close. Otherwise, a close below the '
+                 '220-day weighted average queues an exit at the next opening price. The 15% rule takes precedence; '
+                 'losses can exceed that level. Proposed targets and stops elsewhere are separate research.')
     color  = THEME[S_MOMENTUM]['color']
     st.markdown(
         f'<div class="page-title" style="color:{color}">📈 Momentum Edge</div>'
-        '<div class="page-sub">Large/mid-cap stocks that dipped below their 220-day average, recovered, '
-        'and are now breaking to new all-time highs — caught at the perfect moment.</div><br>',
+        '<div class="page-sub">Study stocks making new highs and the trend checks behind each saved setup.</div><br>',
         unsafe_allow_html=True,
     )
+    section_help('How to read this page', 'A breakout is a move above a previous price high. Trend checks compare price with longer-term averages. '
+                 'Use the company details to inspect each check; the historical test shows what happened to earlier model trades.')
 
     _exit_playbook_card(_pick_rec('momentum_edge'), title='Momentum Edge')
 
@@ -6608,7 +6862,44 @@ def render_momentum(mo: dict):
         with tab_all:   _render_subset(sigs, 'all')
         with tab_buy:   _render_subset(sigs[sigs['Action'] == 'BUY NOW'],  'buy')
         with tab_watch: _render_subset(sigs[sigs['Action'] == 'WATCH'],    'watch')
-        with tab_form:  _render_subset(sigs[sigs['Action'] == 'FORMING'],  'forming')
+        with tab_form:
+            forming = sigs[sigs['Action'] == 'FORMING']
+            _render_subset(forming, 'forming')
+
+            # ── Per-stock setup charts (separate, like the Recent tab) ────────
+            if not forming.empty:
+                n_total  = len(forming)
+                dist_col = next((c for c in ('vs High%', 'Dist ATH%')
+                                 if c in forming.columns), None)
+                chart_fm = (forming.sort_values(dist_col, ascending=False)
+                            if dist_col else forming).head(RECENT_GROWTH_CHART_CAP)
+                st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+                cap_note = (
+                    f' Showing the {RECENT_GROWTH_CHART_CAP} closest to breakout of '
+                    f'{n_total}.' if n_total > RECENT_GROWTH_CHART_CAP else ''
+                )
+                st.caption(
+                    'Charts below — candles (last 90 days), EMA 220 (purple dotted), and the '
+                    'amber 52W-high line the setup must clear. The title shows how far today\'s '
+                    'close is from that breakout level (closest first).' + cap_note
+                )
+                fc1, fc2 = st.columns(2)
+                for i, (_, r) in enumerate(chart_fm.iterrows()):
+                    tk = str(r['Ticker'])
+                    p  = Path(BASE_DIR) / 'data' / 'nse_bse' / f'{tk}.NS.csv'
+                    if not p.exists():
+                        continue
+                    cdf = _compute_full_indicators(str(p))
+                    if cdf is None:
+                        continue
+                    dist = float(r[dist_col]) if dist_col and pd.notna(r[dist_col]) else None
+                    try:
+                        fig_f = _chart_forming_setup(tk, cdf, dist)
+                    except Exception:
+                        continue
+                    with (fc1 if i % 2 == 0 else fc2):
+                        st.plotly_chart(fig_f, width='stretch',
+                                        key=f'me_forming_setup_{tk}_{i}')
         with tab_recent:
             st.markdown(_explain_box(
                 '🔄 <b>Recent Breakouts (last 7 trading days)</b> — Stocks that crossed their '
@@ -6628,6 +6919,37 @@ def render_momentum(mo: dict):
                     'and still hold above their EMA220. **% Off Bk** = how far today\'s close is from the '
                     'breakout-day close (negative = pulled back).'
                 )
+
+                # ── Per-stock growth charts ───────────────────────────────────
+                n_total = len(recent_bk)
+                chart_bk = recent_bk.head(RECENT_GROWTH_CHART_CAP)
+                st.markdown('<div style="height:8px;"></div>', unsafe_allow_html=True)
+                cap_note = (
+                    f' Showing the {RECENT_GROWTH_CHART_CAP} most-recent of {n_total} '
+                    '(sorted by Days Ago).' if n_total > RECENT_GROWTH_CHART_CAP else ''
+                )
+                st.caption(
+                    'Charts below — candles from before each breakout to today, EMA 220 '
+                    '(purple dotted), and a ▲ on the breakout bar. The title shows how much '
+                    'the stock has grown since the day all conditions were met.' + cap_note
+                )
+                rc1, rc2 = st.columns(2)
+                for i, (_, r) in enumerate(chart_bk.iterrows()):
+                    tk = str(r['Ticker'])
+                    p  = Path(BASE_DIR) / 'data' / 'nse_bse' / f'{tk}.NS.csv'
+                    if not p.exists():
+                        continue
+                    cdf = _compute_full_indicators(str(p))
+                    if cdf is None:
+                        continue
+                    try:
+                        fig_g = _chart_recent_growth(
+                            tk, cdf, float(r['Bk Price (₹)']), int(r['Days Ago']))
+                    except Exception:
+                        continue
+                    with (rc1 if i % 2 == 0 else rc2):
+                        st.plotly_chart(fig_g, width='stretch',
+                                        key=f'me_recent_growth_{tk}_{i}')
 
         st.caption(
             '📊 *Hist Win%* / *Hist Avg%* — historical performance of past trades '
@@ -6653,10 +6975,20 @@ def render_momentum(mo: dict):
         st.markdown('<br>', unsafe_allow_html=True)
         st.markdown(f'<div class="sec-hdr" style="color:{color}">🔍 Drill Into Any Signal</div>',
                     unsafe_allow_html=True)
-        st.caption('Pick a stock to see the price chart with SMA50, EMA220, 52W high/low and past trades overlaid.')
+        st.caption('Pick a stock to see the price chart with SMA50, EMA220, 52W high/low, '
+                   'past trades, the breakout bar, and how much it has grown since all '
+                   'conditions were met.')
 
-        ticker_choices = sigs['Ticker'].tolist()
+        # Drillable universe = current signals + EVERY stock that has broken out
+        # (any date), so you can inspect growth-since-breakout for post-breakout names
+        # that the live screener no longer lists.
+        all_bk = _scan_all_breakouts()
+        bk_choices = all_bk['Ticker'].tolist() if not all_bk.empty else []
+        ticker_choices = sorted(set(sigs['Ticker'].tolist()) | set(bk_choices))
         if ticker_choices:
+            n_bk = len(bk_choices)
+            st.caption(f'{len(ticker_choices)} stocks selectable — '
+                       f'{n_bk} have already met all conditions (broken out).')
             sel = st.selectbox('Ticker', ticker_choices, key='me_detail_picker',
                                label_visibility='collapsed')
             try:
@@ -7058,14 +7390,17 @@ def _build_report(strategy: str) -> dict:
 
 
 def _kpi_card(label: str, value: str, sub: str = '', color: str = '#7c9cff') -> None:
+    if _is_light_theme():
+        color = {'#7c9cff': '#1d4ed8', '#22C55E': '#166534',
+                 '#00c853': '#166534', '#f9c200': '#854d0e'}.get(color, color)
     st.markdown(
         f"""
-        <div style="background:rgba(255,255,255,0.02);border:1px solid #1f2533;
+        <div style="background:var(--card);border:1px solid var(--border);
                     border-radius:10px;padding:14px 16px;">
-          <div style="font-size:10px;letter-spacing:.08em;color:#6a748a;
+          <div style="font-size:10px;letter-spacing:.08em;color:var(--muted-foreground);
                       text-transform:uppercase;">{label}</div>
           <div style="font-size:24px;font-weight:800;color:{color};margin-top:4px;">{value}</div>
-          <div style="font-size:11px;color:#3d4a60;margin-top:2px;">{sub}</div>
+          <div style="font-size:11px;color:var(--muted-foreground);margin-top:2px;">{sub}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -7096,13 +7431,13 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
     st.markdown('<div style="height:18px;"></div>', unsafe_allow_html=True)
 
     # ── Loss-Free Holding Window — proof the strategy "works" ───────────────
-    st.markdown('### 🛟 Loss-Free Holding Window — does this strategy actually work?')
+    st.markdown('### Time before the first close below entry')
     st.markdown(
         '<div style="font-size:12px;color:#94A3B8;margin:-4px 0 10px 0;line-height:1.65;">'
         'For every past qualifying signal, we walk forward day-by-day and count how many '
         '<b>trading days</b> the close stayed <b>at or above the entry price</b> before the first down-close. '
-        'High numbers across the board = the strategy gives reliable cushion, safe to scale capital. '
-        'Low numbers = signals dip immediately, capital at risk.'
+        'Higher numbers mean those past trades stayed above entry longer. '
+        'This observation does not establish a safe holding period for future trades.'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -7123,11 +7458,11 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
 
         # Verdict — strategy "works" if median >= 5 and ≥40% safe 20+ days
         if med >= 10 and pct20 >= 50:
-            verdict, vcolor, vicon = ('STRATEGY WORKING — safe to scale capital',  '#22C55E', '✅')
+            verdict, vcolor, vicon = ('Longer periods above entry in this sample',  '#22C55E', '●')
         elif med >= 5 and pct20 >= 30:
-            verdict, vcolor, vicon = ('CONDITIONAL — works but size positions carefully', '#F59E0B', '⚠️')
+            verdict, vcolor, vicon = ('Mixed periods above entry in this sample', '#F59E0B', '●')
         else:
-            verdict, vcolor, vicon = ('WEAK — signals dip fast, do not scale up', '#EF4444', '❌')
+            verdict, vcolor, vicon = ('Earlier dips below entry in this sample', '#EF4444', '●')
 
         st.markdown(
             f'<div style="background:{vcolor}1A;border:1px solid {vcolor}55;border-left:4px solid {vcolor};'
@@ -7135,7 +7470,7 @@ def _render_strategy_insights(strategy: str, report: dict) -> None:
             f'<span style="font-size:18px;margin-right:10px;">{vicon}</span>'
             f'<b style="color:{vcolor};letter-spacing:.03em;">{verdict}</b>'
             f'<span style="color:#94A3B8;margin-left:16px;">'
-            f'median {med:.0f}d safe · {pct20:.0f}% of signals stay loss-free ≥ 20d · {never} never dipped'
+            f'median {med:.0f} days before a dip · {pct20:.0f}% stayed above entry ≥ 20 days · {never} never dipped during the saved trade'
             f'</span></div>',
             unsafe_allow_html=True,
         )
@@ -7642,10 +7977,10 @@ def _render_regime_banner() -> None:
     extras = ''
     if snap.get('close'):
         extras = (
-            f'<span style="margin-left:18px;color:#6a748a;">'
-            f'Nifty <b style="color:#e4e8f0">{snap["close"]:,}</b> · '
-            f'SMA50 <b style="color:#e4e8f0">{snap["sma50"]:,}</b> · '
-            f'SMA200 <b style="color:#e4e8f0">{snap["sma200"]:,}</b> · '
+            f'<span style="margin-left:18px;color:var(--muted-foreground);">'
+            f'Nifty <b style="color:var(--foreground)">{snap["close"]:,}</b> · '
+            f'SMA50 <b style="color:var(--foreground)">{snap["sma50"]:,}</b> · '
+            f'SMA200 <b style="color:var(--foreground)">{snap["sma200"]:,}</b> · '
             f'{snap["pct_from_high"]:+.1f}% from 52W high · '
             f'{snap["date"]}</span>'
         )
@@ -7678,7 +8013,7 @@ def _render_regime_banner() -> None:
                     display:flex;align-items:center;font-size:13px;">
           <span style="font-size:18px;margin-right:10px;">{icon}</span>
           <b style="color:{accent};letter-spacing:.03em;">{msg}</b>
-          <span style="margin-left:14px;color:#6a748a;">
+          <span style="margin-left:14px;color:var(--muted-foreground);">
             {bars} bars since last flip
           </span>
           {extras}
@@ -7972,33 +8307,26 @@ def _build_momentum_suggestions(mo: dict, is_bull: bool, max_picks: int = 5) -> 
 def render_suggestions(m: dict, i: dict, mo: dict) -> None:
     st.markdown(
         '<h1 style="margin:0 0 6px 0;font-size:30px;font-weight:900;letter-spacing:-.02em;">'
-        '🎯 Suggestions — Risk-Filtered Picks</h1>',
+        'Stocks to review</h1>',
         unsafe_allow_html=True,
     )
-    st.caption(
-        'Live signals re-ranked by historical edge. Only setups that historically won are surfaced; '
-        'regime gate, position sizing, and stop-losses are applied automatically.'
-    )
-
-    st.markdown(_explain_box(
-        '🧠 <b>How the engine works (Plain English)</b><br>'
-        '<b>Step 1 — Find the edge.</b> Every closed historical trade is grouped by its setup '
-        '(e.g. Entry Type × Recovery Speed for Momentum Edge, Setup_Type for IPO Edge). '
-        'Buckets with <b>positive expectancy</b> (wins × win-rate beats losses × loss-rate) become the "approved" buckets.<br>'
-        '<b>Step 2 — Filter today\'s signals.</b> Only live signals that match an approved bucket pass through. '
-        'Everything else is dropped — no matter how exciting the chart looks.<br>'
-        '<b>Step 3 — Regime gate.</b> If Nifty regime is Bear, position sizes are cut in half (or to zero for IPO Edge). '
-        'New entries during Bear regime have a much lower historical win rate.<br>'
-        '<b>Step 4 — Risk wrap.</b> Each pick ships with a defined entry, stop-loss, target, R:R ratio, '
-        'and max-position-size cap so a single bad trade can\'t crater the account.'
-    ), unsafe_allow_html=True)
-
-    st.markdown(_tip_box(
-        '⚠️ <b>Zero risk does not exist in markets.</b> What this page does is <b>minimise</b> risk: '
-        'it refuses to show you any setup that did not historically make money, it sizes positions so no single loss '
-        'is fatal, and it forces a pre-defined stop-loss on every trade. Worst-case loss per pick is capped at '
-        '<b>position_size × stop_distance</b>. Across the whole portfolio, that worst-case is &lt; 2% of capital.'
-    ), unsafe_allow_html=True)
+    st.caption('Suggestions · Understand the setup, review the evidence, then make your own decision.')
+    with st.container(border=True):
+        st.markdown("**What happens here**")
+        st.write("Review the setup, historical sample and proposed price levels before making a decision. "
+                 "No purchase, stop order or portfolio allocation is executed by this page.")
+        st.caption("PEAD candidates are reviewed on the PEAD page. Persistent review decisions and manual trade recording are planned for the tracking phase.")
+    with st.expander("How suggestions are selected"):
+        st.write("The existing engine groups historical trades by setup, keeps buckets with positive expectancy, "
+                 "and matches current signals to those buckets. Regime rules adjust suggested sizes and suspend IPO picks in Bear conditions.")
+        st.write("Historical win rate describes the saved sample, not a forecast probability. "
+                 "Entry, target, stop and allocation values are suggestions. Gaps can produce losses beyond a stop level.")
+    with st.expander('What the proposed prices and amounts mean'):
+        st.markdown('- **Reference entry:** the price used to describe the setup; not an executed purchase.\n'
+                    '- **Suggested stop:** a proposed level for exiting after a fall; the actual execution price can be worse.\n'
+                    '- **Suggested target:** a proposed price to review after a rise; it may never be reached.\n'
+                    '- **Suggested allocation:** a portion of hypothetical capital, not money already invested.\n'
+                    '- **Historical sample:** past trades used to describe this setup, not a forecast of your results.')
 
     # Regime gate
     snap = _regime_snapshot()
@@ -8012,7 +8340,7 @@ def render_suggestions(m: dict, i: dict, mo: dict) -> None:
     )
     st.markdown(
         f'<div style="border-left:4px solid {regime_color};background:{regime_color}11;'
-        f'padding:12px 16px;margin:14px 0;border-radius:8px;font-size:13px;color:#e4e8f0;">'
+        f'padding:12px 16px;margin:14px 0;border-radius:8px;font-size:13px;color:var(--foreground);">'
         f'{regime_msg}</div>',
         unsafe_allow_html=True,
     )
@@ -8034,11 +8362,11 @@ def render_suggestions(m: dict, i: dict, mo: dict) -> None:
     with c1:
         _kpi_card('Picks Today', f'{n_picks}', 'after edge + regime filter', '#7c9cff')
     with c2:
-        _kpi_card('Avg Confidence', f'{avg_conf:.0f}%', 'hist. win rate', '#22C55E' if avg_conf >= 55 else '#f9c200')
+        _kpi_card('Historical win rate', f'{avg_conf:.0f}%', 'hist. win rate', '#22C55E' if avg_conf >= 55 else '#f9c200')
     with c3:
-        _kpi_card('Total Allocation', f'{min(total_alloc,100):.0f}%', 'of capital deployed', '#e4e8f0')
+        _kpi_card('Total Allocation', f'{min(total_alloc,100):.0f}%', 'suggested; not deployed', 'var(--foreground)')
     with c4:
-        _kpi_card('Cash Reserve', f'{cash_pct:.0f}%', 'idle (dry powder)', '#00c853')
+        _kpi_card('Cash Reserve', f'{cash_pct:.0f}%', 'suggested cash balance', '#00c853')
 
     st.markdown('<br>', unsafe_allow_html=True)
 
@@ -8063,17 +8391,19 @@ def render_suggestions(m: dict, i: dict, mo: dict) -> None:
         if not pool:
             st.info('No picks in this strategy right now.')
             return
-        html = ''
         for idx, p in enumerate(pool, start=1):
-            html += _suggestion_card(
-                rank=idx, ticker=p['ticker'], company=p['company'],
-                strategy=p['strategy'], signal=p['signal'],
-                close=p['close'], stop=p['stop'], target=p['target'],
-                confidence=p['confidence'], avg_pnl=p['avg_pnl'],
-                n_hist=p['n_hist'], position_pct=p['position_pct'],
-                rationale=p['rationale'],
-            )
-        st.markdown(html, unsafe_allow_html=True)
+            with st.container(border=True):
+                st.markdown(f"**{idx}. {p['ticker']} | {p['company']}**")
+                st.caption(f"{p['strategy']} | {p['signal']}")
+                rationale = p['rationale'].replace('<b>', '**').replace('</b>', '**')
+                st.markdown(rationale.replace('<br>', '\n\n'))
+                cols = st.columns(4)
+                cols[0].metric('Reference entry', f"₹{p['close']:,.2f}")
+                cols[1].metric('Suggested stop', f"₹{p['stop']:,.2f}")
+                cols[2].metric('Suggested target', f"₹{p['target']:,.2f}")
+                cols[3].metric('Suggested allocation', f"{p['position_pct']:.0f}%")
+                st.caption(f"Historical sample: {p['n_hist']} trades | win rate {p['confidence']:.0f}% | "
+                           f"average return {p['avg_pnl']:+.2f}%. Costs and out-of-sample performance are unverified.")
 
     with tab_all:
         _render_pool(all_picks)
@@ -8095,10 +8425,13 @@ def render_suggestions(m: dict, i: dict, mo: dict) -> None:
 def render_insights(m: dict, i: dict, mo: dict) -> None:
     st.markdown(
         '<h1 style="margin:0 0 6px 0;font-size:30px;font-weight:900;letter-spacing:-.02em;">'
-        '🔬 Insights</h1>',
+        'Understand past trades</h1>',
         unsafe_allow_html=True,
     )
-    st.caption('Post-hoc analytics on closed trades — entry quality, exit timing, stop placement.')
+    st.caption('Insights · Explore what happened during completed model trades and what the saved evidence can tell you.')
+    research_notice()
+    section_help('How to read this page', 'Choose a strategy below. Each section examines earlier trades from a different angle: '
+                 'price dips, price rises, time held and losing streaks. These observations were made after the trades and are not validated forecasts.')
 
     st.markdown(_explain_box(
         '🧠 <b>What this page shows (Plain English)</b><br>'
@@ -8312,11 +8645,13 @@ def _render_add_card() -> None:
 
 def render_strategy_library(m: dict, i: dict, mo: dict) -> None:
     """Strategy Library page — grid of all strategies."""
+    section_help('Browse strategies', 'Each strategy is a set of rules for selecting and exiting stocks. Open one to inspect its saved results. '
+                 'Live and Paper are saved status labels; they do not mean this app has placed orders.')
     st.markdown("""
         <div class="lib-header">
             <div>
                 <h1>Strategy Library</h1>
-                <p class="lib-subtitle">Browse, compare, and deploy your audit-graded strategies</p>
+                <p class="lib-subtitle">Browse the saved rules, history and status of each strategy</p>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -8722,6 +9057,8 @@ def _summarize_exits(ex: dict) -> str:
 
 def render_add_strategy() -> None:
     """5-step wizard for creating a new strategy."""
+    section_help('Create a strategy', 'Build a set of rules step by step: choose companies, define entry and exit conditions, '
+                 'then review the configuration before running a historical simulation.')
     _wizard_init()
     step = st.session_state['_wizard_step']
     data = st.session_state['_wizard_data']
@@ -8911,11 +9248,14 @@ def _read_strategy_results(strat: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 def render_backtest_results(strat_id: str) -> None:
     """Comprehensive backtest analysis page for one strategy."""
+    section_help('Read a historical test', 'These results apply the saved rules to earlier data. Review the date range, '
+                 'number of trades and largest decline alongside growth. Historical returns do not predict future returns.')
     strats = _load_strategies_index()
     strat = next((s for s in strats if s['id'] == strat_id), None)
     if strat is None:
         st.error(f"Strategy '{strat_id}' not found"); return
 
+    research_notice()
     k = strat.get('kpis_inline', {})
     cagr_str = f"{k.get('cagr', 0)*100:+.2f}%"
     sharpe_str = f"{k.get('sharpe', 0):.2f}"
@@ -8993,17 +9333,23 @@ def render_backtest_results(strat_id: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def main():
+    workflow_style()
+    native_theme()
     page = render_sidebar()
     core_glossary.render_sidebar(st)
-
-    render_staleness_banner("nse_bse", "data/nse_bse")
 
     with st.spinner('Loading data…'):
         m  = load_monthly()
         i  = load_ipo()
         mo = load_momentum()
 
-    _render_regime_banner()
+    with st.expander('Market context and price-data status'):
+        st.caption('This describes the broad stock market and saved price files. Earnings dates and update status appear on the PEAD page. '
+                   'Each strategy has its own entry rules; this market label does not apply the same restriction to every strategy.')
+        render_staleness_banner("nse_bse", "data/nse_bse")
+        _render_regime_banner()
+        st.caption('Nifty is the market reference. SMA50 and SMA200 are average prices over 50 and 200 trading days. '
+                   'A bar is one trading session; the 52-week high is the highest price in that period.')
 
     page_clean = page.split('  ', 1)[-1] if '  ' in page else page.lstrip('🏠🔄🚀📈📊 ')
 

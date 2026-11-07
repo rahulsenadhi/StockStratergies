@@ -1133,6 +1133,69 @@ def _build_detail_chart(ticker: str, df: pd.DataFrame,
     return fig
 
 
+def _build_recent_growth_chart(ticker: str, df: pd.DataFrame,
+                               bk_price: float, days_ago: int) -> go.Figure:
+    """Candlestick + EMA 220 for a recent-breakout stock.
+
+    Shows candles from ~30 bars before the breakout to today, the EMA 220 overlay,
+    a ▲ marker on the breakout bar, and a title annotating % growth since the
+    breakout — i.e. how much the stock has grown since all conditions were met.
+    """
+    close  = df['Close']
+    ema220 = close.ewm(span=EMA220_P, adjust=False).mean()
+
+    n          = len(df)
+    bk_pos     = max(0, n - 1 - int(days_ago))   # state machine: idx = n-1-k
+    start_pos  = max(0, bk_pos - 30)             # ~30 bars of pre-breakout base
+    df_w       = df.iloc[start_pos:].copy()
+    idx        = df_w.index
+    ema_w      = ema220.iloc[start_pos:]
+    bk_date    = df.index[bk_pos]
+    close_now  = float(close.iloc[-1])
+    growth_pct = (close_now / bk_price - 1) * 100 if bk_price else 0.0
+
+    fig = go.Figure()
+    fig.add_trace(go.Candlestick(
+        x=idx, open=df_w['Open'], high=df_w['High'],
+        low=df_w['Low'], close=df_w['Close'], name='Price',
+        increasing_line_color='#00c853', increasing_fillcolor='rgba(0,200,83,0.35)',
+        decreasing_line_color='#ff3d3d', decreasing_fillcolor='rgba(255,61,61,0.35)',
+    ))
+    fig.add_trace(go.Scatter(
+        x=idx, y=ema_w, name='EMA 220', mode='lines',
+        line=dict(color='#ff5252', width=2, dash='dot'),
+    ))
+    # Breakout bar — vertical guide + triangle at the breakout close
+    fig.add_vline(x=bk_date, line_color='rgba(76,159,255,0.55)',
+                  line_dash='dash', line_width=1.2)
+    fig.add_trace(go.Scatter(
+        x=[bk_date], y=[bk_price], mode='markers', name='Breakout',
+        marker=dict(symbol='triangle-up', size=15, color='#4c9fff',
+                    line=dict(color='#ffffff', width=1)),
+        hovertemplate=f'Breakout  ₹{bk_price:,.2f}<br>%{{x}}<extra></extra>',
+    ))
+    arrow = '▲' if growth_pct >= 0 else '▼'
+    color = '#00e676' if growth_pct >= 0 else '#ff5252'
+    fig.update_layout(
+        title=dict(
+            text=f'{ticker} — {arrow} {growth_pct:+.1f}% since breakout ({int(days_ago)}d ago)',
+            font=dict(size=13, color=color), x=0.0,
+        ),
+        height=300,
+        paper_bgcolor='#0e1117', plot_bgcolor='#12172a',
+        xaxis=dict(gridcolor='#1e2235', showgrid=True, rangeslider=dict(visible=False),
+                   tickformat='%d %b %y', tickfont=dict(size=9)),
+        yaxis=dict(gridcolor='#1e2235', showgrid=True, tickprefix='₹', tickformat=',.0f',
+                   tickfont=dict(size=9)),
+        legend=dict(orientation='h', y=1.02, x=0, font=dict(size=10, color='#8892a4'),
+                    bgcolor='rgba(0,0,0,0)'),
+        font=dict(color='#e0e0e0', family='Inter'),
+        margin=dict(l=60, r=20, t=40, b=24),
+        hovermode='x unified',
+    )
+    return fig
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  DETAIL VIEW — CRITERIA PANEL
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2158,6 +2221,26 @@ def main():
                         width='stretch',
                         hide_index=True,
                     )
+
+                    # ── Per-stock growth charts ───────────────────────────────
+                    st.markdown(
+                        '<div style="font-size:11px;color:#5a6480;margin:14px 0 6px;">'
+                        'Candlestick from before each breakout to today, with the EMA 220 '
+                        '(red dotted) and a ▲ marker on the breakout bar. The title shows how '
+                        'much the stock has grown since the day all conditions were met.'
+                        '</div>', unsafe_allow_html=True)
+                    ohlcv = load_universe_data()
+                    chart_cols = st.columns(2)
+                    for i, (_, r) in enumerate(recent_sigs.iterrows()):
+                        tk  = r['Ticker']
+                        cdf = ohlcv.get(tk)
+                        if cdf is None or len(cdf) < EMA220_P:
+                            continue
+                        fig = _build_recent_growth_chart(
+                            tk, cdf, float(r['Bk Price (₹)']), int(r['Days Ago']))
+                        with chart_cols[i % 2]:
+                            st.plotly_chart(fig, width='stretch',
+                                            key=f'recent_chart_{tk}_{i}')
 
         with col_side:
             st.markdown('<div class="sec-hdr">Filter Funnel</div>', unsafe_allow_html=True)
