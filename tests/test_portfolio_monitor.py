@@ -139,3 +139,56 @@ def test_validate_only(env, capsys):
     p.write_text(json.dumps(cand), encoding="utf-8")
     assert pm.main(["--validate-only", str(p)]) == 0
     assert json.loads(capsys.readouterr().out)["ok"] is True
+
+
+def test_exit_stale_exit_raises_one_alert(env):
+    add(env[0], buy("APLAPOLLO.NS", d="2026-10-01"))
+    bars = {"APLAPOLLO.NS": make_bars(uptrend(last=80))}
+    run(env, bars)
+    run(env, bars, nifty=date(2026, 11, 9))          # STALE (bar behind Nifty)
+    run(env, bars)                                    # EXIT again, same rule
+    alerts = load_alerts(env[0] / "alerts.json")["alerts"]
+    assert [a["action"] for a in alerts] == ["EXIT", "STALE"]
+
+
+def test_missing_nifty_lists_error_and_stales_holdings(env):
+    add(env[0], buy("APLAPOLLO.NS", d="2026-10-01"))
+    d, out = env
+    rc = pm.main(["--dir", str(d), "--out", str(out)], now=NOW,
+                 bars_loader=lambda s: make_bars(uptrend(last=80)), nifty_last_date=lambda n: None)
+    ui = json.loads(out.read_text(encoding="utf-8"))
+    assert rc == 0 and ui["positions"][0]["evaluation"]["action"] == "STALE"
+    assert any("calendar" in e for e in ui["monitor"]["errors"])
+
+
+def test_validate_only_malformed_inputs(env, capsys):
+    d, _ = env
+    p = d.parent / "c.json"
+    for text in ("{not json", json.dumps({"transactions": [5]}),
+                 json.dumps({"transactions": [{"type": "BUY", "price": "x"}]}), "[]"):
+        p.write_text(text, encoding="utf-8")
+        assert pm.main(["--validate-only", str(p)]) == 2
+        out = json.loads(capsys.readouterr().out)
+        assert out["ok"] is False and out["errors"]
+    assert pm.main(["--validate-only", str(d.parent / "nope.json")]) == 2
+
+
+def test_corrupt_ledger_keeps_last_good_positions_marked_stale(env):
+    d, out = env
+    add(d, buy("APLAPOLLO.NS", d="2026-10-01"))
+    run(env, {"APLAPOLLO.NS": make_bars(uptrend(last=140))})
+    (d / "ledger.json").write_text("{bad", encoding="utf-8")
+    rc, ui = run(env, {})
+    ev = ui["positions"][0]["evaluation"]
+    assert rc == 1 and ui["monitor"]["ok"] is False
+    assert "ledger file unreadable" in ui["monitor"]["errors"][0] and "ledger.json" in ui["monitor"]["errors"][0]
+    assert ev["data_status"] == "STALE" and "Ledger unreadable; showing the last good check from" in ev["explanation"]
+    rc2, ui2 = run(env, {})                            # still corrupt: last good time preserved
+    assert ui2["monitor"]["last_good_check"] == ui["monitor"]["last_good_check"] is not None
+
+
+def test_corrupt_alerts_file_is_named(env):
+    d, _ = env
+    (d / "alerts.json").write_text("nope", encoding="utf-8")
+    rc, ui = run(env, {})
+    assert rc == 1 and "alerts file unreadable" in ui["monitor"]["errors"][0]

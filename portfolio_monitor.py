@@ -156,29 +156,39 @@ def _settings_summary(settings: dict) -> dict:
             "experimental_reduce": bool(settings.get("monitor", {}).get("experimental_reduce"))}
 
 
-def _doc(now: datetime, ok: bool, errors: list[str], rows=(), closed=(), alerts=(), settings=None) -> dict:
+def _doc(now: datetime, ok: bool, errors: list[str], rows=(), closed=(), alerts=(),
+         settings=None, last_good: str | None = None) -> dict:
     stamp = _as_ist(now).isoformat(timespec="seconds")
     return {"version": UI_VERSION, "generated_at": stamp,
-            "monitor": {"last_run": stamp, "ok": ok, "errors": errors},
+            "monitor": {"last_run": stamp, "ok": ok, "errors": errors,
+                        "last_good_check": stamp if ok else last_good},
             "positions": list(rows), "closed": list(closed), "alerts": list(alerts),
             "settings_summary": _settings_summary(settings or DEFAULT_SETTINGS),
             "scheduler": "none"}
 
 
 def run(pdir: Path, ledger_path: Path, out: Path, now: datetime, loader, nifty) -> int:
-    try:
-        settings = ensure_settings(pdir / "settings.json")
-        ledger = load_ledger(ledger_path)
-        alert_doc = load_alerts(pdir / "alerts.json")
-    except LedgerCorrupt as exc:
-        _atomic_write(out, _doc(now, False, [f"Ledger or settings file unreadable: {exc}"]))
-        print(f"portfolio_monitor: {exc}", file=sys.stderr)
-        return 1
+    loaded = {}
+    for kind, loader_fn, path in (("settings", ensure_settings, pdir / "settings.json"),
+                                  ("ledger", load_ledger, ledger_path),
+                                  ("alerts", load_alerts, pdir / "alerts.json")):
+        try:
+            loaded[kind] = loader_fn(path)
+        except LedgerCorrupt as exc:
+            _write_unreadable(out, now, f"{kind} file unreadable: {exc}")
+            print(f"portfolio_monitor: {kind} file unreadable: {exc}", file=sys.stderr)
+            return 1
+    settings, ledger, alert_doc = loaded["settings"], loaded["ledger"], loaded["alerts"]
     allpos = positions(ledger)
     open_pos = {s: p for s, p in allpos.items() if p.open_qty > 0}
     universe = universe_index()
     nifty = nifty(now) if callable(nifty) else nifty
+    if nifty is None and open_pos:
+        errors_pre = ["Market calendar unavailable: data/nse_bse/^NSEI.csv missing or unreadable"]
+    else:
+        errors_pre = []
     pairs, errors = _evaluate_all(open_pos, _strategies(ledger), nifty, now, settings, loader)
+    errors = errors_pre + errors
     evals = [ev.to_dict() for _, ev in pairs]
     _append_jsonl(pdir / "evaluations.jsonl", evals)
     alert_doc, _ = update_alerts(alert_doc, evals, set(open_pos), now)
@@ -191,6 +201,26 @@ def run(pdir: Path, ledger_path: Path, out: Path, now: datetime, loader, nifty) 
     return 0
 
 
+def _write_unreadable(out: Path, now: datetime, message: str) -> None:
+    """Keep the last good positions (marked STALE) instead of blanking the page."""
+    prev = {}
+    try:
+        prev = json.loads(out.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    old_mon = prev.get("monitor") if isinstance(prev.get("monitor"), dict) else {}
+    last_good = old_mon.get("last_good_check") or (old_mon.get("last_run") if old_mon.get("ok") else None)
+    rows = []
+    for row in prev.get("positions") or []:
+        ev = dict(row.get("evaluation") or {})
+        ev.update(action="STALE", rule=None, data_status="STALE",
+                  explanation=f"Ledger unreadable; showing the last good check from {last_good or 'an unknown time'}")
+        rows.append(dict(row, evaluation=ev))
+    doc = _doc(now, False, [message], rows, prev.get("closed") or [], prev.get("alerts") or [],
+               last_good=last_good)
+    _atomic_write(out, doc)
+
+
 def validate_only(candidate: Path) -> int:
     """Validate the LAST transaction of a candidate ledger against the others."""
     try:
@@ -199,8 +229,8 @@ def validate_only(candidate: Path) -> int:
             raise ValueError("candidate ledger has no transactions")
         last = {k: v for k, v in txs[-1].items() if k not in ("id", "created_at")}
         errors = validate_transaction(last, txs[:-1], universe_index())
-    except (OSError, ValueError, AttributeError) as exc:
-        errors = [f"cannot read candidate ledger: {exc}"]
+    except Exception as exc:  # malformed input must give ok:false, never a traceback
+        errors = [f"cannot validate candidate ledger: {type(exc).__name__}: {exc}"]
     print(json.dumps({"ok": not errors, "errors": errors}))
     return 0 if not errors else 2
 

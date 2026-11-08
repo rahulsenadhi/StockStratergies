@@ -16,6 +16,7 @@ from core.portfolio import LedgerCorrupt, _atomic_write
 
 ALERTS_VERSION = 1
 MAX_ALERTS = 200
+TRANSIENT_ACTIONS = ("STALE", "DATA UNAVAILABLE")
 
 
 def _empty() -> dict:
@@ -53,8 +54,10 @@ def update_alerts(data: dict, evaluations: list[dict], open_symbols: set[str],
     for ev in evaluations:
         sym, action, rule = ev["symbol"], ev["action"], ev.get("rule")
         prev = state.get(sym)
-        state[sym] = {"action": action, "rule": rule}
-        if action == "HOLD" or (prev and prev == state[sym]):
+        transient = action in TRANSIENT_ACTIONS     # data problems never replace the stored state
+        if not transient:
+            state[sym] = {"action": action, "rule": rule}
+        if action == "HOLD" or (not transient and prev == state[sym]):
             continue
         aid = alert_id(sym, action, rule, ev.get("last_bar_date"))
         if aid in known_ids:

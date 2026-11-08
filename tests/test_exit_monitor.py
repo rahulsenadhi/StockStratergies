@@ -42,7 +42,7 @@ def ev(closes, position=None, now=NOW, nifty=END, end=END):
 def test_hard_stop_gives_exit():
     e = ev(uptrend(last=80), pos(avg=100))      # 80 < 85
     assert (e.action, e.rule) == ("EXIT", "hard stop")
-    assert "not a guaranteed price" in e.explanation
+    assert "actual sale price can be worse" in e.explanation
     assert e.levels["hard_stop"] == 85.0
 
 
@@ -143,8 +143,24 @@ def test_strategy_other_is_labelled_review():
     assert e.action == "REVIEW" and "No automated exit rules" in e.explanation
 
 
+def test_missing_nifty_calendar_marks_stale_but_keeps_rule_as_info():
+    e = ev(uptrend(last=80), nifty=None)
+    assert e.action == "STALE" and e.data_status == "STALE"
+    assert "Market calendar unavailable" in e.explanation
+    assert e.levels["rule_result"]["action"] == "EXIT"
+
+
+def test_wall_clock_staleness_even_if_nifty_equally_old():
+    old_end = "2026-10-20"
+    e = ev(uptrend(last=140), nifty=old_end, end=old_end)   # now is 2026-11-09
+    assert e.action == "STALE" and "Prices not updated since 2026-10-20" in e.explanation
+
+
+def test_weekend_gap_is_not_stale():
+    assert ev(uptrend(last=140)).action == "HOLD"           # Fri bar, Mon evening
+
+
 def test_never_uses_forbidden_words():
     for last in (80, 100, 140):
         text = ev(uptrend(last=last)).explanation.lower()
-        assert "no loss" not in text and "100%" not in text
-        assert text.count("guarantee") == text.count("not a guaranteed")
+        assert "guarantee" not in text and "no loss" not in text and "100%" not in text

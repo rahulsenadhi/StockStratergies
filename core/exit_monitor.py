@@ -21,8 +21,12 @@ MIN_BARS = 220          # bars needed to form the EMA220
 MATURE_BARS = 440       # below this the EMA220 is still warming up
 UNKNOWN_DATE = "buy date unknown"
 
-HARD_STOP_TEXT = ("Exit rule triggered at today's close; earliest action is the next "
-                  "session. A stop is a trigger, not a guaranteed price; gaps can fill worse.")
+HARD_STOP_TEXT = ("Exit rule triggered at this close; the earliest action is the next "
+                  "session. A stop is a trigger level - after a gap the actual sale price "
+                  "can be worse.")
+STALE_AFTER_DAYS = 4    # default for settings monitor.stale_after_days
+NO_CALENDAR_TEXT = ("Market calendar unavailable (Nifty file missing or unreadable); "
+                    "data freshness cannot be confirmed.")
 EMA_TEXT = "The model exits at the next session's open."
 REVIEW_LABEL = "Advisory, not a model exit."
 RECON_LABEL = "Reconstructed from saved prices - no alert existed at the time"
@@ -178,10 +182,19 @@ def _evaluate(position: Any, bars: Any, ignored: bool, nifty_last_date: Any,
     action, rule, text = _decide(close, ema, stop, bands)
     status = "OK"
     nifty = _iso(nifty_last_date) if nifty_last_date is not None else None
-    if nifty and last_date < nifty:
-        status, action, rule = "STALE", "STALE", None
-        text = (f"Last price bar is {last_date}, behind the latest market session {nifty}. "
-                "Update data before acting on this holding.")
+    limit = int(settings.get("monitor", {}).get("stale_after_days", STALE_AFTER_DAYS))
+    oldest_ok = (completed_cutoff(now) - timedelta(days=limit)).isoformat()
+    stale_text = None
+    if nifty is None:
+        stale_text = NO_CALENDAR_TEXT
+    elif last_date < nifty:
+        stale_text = (f"Last price bar is {last_date}, behind the latest market session "
+                      f"{nifty}. Update data before acting on this holding.")
+    elif last_date < oldest_ok:
+        stale_text = f"Prices not updated since {last_date}; run an update."
+    if stale_text:
+        levels["rule_result"] = {"action": action, "rule": rule, "note": "informational only"}
+        status, action, rule, text = "STALE", "STALE", None, stale_text
     if levels["ema_immature"]:
         text += f" The 220-day EMA is immature (only {len(bars)} bars of history)."
     if ignored:
