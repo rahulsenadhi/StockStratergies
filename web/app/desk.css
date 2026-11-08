@@ -186,3 +186,55 @@ details[open] > .desk-summary::after { content: "▴"; }
   .desk-only-desktop { display: none; }
 }
 .rd-name__title svg.desk-ext { width: 12px; height: 12px; margin-left: 4px; vertical-align: -1px; color: var(--rd-text-muted); }
+
+/* Shared pieces copied from core/ui_components.py COMPONENT_CSS */
+.rd-ctx { display:flex; flex-wrap:wrap; align-items:center; gap:var(--rd-sp-2) var(--rd-sp-5);
+  padding:var(--rd-sp-2) var(--rd-sp-3); border:1px solid var(--rd-line); border-radius:var(--rd-radius);
+  font-size:var(--rd-fs-sm); color:var(--rd-text); margin:0 0 var(--rd-sp-4); }
+.rd-ctx__item { display:inline-flex; gap:6px; align-items:baseline; }
+.rd-ctx__label { color:var(--rd-text-muted); font-size:var(--rd-fs-xs); text-transform:uppercase;
+  letter-spacing:.06em; }
+.rd-ctx__value { font-weight:600; font-variant-numeric:tabular-nums; }
+.rd-ctx__basis { margin-left:auto; color:var(--rd-warn); font-weight:600; font-size:var(--rd-fs-xs); }
+.rd-checks { list-style:none; margin:0 0 var(--rd-sp-4); padding:0; border:1px solid var(--rd-line);
+  border-radius:var(--rd-radius); }
+.rd-check { display:grid; grid-template-columns:minmax(140px, 220px) auto 1fr; gap:var(--rd-sp-3);
+  align-items:center; padding:var(--rd-sp-2) var(--rd-sp-3); border-bottom:1px solid var(--rd-line);
+  font-size:var(--rd-fs-sm); color:var(--rd-text); }
+.rd-check:last-child { border-bottom:0; }
+.rd-check__title { font-weight:600; }
+.rd-check__note { color:var(--rd-text-muted); }
+@media (max-width: 767px) {
+  .rd-check { grid-template-columns:1fr auto; }
+  .rd-check__note { grid-column:1 / -1; }
+  .rd-ctx__basis { margin-left:0; }
+}
+.rd-big { font-size: 34px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1;
+  color: var(--rd-text); font-variant-numeric: tabular-nums; }
+.rd-big__dec { font-size: 20px; font-weight: 500; }
+.rd-big--gain { color: var(--rd-gain); } .rd-big--loss { color: var(--rd-loss); }
+.rd-big--warn { color: var(--rd-warn); } .rd-big--info { color: var(--rd-info); } .rd-big--muted { color: var(--rd-text-muted); }
+.rd-stat-label { font-size: var(--rd-fs-sm); color: var(--rd-text-muted); margin-bottom: 4px; }
+.rd-stat-sub { font-size: var(--rd-fs-sm); color: var(--rd-text-muted); margin-top: 6px; }
+.rd-bar { display:flex; justify-content:space-between; align-items:center; padding: 7px 0 7px 10px;
+  border-left: 3px solid var(--rd-line); margin-top: 8px; font-size: var(--rd-fs-base); color: var(--rd-text); }
+.rd-bar--gain { border-left-color: var(--rd-gain); } .rd-bar--loss { border-left-color: var(--rd-loss); }
+.rd-bar--info { border-left-color: var(--rd-info); } .rd-bar--muted { border-left-color: var(--rd-line); }
+.rd-bar__val { font-variant-numeric: tabular-nums; font-weight: 500; }
+
+/* Tabs: look of the Streamlit tab strip (ui_components.py ~434-438) */
+.desk-tabs [role="tablist"] { display:flex; gap: 4px; border-bottom: 1px solid var(--rd-line); }
+.desk-tabs button[role="tab"] { all: unset; cursor: pointer; background:transparent; border-radius:0;
+  padding: 6px 2px; margin-right: 18px; font-size: var(--rd-fs-md); font-weight:500; color: var(--rd-text-muted); }
+.desk-tabs button[role="tab"][aria-selected="true"] { color: var(--rd-text); font-weight:600; }
+.desk-tabs button[role="tab"]:focus-visible { outline: 2px solid var(--rd-info); outline-offset: 2px; }
+.desk-tabs [role="tabpanel"] { padding-top: var(--rd-sp-4); }
+
+/* Inline callout (master_dashboard.py .explain-box, mapped to --rd-* tokens) */
+.explain-box { background: var(--rd-card); border: 1px solid var(--rd-line); border-left: 3px solid var(--rd-info);
+  border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 10px 0 14px 0;
+  font-size: 12.5px; color: var(--rd-text-2); line-height: 1.7; }
+.explain-box b { color: var(--rd-text); font-weight: 600; }
+
+/* Sticky right rail on tall, wide screens */
+@media (min-width:1200px) and (min-height:900px) { .desk-rail { position: sticky; top: 16px; } }

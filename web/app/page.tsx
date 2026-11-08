@@ -1,11 +1,11 @@
 import { CandidatesCard, GrowthCard, StrategiesCard } from "@/components/desk/home/home-cards";
+import { GlossaryDisclosure } from "@/components/desk/glossary";
 import { ResearchNotice } from "@/components/desk/notices";
 import { ChangePill, EmptyState, PageHeader, RailList, StatusPill } from "@/components/desk/primitives";
 import { freshnessLabel, freshnessTone } from "@/lib/desk/format";
 import { HOW_TO_READ, headerSub, headerTrend, marketRows, priceAge } from "@/lib/desk/home";
 import { savedDataAges } from "@/lib/desk/saved-ages";
 import { loadSnapshot, withLiveFreshness } from "@/lib/desk/snapshot";
-import { GLOSSARY } from "@/lib/glossary";
 
 export const dynamic = "force-dynamic";
 
@@ -59,14 +59,7 @@ export default async function Home() {
         <summary>How to read these figures</summary>
         <div>{HOW_TO_READ}</div>
       </details>
-      <details className="desk-disclosure">
-        <summary>Glossary — What do these words mean?</summary>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "10px 24px" }}>
-          {Object.entries(GLOSSARY).map(([key, g]) => (
-            <p key={key} className="rd-note" style={{ margin: 0 }}><b style={{ color: "var(--rd-text)" }}>{g.label}</b> — {g.explain}</p>
-          ))}
-        </div>
-      </details>
+      <GlossaryDisclosure />
     </>
   );
 }

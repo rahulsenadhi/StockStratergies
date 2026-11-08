@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { formatChange, type Tone } from "@/lib/desk/format";
+import { bigValueParts, formatChange, type Tone } from "@/lib/desk/format";
+import type { CheckRow } from "@/lib/desk/monthly-text";
 
 /** Python status_pill. */
 export function StatusPill({ label, tone = "muted" }: { label: string; tone?: Tone }) {
@@ -71,5 +72,56 @@ export function EmptyState({ title, reason }: { title: string; reason?: string }
       <div className="rd-empty__title">{title}</div>
       {reason ? <div className="rd-empty__reason">{reason}</div> : null}
     </div>
+  );
+}
+
+/** Python context_bar: one line stating what a result belongs to. */
+export function ContextBar({ items, basis }: { items: [string, string][]; basis?: string }) {
+  return (
+    <div className="rd-ctx" role="group" aria-label="Result context">
+      {items.map(([k, v]) => (
+        <span className="rd-ctx__item" key={k}>
+          <span className="rd-ctx__label">{k}</span>
+          <span className="rd-ctx__value">{v}</span>
+        </span>
+      ))}
+      {basis ? <span className="rd-ctx__basis">{basis}</span> : null}
+    </div>
+  );
+}
+
+/** Python big_value: large headline number with smaller decimals. */
+export function BigValue({ text, tone }: { text: string; tone?: Tone }) {
+  const { head, dec } = bigValueParts(text);
+  return (
+    <span className={tone ? `rd-big rd-big--${tone}` : "rd-big"}>
+      {head}
+      {dec !== null ? <span className="rd-big__dec">{dec}</span> : null}
+    </span>
+  );
+}
+
+/** Python stat_bar: label/value row with a coloured left bar. */
+export function StatBar({ label, value, tone = "muted" }: { label: string; value: string; tone?: Tone }) {
+  return (
+    <div className={`rd-bar rd-bar--${tone}`}>
+      <span>{label}</span>
+      <span className="rd-bar__val">{value}</span>
+    </div>
+  );
+}
+
+/** Python validation_checklist: research checks with an honest status pill. */
+export function Checklist({ checks }: { checks: CheckRow[] }) {
+  return (
+    <ul className="rd-checks" aria-label="Validation status">
+      {checks.map((c) => (
+        <li className="rd-check" key={c.title}>
+          <span className="rd-check__title">{c.title}</span>
+          <StatusPill label={c.label} tone={c.tone} />
+          {c.note ? <span className="rd-check__note">{c.note}</span> : null}
+        </li>
+      ))}
+    </ul>
   );
 }
