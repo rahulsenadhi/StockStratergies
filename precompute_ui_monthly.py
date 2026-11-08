@@ -17,7 +17,7 @@ from pathlib import Path
 import pandas as pd
 
 import master_dashboard as md
-from precompute_ui_home import _clean, write_snapshot
+from precompute_ui_home import _clean, _traces, write_snapshot
 
 BASE_DIR = Path(__file__).resolve().parent
 OUT = BASE_DIR / 'ui_monthly.json'
@@ -56,10 +56,7 @@ def _chart(eq: pd.DataFrame, colour: str) -> dict:
     for window in CHART_WINDOWS:
         shown = md._monthly_period_slice(eq, window)
         fig = md.chart_equity(shown, 'Portfolio_Value', md.S_MONTHLY, colour, 'Benchmark_Value')
-        out[window] = [{
-            'name': t.name, 'colour': t.line.color, 'dash': t.line.dash == 'dot',
-            'points': [[pd.Timestamp(x).strftime('%Y-%m-%d'), float(y)] for x, y in zip(t.x, t.y)],
-        } for t in fig.data]
+        out[window] = _traces(fig)
     return out
 
 

@@ -38,6 +38,14 @@ def _clean(value):
     return value
 
 
+def _traces(fig) -> list[dict]:
+    """Read a Plotly line figure's traces as plain data: name, colour, dotted flag, [date, y] points."""
+    return [{
+        'name': t.name, 'colour': t.line.color, 'dash': t.line.dash == 'dot',
+        'points': [[pd.Timestamp(x).strftime('%Y-%m-%d'), float(y)] for x, y in zip(t.x, t.y)],
+    } for t in fig.data]
+
+
 def _candidates(m: dict, i: dict, mo: dict) -> list[dict]:
     cands = md._home_candidates(m, i, mo)
     return [{
@@ -96,10 +104,10 @@ def build_ui_snapshot(m: dict, i: dict, mo: dict) -> dict:
     })
 
 
-def write_snapshot(snapshot: dict, path: Path) -> None:
-    """Write atomically so a reader never sees a half-written file."""
+def write_snapshot(snapshot: dict, path: Path, indent: int | None = 1) -> None:
+    """Write atomically so a reader never sees a half-written file (indent=None: compact, for big files)."""
     tmp = path.with_suffix('.json.tmp')
-    tmp.write_text(json.dumps(_clean(snapshot), ensure_ascii=False, indent=1), encoding='utf-8')
+    tmp.write_text(json.dumps(_clean(snapshot), ensure_ascii=False, indent=indent), encoding='utf-8')
     os.replace(tmp, path)
 
 
