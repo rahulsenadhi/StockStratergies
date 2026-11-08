@@ -3,11 +3,10 @@
 import { DeskTable } from "@/components/desk/desk-table";
 import { Checklist, EmptyState, SectionHead } from "@/components/desk/primitives";
 import { Tabs } from "@/components/desk/tabs";
-import { ExitResearch } from "@/components/desk/exit-research";
 import {
-  EMPTY_NO_REBALANCE, EXIT_TITLE, HOW_IT_WORKS, HOW_TO_READ, HOW_TO_READ_TITLE,
+  EMPTY_NO_REBALANCE, HOW_IT_WORKS, HOW_TO_READ, HOW_TO_READ_TITLE,
   REBALANCE_NOTE, TAB_TITLES, VALIDATION_META, VALIDATION_TITLE, rebalanceCells,
-  type CheckRow, type ExitRec, type RebalanceRow,
+  type CheckRow, type RebalanceRow,
 } from "@/lib/desk/monthly-text";
 import type { DeskColumn } from "@/lib/desk/table";
 
@@ -51,18 +50,16 @@ function RulesAndChecks({ checks, colour }: { checks: CheckRow[]; colour: string
 interface LowerTabsProps {
   rebalances: { total: number; rows: RebalanceRow[] };
   checks: CheckRow[];
-  exitRec: ExitRec | null;
   colour: string;
 }
 
-/** Python render_monthly st.tabs: Rebalance log / Rules and checks / Exit research. */
-export function LowerTabs({ rebalances, checks, exitRec, colour }: LowerTabsProps) {
-  const [reb, rules, exit] = TAB_TITLES;
+/** Python render_monthly st.tabs: Rebalance log / Rules and checks. */
+export function LowerTabs({ rebalances, checks, colour }: LowerTabsProps) {
+  const [reb, rules] = TAB_TITLES;
   return (
     <Tabs tabs={[
       { id: "rebalance", label: reb, content: <RebalanceLog rebalances={rebalances} /> },
       { id: "rules", label: rules, content: <RulesAndChecks checks={checks} colour={colour} /> },
-      { id: "exit", label: exit, content: <ExitResearch rec={exitRec} title={EXIT_TITLE} /> },
     ]} />
   );
 }

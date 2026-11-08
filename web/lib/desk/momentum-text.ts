@@ -446,3 +446,14 @@ export const EMPTY_NO_SIGNALS = {
 };
 export const CONTEXT_UNIVERSE = (total: number): string => `NSE + BSE, ${formatNumber(total, 0)} stocks`;
 export const CONTEXT_RULE = "New high above 220-day line · exit −15% or close below it";
+
+export const HOLD_EXIT_TITLE = "Hold and exit plan: Price strength (Momentum)";
+
+/** Extra Hold and exit rows from the current ATH view's health numbers. */
+export function holdExitExtras(h: Health): { label: string; value: string }[] {
+  return [
+    { label: "Trades in profit at exit",
+      value: h.win_rate == null ? DASH : `${pyFixed(h.win_rate, 0)}% of ${orDash(h.n_trades, String)}` },
+    { label: "Stayed above entry 20+ days", value: orDash(h.safe_20d_pct, (n) => `${pyFixed(n, 0)}%`) },
+  ];
+}

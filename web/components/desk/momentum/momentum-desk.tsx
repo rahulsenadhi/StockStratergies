@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { HoldExitCard } from "@/components/desk/hold-exit-card";
 import { SectionHead } from "@/components/desk/primitives";
 import { Segmented } from "@/components/desk/segmented";
 import { Funnel } from "@/components/desk/momentum/funnel";
@@ -8,7 +9,7 @@ import { LowerTabs } from "@/components/desk/momentum/lower-tabs";
 import { SetupsDesk } from "@/components/desk/momentum/setups-desk";
 import { SummaryCard } from "@/components/desk/momentum/summary-card";
 import {
-  ATH_NOTE, ATH_OPTIONS, ATH_SWITCH_LABEL, FUNNEL_NOTE, FUNNEL_TITLE, resolveSelected, type UiMomentum, type ViewKey,
+  ATH_NOTE, ATH_OPTIONS, ATH_SWITCH_LABEL, FUNNEL_NOTE, FUNNEL_TITLE, HOLD_EXIT_TITLE, holdExitExtras, resolveSelected, type UiMomentum, type ViewKey,
 } from "@/lib/desk/momentum-text";
 
 type AthOption = (typeof ATH_OPTIONS)[number];
@@ -29,6 +30,7 @@ export function MomentumDesk({ data, ticker }: { data: UiMomentum; ticker: strin
         </div>
         <p className="rd-note" style={{ margin: 0 }}>{ATH_NOTE}</p>
       </div>
+      <HoldExitCard rec={data.exit_rec} title={HOLD_EXIT_TITLE} extra={holdExitExtras(data.views[view].health)} />
       <SummaryCard summary={data.summary} chart={data.chart} health={data.views[view].health} />
       <SetupsDesk key={initial.symbol ?? ""} data={data} view={view} initial={initial} />
       {data.funnel ? (

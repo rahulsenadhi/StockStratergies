@@ -2,12 +2,15 @@ import { GlossaryDisclosure } from "@/components/desk/glossary";
 import { PageUpdateButton } from "@/components/desk/page-update-button";
 import { ResearchNotice } from "@/components/desk/notices";
 import { ContextBar, EmptyState, PageHeader, StatusPill } from "@/components/desk/primitives";
+import { HoldExitCard } from "@/components/desk/hold-exit-card";
+import { MonthlySelectionProvider } from "@/components/desk/monthly/selection";
+import { Top5Card } from "@/components/desk/monthly/top5-card";
 import { LowerTabs } from "@/components/desk/monthly/lower-tabs";
 import { RankingDesk } from "@/components/desk/monthly/ranking-desk";
 import { SummaryCard } from "@/components/desk/monthly/summary-card";
 import {
   CONTEXT_BASIS, CONTEXT_RULE, CONTEXT_UNIVERSE, EMPTY_NO_SIMULATION, FOOTER_CAPTION, LIVE_PILL, MONTHLY_SUB,
-  MONTHLY_TITLE, loadMonthly, rankingAge, resolveSelected, testPeriod, type UiMonthly,
+  HOLD_EXIT_TITLE, MONTHLY_TITLE, loadMonthly, rankingAge, resolveSelected, testPeriod, type UiMonthly,
 } from "@/lib/desk/monthly";
 import { savedDataAges } from "@/lib/desk/saved-ages";
 
@@ -27,8 +30,7 @@ function firstParam(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
-function Ranking({ data, ticker }: { data: UiMonthly; ticker: string | undefined }) {
-  const initial = resolveSelected(data.ranking, data.default_symbol, ticker);
+function Ranking({ data, initial }: { data: UiMonthly; initial: string | null }) {
   return (
     <RankingDesk key={initial ?? ""} ranking={data.ranking} filters={data.filters} initialSelected={initial}
       closes={data.closes} top5={data.top5} colour={data.colour} />
@@ -50,12 +52,15 @@ export default async function MonthlyPage({ searchParams }: { searchParams: Sear
 
   const data = res.data;
   const ticker = firstParam(params.ticker);
+  const initial = resolveSelected(data.ranking, data.default_symbol, ticker);
   if (data.summary === null) {
     return (
       <>
         {header}
         <EmptyState title={EMPTY_NO_SIMULATION.title} reason={EMPTY_NO_SIMULATION.reason} />
-        <Ranking data={data} ticker={ticker} />
+        <MonthlySelectionProvider key={initial ?? ""} initial={initial}>
+          <Ranking data={data} initial={initial} />
+        </MonthlySelectionProvider>
       </>
     );
   }
@@ -66,9 +71,13 @@ export default async function MonthlyPage({ searchParams }: { searchParams: Sear
       <ContextBar
         items={[["Universe", CONTEXT_UNIVERSE], ["Test period", testPeriod(data.summary)], ["Rule", CONTEXT_RULE]]}
         basis={CONTEXT_BASIS} />
-      <SummaryCard summary={data.summary} chart={data.chart} />
-      <Ranking data={data} ticker={ticker} />
-      <LowerTabs rebalances={data.rebalances} checks={data.checks} exitRec={data.exit_rec} colour={data.colour} />
+      <MonthlySelectionProvider key={initial ?? ""} initial={initial}>
+        <Top5Card ranking={data.ranking} top5={data.top5} />
+        <HoldExitCard rec={data.exit_rec} title={HOLD_EXIT_TITLE} />
+        <SummaryCard summary={data.summary} chart={data.chart} />
+        <Ranking data={data} initial={initial} />
+      </MonthlySelectionProvider>
+      <LowerTabs rebalances={data.rebalances} checks={data.checks} colour={data.colour} />
       <ResearchNotice />
       <p className="rd-note" style={{ margin: 0 }}>{FOOTER_CAPTION}</p>
       <GlossaryDisclosure />

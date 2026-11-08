@@ -111,11 +111,12 @@ describe("Monthly sections with partial data", () => {
     expect(html).not.toContain("desk-rail");
   });
 
-  it("rebalance tab shows its empty state and exit research its no-rec text", () => {
+  it("rebalance tab shows its empty state; the Exit research tab is gone", () => {
     const tabs = renderToStaticMarkup(h(LowerTabs, {
-      rebalances: { total: 0, rows: [] }, checks: [], exitRec: null, colour: "#7c9cff",
+      rebalances: { total: 0, rows: [] }, checks: [], colour: "#7c9cff",
     }));
     expect(tabs).toContain(EMPTY_NO_REBALANCE.title);
+    expect(tabs).not.toContain("Exit research");
     expect(renderToStaticMarkup(h(ExitResearch, { rec: null, title: "t" }))).toContain(EXIT_EMPTY);
   });
 });

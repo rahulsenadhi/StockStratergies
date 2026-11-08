@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { DeskTable } from "@/components/desk/desk-table";
-import { ExitResearch } from "@/components/desk/exit-research";
 import { PastTrades, type TradesControls } from "@/components/desk/momentum/past-trades";
 import { Tabs } from "@/components/desk/tabs";
 import {
@@ -31,7 +30,6 @@ export function LowerTabs({ data, view }: { data: UiMomentum; view: ViewKey }) {
           <div className="desk-stack" style={{ gap: 10 }}>
             <p className="rd-note" style={{ margin: 0 }}>{EXIT_RULES}</p>
             <p className="rd-note" style={{ margin: 0 }}>{BUY_NOW_NOTE}</p>
-            <ExitResearch rec={data.exit_rec} title="Exit research: Price strength (Momentum)" />
           </div>
         ),
       },

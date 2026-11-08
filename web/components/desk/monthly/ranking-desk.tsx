@@ -4,6 +4,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { DeskTable, NameCell } from "@/components/desk/desk-table";
 import { ChangePill, EmptyState, RailList, SectionHead, StatusPill } from "@/components/desk/primitives";
 import { Segmented } from "@/components/desk/segmented";
+import { useMonthlySelection } from "@/components/desk/monthly/selection";
 import { PriceChart } from "@/components/desk/monthly/price-chart";
 import {
   DETAIL_ROWS, EMPTY_NO_RANKING, MONTHLY_FILTERS, RANKING_META, RANKING_NOTE, RANKING_TITLE, TOP5_META, TOP5_TITLE,
@@ -39,7 +40,9 @@ interface RankingDeskProps {
 /** Python _render_monthly_ranking + _render_monthly_detail: filter, ranking table and the detail rail. */
 export function RankingDesk({ ranking, filters, initialSelected, closes, top5, colour }: RankingDeskProps) {
   const [pick, setPick] = useState<MonthlyFilter>("All 50");
-  const [selected, setSelected] = useState<string | null>(initialSelected);
+  const [localSelected, setLocalSelected] = useState<string | null>(initialSelected);
+  const shared = useMonthlySelection();
+  const selected = shared ? shared.selected : localSelected;
   const railRef = useRef<HTMLDivElement>(null);
   // A deep-linked row (e.g. ?ticker=HAL, rank 42) beyond the 15-row preview opens the full list so it is visible.
   const [startExpanded] = useState(() => ranking.findIndex((r) => r.symbol === initialSelected) >= PREVIEW_ROWS);
@@ -53,8 +56,11 @@ export function RankingDesk({ ranking, filters, initialSelected, closes, top5, c
   const row = ranking.find((r) => r.symbol === selected) ?? null;
 
   const select = (r: RankRow) => {
-    setSelected(r.symbol);
-    window.history.replaceState(null, "", `?ticker=${encodeURIComponent(r.symbol)}`);
+    if (shared) shared.select(r.symbol);
+    else {
+      setLocalSelected(r.symbol);
+      window.history.replaceState(null, "", `?ticker=${encodeURIComponent(r.symbol)}`);
+    }
     if (window.innerWidth < STACKED_MAX_WIDTH) railRef.current?.scrollIntoView({ block: "start" });
   };
 

@@ -1,6 +1,6 @@
 import { DeskTable } from "@/components/desk/desk-table";
 import { EmptyState } from "@/components/desk/primitives";
-import { ExitCurveChart } from "@/components/desk/monthly/exit-curve-chart";
+import { ExitCurveChart } from "@/components/desk/exit-curve-chart";
 import { EXIT_CAPTION, EXIT_EMPTY, EXIT_LABELS, exitTexts, type ExitRec } from "@/lib/desk/exit-text";
 import type { DeskColumn } from "@/lib/desk/table";
 

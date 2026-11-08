@@ -2,7 +2,7 @@
  * Pure (client-safe) exit research types, display mapper and copy, shared by the Monthly and
  * Momentum desk pages (master_dashboard.py _exit_playbook_card). No node:fs here.
  */
-import { orDash, pyFixed } from "@/lib/desk/format";
+import { LOW_SAMPLE_TRADES, formatSigned, orDash, pyFixed } from "@/lib/desk/format";
 
 /** Saved numbers that Python wrote as NaN arrive as null; `targets` may be missing (Python reads it with .get). */
 export interface ExitTarget {
@@ -54,3 +54,38 @@ export const EXIT_LABELS = {
   columns: ["Tier", "Profit target", "Book", "Hit rate (hist.)"],
 } as const;
 export const EXIT_EMPTY = "Exit Playbook: insufficient trade history to recommend a hold/exit plan yet.";
+
+// ---- Hold and exit plan card ----
+
+export const HOLD_EXIT_LABELS = {
+  hold: "Suggested hold",
+  winRate: "Success rate at that hold",
+  median: "Median return at that hold",
+  sellPlan: "Sell plan",
+  stop: "Stop level",
+  columns: ["Tier", "Sell at", "Sell this much", "Hit before (hist.)"],
+} as const;
+
+export const SMALL_SAMPLE_NOTE = `Small sample: fewer than ${LOW_SAMPLE_TRADES} past trades, so treat these numbers as rough.`;
+
+/** Plain statement that the numbers are history, never a promise. */
+export const HONESTY_NOTE = (lossPct: number) =>
+  `Past results, not a promise. At the suggested hold, ${lossPct}% of past trades still lost money.`;
+
+/** Display text for the Hold and exit plan card, from the saved exit_rec. */
+export function holdExitRows(rec: ExitRec) {
+  const t = exitTexts(rec);
+  const sample = rec.sample_size;
+  return {
+    hold: t.hold,
+    winRate: t.winRate,
+    median: orDash(rec.hold_median_return, (n) => `${formatSigned(n, 1)}%`),
+    stop: orDash(rec.stop_pct, (n) => `${pyFixed(n, 1)}%`),
+    basis: `Based on ${orDash(sample, String)} past trades`,
+    isSmallSample: sample != null && Number.isFinite(sample) && sample < LOW_SAMPLE_TRADES,
+    lossPct: rec.hold_win_rate == null || !Number.isFinite(rec.hold_win_rate)
+      ? null : Number(pyFixed((1 - rec.hold_win_rate) * 100, 0)),
+    dataQuality: rec.data_quality === "ohlcv" ? "daily OHLCV" : "close-only (approx.)",
+    targets: t.targets,
+  };
+}

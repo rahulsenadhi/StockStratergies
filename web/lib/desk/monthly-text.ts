@@ -215,11 +215,13 @@ export const DETAIL_ROWS = {
 } as const;
 export const priceChartLabel = (sessions: number, savedTo: string): string =>
   `Closing price · last ${sessions} sessions (saved to ${savedTo})`;
+export const TOP5_CARD_TITLE = "Model's top 5 for this month";
+export const TOP5_CARD_SUB = "The stocks the model would hold this month. A model list, not an instruction.";
 export const TOP5_TITLE = "Model top 5";
 export const TOP5_META = "RS score";
 export const exchangeLine = (symbol: string): string => `${symbol} · NSE`;
 
-export const TAB_TITLES = ["Rebalance log", "Rules and checks", "Exit research"] as const;
+export const TAB_TITLES = ["Rebalance log", "Rules and checks"] as const;
 
 export const HOW_IT_WORKS: { text: string; bold: boolean }[] = [
   { text: "How it works:", bold: true },
@@ -239,7 +241,7 @@ export const HOW_TO_READ =
 export const VALIDATION_TITLE = "Validation status";
 export const VALIDATION_META = "what has and has not been checked";
 
-export const EXIT_TITLE = "Exit research: Monthly stock rotation";
+export const HOLD_EXIT_TITLE = "Hold and exit plan: Monthly stock rotation";
 export const FOOTER_CAPTION =
   "Daily rankings are research candidates. The backtest rotates monthly; actual holdings are not tracked here.";
 
