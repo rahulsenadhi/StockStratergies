@@ -1,49 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { RefreshCw, SlidersHorizontal } from "lucide-react";
-import { runJobStream } from "@/lib/use-job-stream";
+import { useStrategyUpdate } from "@/lib/desk/use-strategy-update";
 import { errorHeadline, freshnessLabel, freshnessTone } from "@/lib/desk/format";
 import { oldestAge, type SavedAge } from "@/lib/desk/ages";
-import { UPDATE_STRATEGIES, type UpdateStrategy } from "@/lib/desk/update-steps";
-import type { UpdateResult } from "@/lib/desk/run-update";
+import { UPDATE_STRATEGIES } from "@/lib/desk/update-steps";
 import { StatusPill } from "@/components/desk/primitives";
-
-const MAX_LINES = 6;
 
 /** Sidebar bottom block, always visible: data age, Update all data, Update one strategy. */
 export function UpdatePanel({ ages }: { ages: SavedAge[] }) {
-  const router = useRouter();
-  const [running, setRunning] = useState<string | null>(null);
-  const [lines, setLines] = useState<string[]>([]);
-  const [results, setResults] = useState<UpdateResult[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { running, lines, results, error, start, dismiss } = useStrategyUpdate();
 
   const oldest = oldestAge(ages);
   const ageLine = oldest == null ? null
     : oldest.ageDays === 0 ? "All saved data updated today"
       : `Oldest saved data: ${oldest.name}, ${freshnessLabel(oldest.ageDays)}`;
-
-  async function start(strategy: "all" | UpdateStrategy) {
-    setRunning(strategy);
-    setLines([]);
-    setResults(null);
-    setError(null);
-    try {
-      const r = await runJobStream("/api/update", { strategy }, {
-        onLine: (l) => setLines((prev) => [...prev, l].slice(-MAX_LINES)),
-      });
-      if (r.status === 409 || r.status === 400) setError(String(r.data.error ?? "Update could not start."));
-      else if (Array.isArray(r.data.results)) setResults(r.data.results as UpdateResult[]);
-      else setError(String(r.data.error ?? "Update finished without a result."));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Update failed to start.");
-    } finally {
-      setRunning(null);
-      router.refresh();
-    }
-  }
 
   return (
     <div className="desk-pinned">
@@ -91,7 +62,7 @@ export function UpdatePanel({ ages }: { ages: SavedAge[] }) {
         <div className="rd-list" role="status">
           <div className="rd-list__head">
             Update results
-            <button type="button" className="desk-link" onClick={() => { setResults(null); setLines([]); }}>Dismiss</button>
+            <button type="button" className="desk-link" onClick={dismiss}>Dismiss</button>
           </div>
           {results.map((r) => (
             <div className="rd-li" key={r.strategy} style={{ alignItems: "flex-start" }}>

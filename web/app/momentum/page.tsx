@@ -1,5 +1,6 @@
 import { GlossaryDisclosure } from "@/components/desk/glossary";
 import { ResearchNotice } from "@/components/desk/notices";
+import { PageUpdateButton } from "@/components/desk/page-update-button";
 import { ContextBar, EmptyState, PageHeader, StatusPill } from "@/components/desk/primitives";
 import { MomentumDesk } from "@/components/desk/momentum/momentum-desk";
 import { freshnessLabel, freshnessTone } from "@/lib/desk/format";
@@ -31,7 +32,8 @@ export default async function MomentumPage({ searchParams }: { searchParams: Sea
   const header = (
     <PageHeader title={MOMENTUM_TITLE} sub={MOMENTUM_SUB}
       right={<><StatusPill label={`Signals ${freshnessLabel(age)}`} tone={freshnessTone(age)} />{" "}
-        <StatusPill label="“Buy now” is a model label" tone="muted" /></>} />
+        <StatusPill label="“Buy now” is a model label" tone="muted" />{" "}
+        <PageUpdateButton strategy="Momentum" label="Update Momentum data" /></>} />
   );
   if (!res.ok) return <>{header}<EmptyState title={NOT_READY_TITLE} reason={NOT_READY[res.reason]} /></>;
 

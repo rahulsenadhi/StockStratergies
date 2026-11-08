@@ -7,6 +7,9 @@ import {
   emptyNoPrices, type RankRow, type UiMonthly,
 } from "@/lib/desk/monthly-text";
 
+// The page header holds a client update button that calls useRouter, which needs a mounted app router.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }));
+
 const load = vi.hoisted(() => ({ result: null as MonthlyResult | null }));
 vi.mock("@/lib/desk/monthly", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/desk/monthly")>()),

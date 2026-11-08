@@ -1,4 +1,5 @@
 import { GlossaryDisclosure } from "@/components/desk/glossary";
+import { PageUpdateButton } from "@/components/desk/page-update-button";
 import { ResearchNotice } from "@/components/desk/notices";
 import { ContextBar, EmptyState, PageHeader, StatusPill } from "@/components/desk/primitives";
 import { LowerTabs } from "@/components/desk/monthly/lower-tabs";
@@ -40,7 +41,8 @@ export default async function MonthlyPage({ searchParams }: { searchParams: Sear
   const age = rankingAge(ages.find((a) => a.name === "Monthly")?.ageDays ?? null);
   const header = (
     <PageHeader title={MONTHLY_TITLE} sub={MONTHLY_SUB}
-      right={<><StatusPill label={LIVE_PILL} tone="info" />{" "}<StatusPill label={age.label} tone={age.tone} /></>} />
+      right={<><StatusPill label={LIVE_PILL} tone="info" />{" "}<StatusPill label={age.label} tone={age.tone} />{" "}
+        <PageUpdateButton strategy="Monthly" label="Update Monthly data" /></>} />
   );
   if (!res.ok) {
     return <>{header}<EmptyState title={NOT_READY_TITLE} reason={NOT_READY[res.reason]} /></>;
