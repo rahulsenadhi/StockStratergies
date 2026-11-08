@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {
-  conditionTitle, exitBadge, FUNNEL_LABELS, healthStats, loadMomentum, recentCells, resolveSelected, signalCells,
+  conditionTitle, countsLine, exchangeOf, exitBadge, OLD_APP_LINK, FUNNEL_LABELS, healthStats, loadMomentum, recentCells, resolveSelected, signalCells,
   tabLabels, tabRows, tradeCells, tradesCaption, visibleTrades,
   type Health, type MomentumSummary, type RecentRow, type SignalRow, type TradeRow, type UiMomentum,
 } from "@/lib/desk/momentum";
@@ -234,4 +234,18 @@ describe.skipIf(!PY)("Momentum parity with Streamlit", () => {
     expect(rows[3].sub).toBe(expected.health.medianSub);
     expect(d.views.all.counts).toEqual(expected.counts);
   }, 180_000);
+});
+
+describe("exchangeOf / countsLine / old-app link", () => {
+  test("exchangeOf labels .BO symbols BSE and everything else NSE", () => {
+    expect(exchangeOf("519477.BO")).toBe("BSE");
+    expect(exchangeOf("TITAN")).toBe("NSE");
+    expect(exchangeOf("TITAN.NS")).toBe("NSE");
+  });
+  test("countsLine shows the saved ATH, clean and fast counts", () => {
+    expect(countsLine({ ath: 4, clean: 21, fast: 9 })).toBe("All-time-high entries 4 · Clean charts 21 · Fast recovery 9");
+  });
+  test("old-app link text is the approved wording", () => {
+    expect(OLD_APP_LINK).toBe("Full indicator chart and single-stock test: open in the old app");
+  });
 });

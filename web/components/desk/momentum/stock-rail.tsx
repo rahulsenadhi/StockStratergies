@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { EmptyState, SectionHead, StatusPill } from "@/components/desk/primitives";
 import { RailChart } from "@/components/desk/momentum/rail-chart";
 import { STREAMLIT_URL } from "@/lib/desk/nav";
-import { OLD_APP_LINK, conditionTitle as conditionTitleOf, signalCells, type SignalRow, type StockDetail } from "@/lib/desk/momentum-text";
+import { OLD_APP_LINK, exchangeOf, conditionTitle as conditionTitleOf, signalCells, type SignalRow, type StockDetail } from "@/lib/desk/momentum-text";
 import type { Tone } from "@/lib/desk/format";
 
 export function signalTone(signal: string): Tone {
@@ -45,7 +45,7 @@ export function StockRail({ stock, detail, colour }: { stock: RailStock; detail:
   return (
     <>
       <section className="rd-list" aria-label={`${stock.company} detail`}>
-        <div className="rd-li"><span className="rd-li__sub">{`${stock.symbol} · NSE`}</span></div>
+        <div className="rd-li"><span className="rd-li__sub">{`${stock.symbol} · ${exchangeOf(stock.symbol)}`}</span></div>
         <div className="rd-li"><span className="desk-rail__title">{stock.company}</span></div>
         <div className="rd-li">
           <span className="rd-li__val" style={{ fontSize: "var(--rd-fs-lg)", fontWeight: 600 }}>{stock.price}</span>

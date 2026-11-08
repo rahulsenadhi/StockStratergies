@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { DeskTable, NameCell } from "@/components/desk/desk-table";
 import { StatusPill } from "@/components/desk/primitives";
 import { Segmented } from "@/components/desk/segmented";
@@ -11,6 +11,18 @@ import {
 import type { DeskColumn } from "@/lib/desk/table";
 
 const cells = tradeCells;
+
+/** Filter state lives in the parent so it survives switching lower tabs. */
+export interface TradesControls {
+  period: TradePeriod;
+  setPeriod: (p: TradePeriod) => void;
+  year: number | null;
+  setYear: (y: number | null) => void;
+  strict: boolean;
+  setStrict: (b: boolean) => void;
+  allCols: boolean;
+  setAllCols: (b: boolean) => void;
+}
 
 const COLUMNS: DeskColumn<TradeRow>[] = [
   { key: "stock", label: "Stock", kind: "name", priority: 1, sortValue: (r) => r.symbol,
@@ -30,12 +42,9 @@ const COLUMNS: DeskColumn<TradeRow>[] = [
 ];
 
 /** Past trades for the chosen switch view: period, year and clean-signals filters, then the table. */
-export function PastTrades({ data, view }: { data: UiMomentum; view: ViewKey }) {
-  const [period, setPeriod] = useState<TradePeriod>("All");
+export function PastTrades({ data, view, controls }: { data: UiMomentum; view: ViewKey; controls: TradesControls }) {
+  const { period, setPeriod, year, setYear, strict, setStrict, allCols, setAllCols } = controls;
   const years = data.trade_filters.years;
-  const [year, setYear] = useState<number | null>(years[0] ?? null);
-  const [strict, setStrict] = useState(false);
-  const [allCols, setAllCols] = useState(false);
 
   const { rows, hidden } = useMemo(() => visibleTrades(data, view, period, year, strict), [data, view, period, year, strict]);
   const total = data.views[view].trade_ids.length;

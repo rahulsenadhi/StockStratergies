@@ -6,7 +6,7 @@ import { ChangePill, EmptyState, SectionHead, StatusPill } from "@/components/de
 import { Tabs } from "@/components/desk/tabs";
 import { signalTone, StockRail, type RailStock } from "@/components/desk/momentum/stock-rail";
 import {
-  EMPTY_NO_SIGNALS, HIST_NOTE, RECENT_NOTE, SETUPS_META, SETUPS_TITLE, recentCells, signalCells, tabLabels, tabRows,
+  EMPTY_NO_SIGNALS, HIST_NOTE, RAIL_PLACEHOLDER, countsLine, exchangeOf, RECENT_NOTE, SETUPS_META, SETUPS_TITLE, recentCells, signalCells, tabLabels, tabRows,
   type RecentRow, type SetupTab, type SignalRow, type UiMomentum, type ViewKey,
 } from "@/lib/desk/momentum-text";
 import type { DeskColumn } from "@/lib/desk/table";
@@ -14,7 +14,7 @@ import type { DeskColumn } from "@/lib/desk/table";
 /** Below this width the rail stacks under the table, so a row tap scrolls the rail into view. */
 const STACKED_MAX_WIDTH = 1200;
 
-const sub = (r: SignalRow) => (r.company === r.symbol ? "NSE" : `${r.symbol} · NSE`);
+const sub = (r: SignalRow) => (r.company === r.symbol ? exchangeOf(r.symbol) : `${r.symbol} · ${exchangeOf(r.symbol)}`);
 const cells = signalCells;
 
 const COMPACT: DeskColumn<SignalRow>[] = [
@@ -46,7 +46,7 @@ const EXTRA: DeskColumn<SignalRow>[] = [
 ];
 
 const RECENT_COLUMNS: DeskColumn<RecentRow>[] = [
-  { key: "stock", label: "Stock", kind: "name", priority: 1, sortValue: (r) => r.symbol, render: (r) => <NameCell title={r.symbol} sub="NSE" /> },
+  { key: "stock", label: "Stock", kind: "name", priority: 1, sortValue: (r) => r.symbol, render: (r) => <NameCell title={r.symbol} sub={exchangeOf(r.symbol)} /> },
   { key: "days", label: "Days ago", kind: "num", priority: 1, sortValue: (r) => r.days_ago, render: (r) => recentCells(r).daysAgo },
   { key: "bkd", label: "Breakout date", kind: "text", priority: 2, sortValue: (r) => r.bk_date, render: (r) => recentCells(r).bkDate },
   { key: "bkp", label: "Breakout price", kind: "num", priority: 2, sortValue: (r) => r.bk_price, render: (r) => recentCells(r).bkPrice },
@@ -135,13 +135,15 @@ export function SetupsDesk({ data, view, initial }: SetupsDeskProps) {
               <input type="checkbox" checked={allCols} onChange={(e) => setAllCols(e.target.checked)} /> All columns
             </label>
           )} />
+        <p className="rd-note" style={{ margin: 0 }}>{countsLine(data.views[view].counts)}</p>
         <Tabs value={tab} onChange={(id) => setTab(id as SetupTab)}
           tabs={labels.map((l) => ({ id: l.id, label: l.label, content: panel }))} />
       </section>
       <div className="desk-rail desk-stack" ref={railRef}>
         {stock ? (data.details[stock.symbol]
           ? <StockRail stock={stock} detail={data.details[stock.symbol]} colour={data.colour} />
-          : <EmptyState title={`No saved details for ${stock.symbol}.`} />) : null}
+          : <EmptyState title={`No saved details for ${stock.symbol}.`} />)
+          : <EmptyState title={RAIL_PLACEHOLDER.title} reason={RAIL_PLACEHOLDER.reason} />}
       </div>
     </div>
   );

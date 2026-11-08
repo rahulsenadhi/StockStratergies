@@ -422,7 +422,22 @@ export const COLUMN_GUIDE: [string, string][] = [
   ["Score", "Overall quality score (0–10). Higher = better setup. Sort by this to prioritise"],
 ];
 
-export const OLD_APP_LINK = "Run a single-stock backtest in the old app";
+export const RAIL_PLACEHOLDER = {
+  title: "Pick a stock",
+  reason: "Select a row in the table to see its checks and chart.",
+};
+
+/** BSE-only symbols carry the .BO suffix in the saved data; everything else is NSE. */
+export function exchangeOf(symbol: string): "NSE" | "BSE" {
+  return symbol.toUpperCase().endsWith(".BO") ? "BSE" : "NSE";
+}
+
+/** One line under the setups head: the saved counts for the current view. */
+export function countsLine(counts: { ath: number; clean: number; fast: number }): string {
+  return `All-time-high entries ${counts.ath} · Clean charts ${counts.clean} · Fast recovery ${counts.fast}`;
+}
+
+export const OLD_APP_LINK = "Full indicator chart and single-stock test: open in the old app";
 export const EMPTY_NO_SIGNALS = {
   title: "No signals found today",
   reason:
