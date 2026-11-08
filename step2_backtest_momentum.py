@@ -29,7 +29,9 @@ class MomentumRotationBacktest:
         self.monthly_prices = {}
         self.benchmark = None
         self.benchmark_monthly = None
-        
+        self.cutoff_date = None          # set by load_data(); "today" for the run
+        self.last_month_partial = False  # last monthly row is an unfinished month
+
         self.portfolio = {}  # {ticker: shares}
         self.cash = initial_capital
         self.portfolio_value = []
@@ -42,7 +44,8 @@ class MomentumRotationBacktest:
         
         # Use today as cutoff so backtest always includes the latest available data
         cutoff_date = pd.Timestamp(datetime.now().date())
-        
+        self.cutoff_date = cutoff_date
+
         # Load benchmark
         benchmark_file = self.data_folder / 'NIFTYBEES.NS.csv'
         if not benchmark_file.exists():
@@ -100,10 +103,30 @@ class MomentumRotationBacktest:
         for ticker, prices in self.prices.items():
             self.monthly_prices[ticker] = prices.resample('ME').last()
 
+        self._date_unfinished_month()
+
         print(f"  Date range: {self.benchmark_monthly.index[0].date()} "
               f"to {self.benchmark_monthly.index[-1].date()}")
         print(f"  Monthly periods: {len(self.benchmark_monthly)}\n")
     
+    def _date_unfinished_month(self):
+        """resample('ME') labels every month with its calendar month-end, even
+        the month still in progress (a 7 Nov run gave a '30 Nov' row). When the
+        run date is before that month-end, relabel the last row with the real
+        last trading day and flag it, so run_backtest marks it to market
+        without rebalancing on a few days of returns."""
+        cutoff = self.cutoff_date if self.cutoff_date is not None \
+            else pd.Timestamp(datetime.now().date())
+        month_end = self.benchmark_monthly.index[-1]
+        last_day = self.benchmark.index[-1]
+        self.last_month_partial = cutoff < month_end and last_day < month_end
+        if not self.last_month_partial:
+            return
+        self.benchmark_monthly = self.benchmark_monthly.rename({month_end: last_day})
+        for ticker, monthly in self.monthly_prices.items():
+            if monthly.index[-1] == month_end:
+                self.monthly_prices[ticker] = monthly.rename({month_end: last_day})
+
     def calculate_relative_strength(self, month_idx):
         """Calculate RS scores for all stocks at given month."""
         if month_idx < 1:  # Need previous month for calculation
@@ -227,8 +250,10 @@ class MomentumRotationBacktest:
         for month_idx in range(len(months)):
             curr_date = months[month_idx]
             
-            # For first month, just track value (no rebalancing yet)
-            if month_idx == 0:
+            # For first month, just track value (no rebalancing yet).
+            # An unfinished last month is only marked to market as well.
+            is_unfinished = self.last_month_partial and month_idx == len(months) - 1
+            if month_idx == 0 or is_unfinished:
                 port_value = self.calculate_portfolio_value(month_idx)
                 self.portfolio_dates.append(curr_date)
                 self.portfolio_value.append(port_value)
