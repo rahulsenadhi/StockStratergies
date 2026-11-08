@@ -189,6 +189,28 @@ def test_criteria_restores_st_on_error(pre, mo, monkeypatch):
     assert details['AAA']['conditions'] is None and 'ZeroDivisionError' in details['AAA']['note']
 
 
+def test_unparsed_criteria_gets_note(pre, mo, monkeypatch, capsys):
+    monkeypatch.setattr(_md, '_render_criteria_panel', lambda t: _md.st.markdown('<div>no blocks</div>'))
+    d = pre.build_ui_momentum(mo)['details']['AAA']
+    assert d['conditions'] is None
+    assert d['note'] == 'Criteria could not be read from the saved price data.'
+    assert 'warning: AAA criteria not parsed (0 blocks)' in capsys.readouterr().err
+
+
+def test_nan_level_becomes_none(pre, mo):
+    mo['signals'].loc[0, '52W High'] = np.nan
+    mo['recent_breakouts'].loc[0, 'Bk Price (₹)'] = np.nan
+    details = pre.build_ui_momentum(mo)['details']
+    assert details['AAA']['chart'] is None or details['AAA']['chart']['level'] is None
+    assert details['DDD']['chart'] is None or details['DDD']['chart']['level'] is None
+
+
+def test_nan_level_with_chart_file(pre, mo, isolated):
+    _write_csv(isolated, 'AAA')
+    mo['signals'].loc[0, '52W High'] = np.nan
+    assert pre.build_ui_momentum(mo)['details']['AAA']['chart']['level'] is None
+
+
 def test_chart_last_90_and_level(pre, mo, isolated):
     for s in ('AAA', 'DDD'):
         _write_csv(isolated, s)

@@ -2,10 +2,11 @@
 """Save the Momentum page's data for the Next.js Research Desk (web/).
 
 Calls the same master_dashboard.py functions Streamlit's render_momentum uses, so both
-apps show the same numbers. No formulas live here, with three exceptions copied from
-render_momentum (each has a comment naming its source line): the ATH-only filter, the
-past-trade period cutoffs and the strict-mode mask. The protected-file checksum on
-master_dashboard.py is the guard against these drifting.
+apps show the same numbers. No formulas live here. Rules copied from render_momentum,
+each with a comment naming its source line: the ATH-only filter, the past-trade period
+cutoffs, the strict-mode mask, the signal counts (n_bk ... n_fast), the Entry Type names
+and Recovery text of the trades table, and the funnel's bull/bear fallback. The
+protected-file checksum on master_dashboard.py is the guard against these drifting.
 
 Run:  python precompute_ui_momentum.py
 Output (project root):  ui_momentum.json   (schema version 1)
@@ -28,6 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent
 OUT = BASE_DIR / 'ui_momentum.json'
 MOMENTUM_VERSION = 1
 CHART_SESSIONS = 90       # the detail chart keeps the last 90 sessions
+CRITERIA_BLOCKS = 7       # F1-F6 plus the breakout trigger
 TABS = ('BUY NOW', 'WATCH', 'FORMING')
 FUNNEL_KEYS = ('total', 'sufficient_data', 'f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'vol_bk')
 TONES = {'var(--success)': 'gain', 'var(--warning)': 'warn', 'var(--destructive)': 'loss'}
@@ -147,6 +149,7 @@ def _sorted_trades(trades) -> pd.DataFrame:
 
 
 def _recovery(r: pd.Series):
+    # Recovery text copied from render_momentum (master_dashboard.py ~7502-7505).
     speed, days = _get(r, 'Recovery_Speed'), _get(r, 'Recovery_Days')
     if speed is None:
         return None
@@ -159,6 +162,7 @@ def _date(value):
 
 
 def _trade_rows(tr: pd.DataFrame) -> list[dict]:
+    # Entry Type names copied from render_momentum (master_dashboard.py ~7500-7501).
     names = {'ATH': 'All-time high', '52W_HIGH_FALLBACK': '52W high'}
     rows = []
     for i, r in tr.iterrows():
@@ -231,7 +235,10 @@ def _criteria(symbol: str) -> tuple[list[dict] | None, str | None]:
     conds = [{'ok': kind == 'crit-ok', 'label': html.unescape(label).strip(),
               'sub': html.unescape(sub).strip(), 'detail': html.unescape(detail).strip()}
              for block in rec.blocks for kind, label, sub, detail in _CRIT_BLOCK.findall(block)]
-    return conds or None, None
+    if len(conds) < CRITERIA_BLOCKS:
+        print(f'warning: {symbol} criteria not parsed ({len(conds)} blocks)', file=sys.stderr)
+        return None, 'Criteria could not be read from the saved price data.'
+    return conds, None
 
 
 def _chart_path(symbol: str) -> Path | None:
@@ -257,10 +264,14 @@ def _chart(symbol: str, level: dict | None) -> dict | None:
             'ema220': _points(tail['ema220']), 'level': level}
 
 
+def _level(label: str, value) -> dict | None:
+    return None if value is None or pd.isna(value) else {'label': label, 'value': value}
+
+
 def _details(sigs: pd.DataFrame, recent: pd.DataFrame, trades) -> dict:
-    levels = {_symbol(r['Ticker']): {'label': 'Breakout price', 'value': r['Bk Price (₹)']}
+    levels = {_symbol(r['Ticker']): _level('Breakout price', r['Bk Price (₹)'])
               for _, r in recent.iterrows()}
-    levels.update({_symbol(r['Ticker']): {'label': '52-week high', 'value': _get(r, '52W High')}
+    levels.update({_symbol(r['Ticker']): _level('52-week high', _get(r, '52W High'))
                    for _, r in sigs.iterrows()})
     counts = trades['Ticker'].map(_symbol).value_counts() if trades is not None and not trades.empty else {}
     out = {}
