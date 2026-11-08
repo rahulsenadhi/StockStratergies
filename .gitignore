@@ -47,3 +47,6 @@ ui_momentum.json.tmp
 ui_momentum_charts/
 ui_ipo.json
 ui_ipo.json.tmp
+
+# user portfolio data (never committed)
+portfolio/
