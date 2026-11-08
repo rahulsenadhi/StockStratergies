@@ -6,6 +6,9 @@
 import {
   formatChange, formatRupees, formatSigned, orDash, pyFixed, freshnessLabel, freshnessTone, type Direction, type Tone,
 } from "@/lib/desk/format";
+import type { ExitRec } from "@/lib/desk/exit-text";
+
+export { EXIT_CAPTION, EXIT_EMPTY, EXIT_LABELS, exitTexts, type ExitRec, type ExitTarget } from "@/lib/desk/exit-text";
 
 export type ChartWindow = "1Y" | "3Y" | "All";
 export const CHART_WINDOWS: ChartWindow[] = ["1Y", "3Y", "All"];
@@ -61,26 +64,6 @@ export interface CheckRow {
   label: string;
   tone: Tone;
   note: string;
-}
-
-/** Saved numbers that Python wrote as NaN arrive as null; `targets` may be missing (Python reads it with .get). */
-export interface ExitTarget {
-  pct: number | null;
-  book_pct: number | null;
-  hit_rate: number | null;
-}
-
-export interface ExitRec {
-  strategy?: string;
-  bucket?: string;
-  hold_days: number | null;
-  hold_median_return: number | null;
-  hold_win_rate: number | null;
-  targets?: ExitTarget[] | null;
-  stop_pct: number | null;
-  sample_size: number | null;
-  data_quality: string;
-  curve?: Record<string, number | null>[];
 }
 
 export interface UiMonthly {
@@ -197,25 +180,6 @@ export const REBALANCE_NOTE = (total: number): string =>
   `Latest 12 of ${total} monthly rebalances, newest first. ` +
   "Bought = new entrant into the top 5. Sold = fell out of the top 5.";
 
-// ---- exit research (_exit_playbook_card) ----------------------------------------------------------
-
-export function exitTexts(rec: ExitRec) {
-  const dq = rec.data_quality === "ohlcv" ? "daily OHLCV" : "close-only (approx.)";
-  return {
-    hold: orDash(rec.hold_days, (n) => `${n} days`),
-    median: orDash(rec.hold_median_return, (n) => `${pyFixed(n, 1)}%`),
-    winRate: orDash(rec.hold_win_rate, (n) => `${pyFixed(n * 100, 0)}%`),
-    targets: (rec.targets ?? []).map((t, n) => ({
-      tier: `T${n + 1}`,
-      target: orDash(t.pct, (v) => `+${pyFixed(v, 1)}%`),
-      book: orDash(t.book_pct, (v) => `${v}%`),
-      hit: orDash(t.hit_rate, (v) => `${pyFixed(v * 100, 0)}%`),
-    })),
-    caption: `Stop level: ${orDash(rec.stop_pct, (n) => `${pyFixed(n, 1)}%`)}  -  ` +
-      `sample: ${orDash(rec.sample_size, String)} trades  -  data: ${dq}`,
-  };
-}
-
 // ---- copy -------------------------------------------------------------------------------------------
 
 export const MONTHLY_TITLE = "Monthly stock rotation";
@@ -276,18 +240,6 @@ export const VALIDATION_TITLE = "Validation status";
 export const VALIDATION_META = "what has and has not been checked";
 
 export const EXIT_TITLE = "Exit research: Monthly stock rotation";
-export const EXIT_CAPTION =
-  "Exploratory historical analysis. Suggested targets and stops are not necessarily the active strategy exits; " +
-  "no out-of-sample winner established.";
-export const EXIT_LABELS = {
-  hold: "Exploratory hold",
-  holdHelp: "Trading days that historically maximised median return per unit of drawdown.",
-  median: "Median return at hold",
-  winRate: "Win rate at hold",
-  columns: ["Tier", "Profit target", "Book", "Hit rate (hist.)"],
-} as const;
-export const EXIT_EMPTY = "Exit Playbook: insufficient trade history to recommend a hold/exit plan yet.";
-
 export const FOOTER_CAPTION =
   "Daily rankings are research candidates. The backtest rotates monthly; actual holdings are not tracked here.";
 

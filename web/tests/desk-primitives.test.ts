@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { BigValue, Checklist, ContextBar, StatBar } from "@/components/desk/primitives";
 import { Tabs } from "@/components/desk/tabs";
 import { GlossaryDisclosure } from "@/components/desk/glossary";
+import { ExitResearch } from "@/components/desk/exit-research";
+import { EXIT_EMPTY } from "@/lib/desk/exit-text";
 import { GLOSSARY } from "@/lib/glossary";
 
 const render = (el: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(el);
@@ -79,5 +81,20 @@ describe("GlossaryDisclosure", () => {
     const html = render(h(GlossaryDisclosure));
     expect(html).toContain("Glossary — What do these words mean?");
     for (const g of Object.values(GLOSSARY)) expect(html).toContain(g.label.replace(/&/g, "&amp;"));
+  });
+});
+
+describe("ExitResearch", () => {
+  it("renders the empty text when there is no recommendation", () => {
+    expect(render(h(ExitResearch, { rec: null, title: "x" }))).toContain(EXIT_EMPTY);
+  });
+  it("renders the given title with a recommendation", () => {
+    const html = render(h(ExitResearch, {
+      title: "Exit research: Test page",
+      rec: { hold_days: 2, hold_median_return: 0.44, hold_win_rate: 0.56, stop_pct: -12.8, sample_size: 152,
+        data_quality: "close", targets: [{ pct: 7.6, book_pct: 40, hit_rate: 0.6 }] },
+    }));
+    expect(html).toContain("Exit research: Test page");
+    expect(html).toContain("2 days");
   });
 });

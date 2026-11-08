@@ -16,7 +16,8 @@ vi.mock("@/lib/desk/monthly", async (importOriginal) => ({
 const { default: MonthlyPage } = await import("@/app/monthly/page");
 const { RankingDesk } = await import("@/components/desk/monthly/ranking-desk");
 const { SummaryCard } = await import("@/components/desk/monthly/summary-card");
-const { ExitResearch, LowerTabs } = await import("@/components/desk/monthly/lower-tabs");
+const { LowerTabs } = await import("@/components/desk/monthly/lower-tabs");
+const { ExitResearch } = await import("@/components/desk/exit-research");
 
 const row = (rank: number, symbol: string, company: string): RankRow => ({
   rank, ticker: `${symbol}.NS`, symbol, company, price: 100 + rank, month_ret: 5 - rank, bench_ret: 1, rs: 4 - rank,
@@ -112,7 +113,7 @@ describe("Monthly sections with partial data", () => {
       rebalances: { total: 0, rows: [] }, checks: [], exitRec: null, colour: "#7c9cff",
     }));
     expect(tabs).toContain(EMPTY_NO_REBALANCE.title);
-    expect(renderToStaticMarkup(h(ExitResearch, { rec: null }))).toContain(EXIT_EMPTY);
+    expect(renderToStaticMarkup(h(ExitResearch, { rec: null, title: "t" }))).toContain(EXIT_EMPTY);
   });
 });
 
@@ -135,13 +136,13 @@ describe("/monthly with null saved numbers", () => {
   });
 
   it("formats null exit numbers and missing targets as dashes", () => {
-    const html = renderToStaticMarkup(h(ExitResearch, { rec: {
+    const html = renderToStaticMarkup(h(ExitResearch, { title: "t", rec: {
       hold_days: null, hold_median_return: null, hold_win_rate: null, stop_pct: null, sample_size: null,
       data_quality: "close", targets: [{ pct: null, book_pct: null, hit_rate: null }],
     } }));
     expect(html).toContain("Stop level: —");
     expect(html).not.toMatch(/NaN|null|undefined/);
-    const noTargets = renderToStaticMarkup(h(ExitResearch, { rec: {
+    const noTargets = renderToStaticMarkup(h(ExitResearch, { title: "t", rec: {
       hold_days: 2, hold_median_return: 0.44, hold_win_rate: 0.56, stop_pct: -12.8, sample_size: 152, data_quality: "close",
     } }));
     expect(noTargets).toContain("2 days");
