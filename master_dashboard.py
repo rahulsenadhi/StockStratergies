@@ -4856,15 +4856,16 @@ _PIPELINES: dict[str, list[list[str]]] = {
 # the underlying prices changed. Only the feeds a strategy actually feeds are run,
 # to keep the click responsive.
 _PRECOMPUTE_FOR: dict[str, list[str]] = {
-    # precompute_ui_monthly.py then precompute_ui_home.py (last) save the Monthly and
-    # Home data for the Next.js app in web/. PEAD has no Monthly data.
+    # precompute_ui_home.py saves Home's data for the Next.js app in web/;
+    # precompute_ui_monthly.py (last) saves the Monthly page's data. It runs after Home
+    # so a failure there cannot stop Home updating. PEAD has no Monthly data.
     'Monthly':  ['precompute_suggestions.py', 'precompute_insights.py',
-                 'precompute_ui_monthly.py', 'precompute_ui_home.py'],
+                 'precompute_ui_home.py', 'precompute_ui_monthly.py'],
     'IPO':      ['precompute_exit_recommendations.py', 'precompute_suggestions.py',
-                 'precompute_insights.py', 'precompute_ui_monthly.py', 'precompute_ui_home.py'],
+                 'precompute_insights.py', 'precompute_ui_home.py', 'precompute_ui_monthly.py'],
     'Momentum': ['precompute_momentum_signals.py', 'precompute_exit_recommendations.py',
                  'precompute_suggestions.py', 'precompute_insights.py',
-                 'precompute_ui_monthly.py', 'precompute_ui_home.py'],
+                 'precompute_ui_home.py', 'precompute_ui_monthly.py'],
     'PEAD':     ['precompute_pead_screener.py', 'precompute_insights.py', 'precompute_ui_home.py'],
 }
 

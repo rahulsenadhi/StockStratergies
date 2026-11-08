@@ -114,6 +114,18 @@ def test_closes_last_126_and_missing_file(pre, m, monkeypatch):
     assert 'BBB' not in out['closes']
 
 
+def test_closes_skip_ticker_with_unreadable_history(pre, m, monkeypatch, capsys):
+    good = pd.Series(np.arange(10.0), index=pd.date_range('2026-01-01', periods=10, freq='D'))
+    bad = pd.Series(np.arange(10.0), index=[f'bad-{k}' for k in range(10)])   # text, not dates
+    histories = {'AAA.NS': good, 'BBB.NS': bad, 'CCC.NS': good}
+    monkeypatch.setattr(_md, '_monthly_close_history', lambda t: histories[t])
+    out = pre.build_ui_monthly(m)
+    assert 'BBB' not in out['closes']
+    assert set(out['closes']) == {'AAA', 'CCC'}
+    err = capsys.readouterr().err
+    assert 'BBB' in err and 'AAA' not in err and 'CCC' not in err
+
+
 def test_rebalances_latest_12_newest_first(pre, m):
     m['rebalance'] = _rebalance(14)
     out = pre.build_ui_monthly(m)

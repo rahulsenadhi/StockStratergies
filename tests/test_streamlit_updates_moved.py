@@ -68,6 +68,7 @@ def test_staleness_banner_has_no_update_button(rec, monkeypatch):
 def test_step_lists_still_defined_for_the_web_app():
     assert set(md._PIPELINES) == {'Monthly', 'IPO', 'Momentum', 'PEAD'}
     assert all('precompute_ui_home.py' in v for v in md._PRECOMPUTE_FOR.values())
-    assert all(v.index('precompute_ui_monthly.py') == v.index('precompute_ui_home.py') - 1
+    assert all('precompute_ui_monthly.py' in v
+               and v.index('precompute_ui_monthly.py') > v.index('precompute_ui_home.py')
                for k, v in md._PRECOMPUTE_FOR.items() if k != 'PEAD')
     assert 'precompute_ui_monthly.py' not in md._PRECOMPUTE_FOR['PEAD']

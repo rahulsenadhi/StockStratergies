@@ -2,13 +2,15 @@
 """Save the Monthly stock rotation page's data for the Next.js Research Desk (web/).
 
 Calls the same master_dashboard.py functions Streamlit's render_monthly uses, so both
-apps show the same numbers. No formulas live here — this only collects and saves.
+apps show the same numbers. No formulas live here, with one exception: _benchmark, which
+is copied from render_monthly's inline benchmark lines. Everything else only collects and saves.
 
 Run:  python precompute_ui_monthly.py
 Output (project root):  ui_monthly.json   (schema version 1)
 """
 from __future__ import annotations
 
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -25,6 +27,8 @@ CLOSE_SESSIONS = 126      # render_monthly shows the last 126 closes
 REBALANCE_ROWS = 12       # ...and the latest 12 rebalances
 
 
+# Copied from render_monthly's inline b_ret / b_cagr lines (master_dashboard.py ~6553-6560).
+# The protected-file checksum on master_dashboard.py is the guard against this drifting.
 def _benchmark(eq: pd.DataFrame) -> tuple[float, float]:
     """render_monthly's inline Nifty total return and CAGR (0.0 when the column is absent)."""
     if 'Benchmark_Value' not in eq.columns:
@@ -86,10 +90,18 @@ def _closes(ranks: pd.DataFrame) -> dict:
         if close is None or close.empty:
             continue
         close = close.iloc[-CLOSE_SESSIONS:]
-        out[ticker.replace('.NS', '')] = {
-            'saved_to': f'{close.index[-1]:%d %b %Y}',
-            'points': [[pd.Timestamp(x).strftime('%Y-%m-%d'), float(y)] for x, y in close.items()],
-        }
+        try:
+            entry = {
+                'saved_to': f'{close.index[-1]:%d %b %Y}',
+                'points': [[pd.Timestamp(x).strftime('%Y-%m-%d'), float(y)]
+                           for x, y in close.items()],
+            }
+        except (ValueError, TypeError) as exc:
+            # Bad or non-datetime index in this ticker's CSV: leave it out so the page
+            # shows "No saved price history" instead of failing the whole snapshot.
+            print(f'warning: {ticker} close history not saved ({exc})', file=sys.stderr)
+            continue
+        out[ticker.replace('.NS', '')] = entry
     return out
 
 
