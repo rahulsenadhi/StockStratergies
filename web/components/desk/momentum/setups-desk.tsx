@@ -26,17 +26,17 @@ const COMPACT: DeskColumn<SignalRow>[] = [
   { key: "from", label: "From high", kind: "num", priority: 1, sortValue: (r) => r.dist_ath,
     render: (r) => <ChangePill value={r.dist_ath} decimals={1} /> },
   { key: "stop", label: "Stop", kind: "num", priority: 2, sortValue: (r) => r.stop_pct, render: (r) => cells(r).stopPct },
-  { key: "breaks", label: "Breaks", kind: "text", priority: 3, render: (r) => <span style={{ whiteSpace: "nowrap" }}>{cells(r).entryType}</span> },
-  { key: "vol", label: "Volume", kind: "num", priority: 2, sortValue: (r) => r.vol_ratio, render: (r) => cells(r).volRatio },
+  { key: "breaks", label: "Breaks", kind: "text", priority: 3, sortValue: (r) => r.entry_type, render: (r) => <span style={{ whiteSpace: "nowrap" }}>{cells(r).entryType}</span> },
+  { key: "vol", label: "Volume", kind: "num", priority: 3, sortValue: (r) => r.vol_ratio, render: (r) => cells(r).volRatio },
   { key: "score", label: "Score", kind: "num", priority: 1, sortValue: (r) => r.score, render: (r) => cells(r).score },
 ];
 
 const EXTRA: DeskColumn<SignalRow>[] = [
-  { key: "action", label: "Action", kind: "text", priority: 2, render: (r) => r.action },
+  { key: "action", label: "Action", kind: "text", priority: 2, sortValue: (r) => r.action, render: (r) => r.action },
   { key: "ath", label: "ATH (₹)", kind: "num", priority: 2, sortValue: (r) => r.ath, render: (r) => cells(r).ath },
-  { key: "qual", label: "Chart quality", kind: "text", priority: 3, render: (r) => cells(r).chartQual },
+  { key: "qual", label: "Chart quality", kind: "text", priority: 3, sortValue: (r) => r.chart_qual, render: (r) => cells(r).chartQual },
   { key: "chop", label: "Choppiness", kind: "num", priority: 3, sortValue: (r) => r.choppiness, render: (r) => cells(r).choppiness },
-  { key: "recovery", label: "Recovery", kind: "text", priority: 3, render: (r) => cells(r).recovery },
+  { key: "recovery", label: "Recovery", kind: "text", priority: 3, sortValue: (r) => r.recovery, render: (r) => cells(r).recovery },
   { key: "ema", label: "220 EMA", kind: "num", priority: 3, sortValue: (r) => r.ema220, render: (r) => cells(r).ema220 },
   { key: "h52", label: "52W High", kind: "num", priority: 3, sortValue: (r) => r.high52, render: (r) => cells(r).high52 },
   { key: "vsh", label: "vs High%", kind: "num", priority: 3, sortValue: (r) => r.vs_high, render: (r) => cells(r).vsHigh },
@@ -105,8 +105,10 @@ export function SetupsDesk({ data, view, initial }: SetupsDeskProps) {
     panel = (
       <div className="desk-stack" style={{ gap: 8 }}>
         <p className="rd-note" style={{ margin: 0 }}>{RECENT_NOTE}</p>
+        <div className="desk-compact">
         <DeskTable rows={data.recent} columns={RECENT_COLUMNS} getRowId={(r) => r.symbol} selectedId={selected}
           onRowClick={(r) => onRow(r.symbol)} caption="Stocks that broke out in the last 7 days" empty="No recent breakouts" />
+        </div>
       </div>
     );
   } else if (data.signals.length === 0) {
@@ -114,9 +116,11 @@ export function SetupsDesk({ data, view, initial }: SetupsDeskProps) {
   } else {
     panel = (
       <div className="desk-stack" style={{ gap: 8 }}>
+        <div className={allCols ? undefined : "desk-compact"}>
         <DeskTable rows={rows} columns={columns} getRowId={(r) => r.symbol} selectedId={selected}
           onRowClick={(r) => onRow(r.symbol)} caption="Today's saved setups, highest score first"
           empty="No setups match this view and tab" />
+        </div>
         <p className="rd-note" style={{ margin: 0 }}>{HIST_NOTE}</p>
       </div>
     );
@@ -135,7 +139,9 @@ export function SetupsDesk({ data, view, initial }: SetupsDeskProps) {
           tabs={labels.map((l) => ({ id: l.id, label: l.label, content: panel }))} />
       </section>
       <div className="desk-rail desk-stack" ref={railRef}>
-        {stock ? <StockRail stock={stock} detail={data.details[stock.symbol]} colour={data.colour} /> : null}
+        {stock ? (data.details[stock.symbol]
+          ? <StockRail stock={stock} detail={data.details[stock.symbol]} colour={data.colour} />
+          : <EmptyState title={`No saved details for ${stock.symbol}.`} />) : null}
       </div>
     </div>
   );

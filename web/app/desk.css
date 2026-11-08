@@ -266,3 +266,5 @@ details[open] > .desk-summary::after { content: "▴"; }
 .desk-funnel__fill { display: block; height: 100%; min-width: 3px; border-radius: 3px; background: var(--rd-info); }
 .desk-funnel__fill--gain { background: var(--rd-gain); } .desk-funnel__fill--loss { background: var(--rd-loss); }
 .desk-funnel__val { text-align: right; font-variant-numeric: tabular-nums; }
+/* Compact Momentum tables sit beside the rail: drop the lowest-priority columns below 1600px so nothing scrolls inside. */
+@media (max-width: 1599px) { .desk-compact .rd-col--p3 { display: none; } }

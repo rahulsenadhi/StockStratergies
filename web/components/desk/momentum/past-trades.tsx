@@ -24,9 +24,9 @@ const COLUMNS: DeskColumn<TradeRow>[] = [
   { key: "result", label: "Result", kind: "pill", priority: 1, sortValue: (r) => r.pnl,
     render: (r) => <StatusPill label={cells(r).pnl} tone={r.pnl == null ? "muted" : r.pnl >= 0 ? "gain" : "loss"} /> },
   { key: "held", label: "Held", kind: "num", priority: 2, sortValue: (r) => r.hold_days, render: (r) => `${cells(r).held}${r.hold_days == null ? "" : "d"}` },
-  { key: "why", label: "Why sold", kind: "text", priority: 1, render: (r) => cells(r).exitReason },
-  { key: "filters", label: "Filters", kind: "text", priority: 3, render: (r) => cells(r).filters },
-  { key: "recovery", label: "Recovery", kind: "text", priority: 3, render: (r) => cells(r).recovery },
+  { key: "why", label: "Why sold", kind: "text", priority: 1, sortValue: (r) => r.exit_reason, render: (r) => cells(r).exitReason },
+  { key: "filters", label: "Filters", kind: "text", priority: 3, sortValue: (r) => r.filters, render: (r) => cells(r).filters },
+  { key: "recovery", label: "Recovery", kind: "text", priority: 3, sortValue: (r) => r.recovery, render: (r) => cells(r).recovery },
 ];
 
 /** Past trades for the chosen switch view: period, year and clean-signals filters, then the table. */
@@ -58,8 +58,10 @@ export function PastTrades({ data, view }: { data: UiMomentum; view: ViewKey }) 
         <span className="rd-note">Newest exit first</span>
       </div>
       <p className="rd-note" style={{ margin: 0 }}>{caption}</p>
-      <DeskTable rows={rows} columns={COLUMNS} getRowId={(r) => String(r.id)} caption="Closed model trades, newest exit first"
-        empty="No trades in this window" />
+      <div className="desk-compact">
+        <DeskTable rows={rows} columns={COLUMNS} getRowId={(r) => String(r.id)} caption="Closed model trades, newest exit first"
+          empty="No trades in this window" />
+      </div>
       <p className="rd-note" style={{ margin: 0 }}>{TRADES_LEGEND}</p>
     </div>
   );

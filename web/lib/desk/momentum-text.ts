@@ -404,7 +404,7 @@ export const FUNNEL_NOTE =
 
 export const TRADES_LEGEND =
   "BK Margin = how much the signal-day close exceeded the prior 52-week close high. Margins under +1% " +
-  "(like AXISBANK +0.25% on 14 Jan 2026) are knife-edge breakouts that often fail. Strict mode hides them. " +
+  "(like AXISBANK +0.25% on 14 Jan 2026) are knife-edge breakouts that often fail. Clean signals only hides them. " +
   "The Filters column shows how many conditions passed on signal day and names any that failed: F1 trend · " +
   "F2 close>SMA50 · F3 MA align · F4 vs 52W low · F5 dip · F6 choppiness · BK breakout · V volume.";
 

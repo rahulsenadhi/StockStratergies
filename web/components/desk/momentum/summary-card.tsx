@@ -30,7 +30,7 @@ export function SummaryCard({ summary, chart, health }: SummaryCardProps) {
         {summary === null ? <EmptyState title={NO_SIM.title} reason={NO_SIM.reason} /> : (
           <>
             <BigValue text={orDash(cagr, (n) => `${formatSigned(n, 1)}%`)} tone={cagr == null ? "muted" : cagr >= 0 ? "gain" : "loss"} />
-            <div className="rd-stat-sub"><StatusPill label={health.verdict_text} tone={health.verdict_tone} /></div>
+            <div className="rd-stat-sub" style={{ marginBottom: 10 }}><StatusPill label={health.verdict_text} tone={health.verdict_tone} /></div>
           </>
         )}
         {stats.map((s) => (
