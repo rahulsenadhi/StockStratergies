@@ -4,7 +4,7 @@
 // "ALL PASS" or the failing checks. See README.md in this folder.
 async (page) => {
   const BASE = "http://localhost:3000";
-  const PAGES = ["/"];
+  const PAGES = ["/", "/monthly"];
   const VIEWPORTS = [[1280, 600], [1280, 560], [1024, 700], [1920, 1000], [390, 844]];
   const lines = [];
   let failures = 0;
@@ -67,6 +67,42 @@ async (page) => {
       const badSideways = checks.sideways.filter((c) => c !== "rd-table-wrap" || !phone);
       if (badSideways.length) fail.push(`sideways scroll in: ${badSideways.join(", ")}`);
       if (!(await wheelToEnd(".desk-main", Math.round(w * 0.6), Math.round(h / 2)))) fail.push("page wheel-scroll stalls");
+
+      if (path === "/monthly") {
+        // (a) the rail's last child is fully visible at some scroll position; static under 900px tall.
+        const rail = await page.evaluate(async () => {
+          const r = document.querySelector(".desk-rail");
+          const main = document.querySelector(".desk-main");
+          if (!r || !r.lastElementChild) return { missing: true };
+          let seen = false;
+          main.scrollTop = 0;
+          for (let i = 0; i < 60 && !seen; i++) {
+            await new Promise((ok) => requestAnimationFrame(ok));
+            if (r.lastElementChild.getBoundingClientRect().bottom <= innerHeight) seen = true;
+            const prev = main.scrollTop;
+            main.scrollTop += 150;
+            if (main.scrollTop === prev) {
+              await new Promise((ok) => requestAnimationFrame(ok));
+              if (r.lastElementChild.getBoundingClientRect().bottom <= innerHeight) seen = true;
+              break;
+            }
+          }
+          return { seen, position: getComputedStyle(r).position, h: innerHeight };
+        });
+        if (rail.missing) fail.push("detail rail missing");
+        else {
+          if (!rail.seen) fail.push("rail last item never fully visible");
+          if (rail.h < 900 && rail.position !== "static") fail.push(`rail is ${rail.position} under 900px tall`);
+        }
+        // (b) phone: tapping the third ranking row scrolls the rail into view.
+        if (phone) {
+          await page.evaluate(() => { document.querySelector(".desk-main").scrollTop = 0; });
+          await page.locator(".rd-table tbody tr").nth(2).click();
+          await page.waitForTimeout(500);
+          const [top, vh] = await page.evaluate(() => [document.querySelector(".desk-rail").getBoundingClientRect().top, innerHeight]);
+          if (!(top >= 0 && top < vh)) fail.push(`row tap left the rail off screen (top ${Math.round(top)})`);
+        }
+      }
 
       if (phone) {
         await page.locator('button[aria-label="Open menu"]').click();
