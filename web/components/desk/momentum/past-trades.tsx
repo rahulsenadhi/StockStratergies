@@ -35,6 +35,7 @@ export function PastTrades({ data, view }: { data: UiMomentum; view: ViewKey }) 
   const years = data.trade_filters.years;
   const [year, setYear] = useState<number | null>(years[0] ?? null);
   const [strict, setStrict] = useState(false);
+  const [allCols, setAllCols] = useState(false);
 
   const { rows, hidden } = useMemo(() => visibleTrades(data, view, period, year, strict), [data, view, period, year, strict]);
   const total = data.views[view].trade_ids.length;
@@ -54,11 +55,14 @@ export function PastTrades({ data, view }: { data: UiMomentum; view: ViewKey }) 
           <label className="desk-toggle">
             <input type="checkbox" checked={strict} onChange={(e) => setStrict(e.target.checked)} /> Clean signals only
           </label>
+          <label className="desk-toggle">
+            <input type="checkbox" checked={allCols} onChange={(e) => setAllCols(e.target.checked)} /> All columns
+          </label>
         </div>
         <span className="rd-note">Newest exit first</span>
       </div>
       <p className="rd-note" style={{ margin: 0 }}>{caption}</p>
-      <div className="desk-compact">
+      <div className={allCols ? undefined : "desk-compact"}>
         <DeskTable rows={rows} columns={COLUMNS} getRowId={(r) => String(r.id)} caption="Closed model trades, newest exit first"
           empty="No trades in this window" />
       </div>
