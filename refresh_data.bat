@@ -16,7 +16,7 @@ echo ====================================================== >> "%LOG%"
 echo  Refresh started: %DATE% %TIME% >> "%LOG%"
 echo ====================================================== >> "%LOG%"
 
-echo [1/10] Downloading Nifty 50 ... >> "%LOG%"
+echo [1/11] Downloading Nifty 50 ... >> "%LOG%"
 "%PY%" step1_download_data.py >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo  !! step1_download_data.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
@@ -24,7 +24,7 @@ if errorlevel 1 (
     echo  ok Nifty 50 done >> "%LOG%"
 )
 
-echo [2/10] Downloading wider NSE/BSE ... >> "%LOG%"
+echo [2/11] Downloading wider NSE/BSE ... >> "%LOG%"
 "%PY%" nse_bse_downloader.py >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo  !! nse_bse_downloader.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
@@ -40,7 +40,7 @@ if errorlevel 1 (
     echo  ok parquet sync done >> "%LOG%"
 )
 
-echo [3/10] Rebuilding Momentum Edge parquet cache + backtest ... >> "%LOG%"
+echo [3/11] Rebuilding Momentum Edge parquet cache + backtest ... >> "%LOG%"
 "%PY%" momentum_edge_backtest.py >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo  !! momentum_edge_backtest.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
@@ -48,7 +48,7 @@ if errorlevel 1 (
     echo  ok parquet cache + backtest done >> "%LOG%"
 )
 
-echo [4/10] Pre-computing exit recommendations ... >> "%LOG%"
+echo [4/11] Pre-computing exit recommendations ... >> "%LOG%"
 "%PY%" precompute_exit_recommendations.py >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo  !! precompute_exit_recommendations.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
@@ -56,7 +56,7 @@ if errorlevel 1 (
     echo  ok exit recommendations done >> "%LOG%"
 )
 
-echo [5/10] Pre-warming PEAD yfinance cache ... >> "%LOG%"
+echo [5/11] Pre-warming PEAD yfinance cache ... >> "%LOG%"
 "%PY%" -c "from concurrent.futures import ThreadPoolExecutor; import pandas as pd; from core.yf_cache import get_snapshot; u = pd.read_csv('data/universe/universe.csv')['yf_ticker'].dropna().tolist(); print(f'Warming {len(u)} tickers'); ex = ThreadPoolExecutor(max_workers=12); list(ex.map(get_snapshot, u)); print('Cache warm')" >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo  !! yfinance cache warm FAILED >> "%LOG%"
@@ -64,7 +64,7 @@ if errorlevel 1 (
     echo  ok cache warm done >> "%LOG%"
 )
 
-echo [6/10] PEAD daily incremental refresh ... >> "%LOG%"
+echo [6/11] PEAD daily incremental refresh ... >> "%LOG%"
 "%PY%" pead_downloader.py >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo  !! pead_downloader.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
@@ -72,7 +72,7 @@ if errorlevel 1 (
     echo  ok PEAD downloader done >> "%LOG%"
 )
 
-echo [7/10] Saving Monthly data for the Next.js app ... >> "%LOG%"
+echo [7/11] Saving Monthly data for the Next.js app ... >> "%LOG%"
 "%PY%" precompute_ui_monthly.py >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo  !! precompute_ui_monthly.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
@@ -80,7 +80,7 @@ if errorlevel 1 (
     echo  ok ui_monthly.json done >> "%LOG%"
 )
 
-echo [8/10] Saving Momentum data for the Next.js app ... >> "%LOG%"
+echo [8/11] Saving Momentum data for the Next.js app ... >> "%LOG%"
 "%PY%" precompute_ui_momentum.py >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo  !! precompute_ui_momentum.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
@@ -88,7 +88,7 @@ if errorlevel 1 (
     echo  ok ui_momentum.json done >> "%LOG%"
 )
 
-echo [9/10] Saving IPO data for the Next.js app ... >> "%LOG%"
+echo [9/11] Saving IPO data for the Next.js app ... >> "%LOG%"
 "%PY%" precompute_ui_ipo.py >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo  !! precompute_ui_ipo.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
@@ -96,7 +96,15 @@ if errorlevel 1 (
     echo  ok ui_ipo.json done >> "%LOG%"
 )
 
-echo [10/10] Saving Home data for the Next.js app ... >> "%LOG%"
+echo [10/11] Saving Momentum charts for the Next.js app ... >> "%LOG%"
+"%PY%" precompute_ui_momentum_charts.py >> "%LOG%" 2>&1
+if errorlevel 1 (
+    echo  !! precompute_ui_momentum_charts.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"
+) else (
+    echo  ok ui_momentum_charts done >> "%LOG%"
+)
+
+echo [11/11] Saving Home data for the Next.js app ... >> "%LOG%"
 "%PY%" precompute_ui_home.py >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo  !! precompute_ui_home.py FAILED with exit code %ERRORLEVEL% >> "%LOG%"

@@ -42,6 +42,7 @@ export const UPDATE_STEPS: Record<UpdateStrategy, string[][]> = {
     ["precompute_ui_monthly.py"],
     ["precompute_ui_momentum.py"],
     ["precompute_ui_ipo.py"],
+    ["precompute_ui_momentum_charts.py"],
   ],
   PEAD: [
     ["pead_downloader.py"],
