@@ -4,7 +4,7 @@
 // "ALL PASS" or the failing checks. See README.md in this folder.
 async (page) => {
   const BASE = "http://localhost:3000";
-  const PAGES = ["/", "/monthly"];
+  const PAGES = ["/", "/monthly", "/momentum"];
   const VIEWPORTS = [[1280, 600], [1280, 560], [1024, 700], [1920, 1000], [390, 844]];
   const lines = [];
   let failures = 0;
@@ -68,7 +68,7 @@ async (page) => {
       if (badSideways.length) fail.push(`sideways scroll in: ${badSideways.join(", ")}`);
       if (!(await wheelToEnd(".desk-main", Math.round(w * 0.6), Math.round(h / 2)))) fail.push("page wheel-scroll stalls");
 
-      if (path === "/monthly") {
+      if (path === "/monthly" || path === "/momentum") {
         // (a) the rail's last child is fully visible at some scroll position; static under 900px tall.
         const rail = await page.evaluate(async () => {
           const r = document.querySelector(".desk-rail");
