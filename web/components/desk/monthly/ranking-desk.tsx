@@ -15,6 +15,8 @@ import { PREVIEW_ROWS, type DeskColumn } from "@/lib/desk/table";
 
 /** Below this width the rail stacks under the table, so a row tap scrolls the rail into view. */
 const STACKED_MAX_WIDTH = 1200;
+/** The Top 5 card scrolls here after a click, as the ranking desk does for its own rows. */
+export const RAIL_ID = "monthly-rail";
 
 const COLUMNS: DeskColumn<RankRow>[] = [
   { key: "rank", label: "#", kind: "num", priority: 1, sortValue: (r) => r.rank, render: (r) => rankCells(r).rank },
@@ -86,7 +88,7 @@ export function RankingDesk({ ranking, filters, initialSelected, closes, top5, c
           defaultExpanded={startExpanded} />
         <p className="rd-note" style={{ margin: 0 }}>{RANKING_NOTE}</p>
       </section>
-      <div className="desk-rail desk-stack" ref={railRef}>
+      <div className="desk-rail desk-stack" ref={railRef} id={RAIL_ID}>
         {row ? <DetailRail row={row} total={ranking.length} close={closes[row.symbol]} colour={colour} /> : null}
         <RailList title={TOP5_TITLE} meta={TOP5_META} items={top5Rows(ranking, top5)} />
       </div>

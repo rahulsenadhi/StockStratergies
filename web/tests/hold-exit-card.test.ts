@@ -2,7 +2,6 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { HONESTY_NOTE, SMALL_SAMPLE_NOTE, EXIT_EMPTY, holdExitRows, type ExitRec } from "@/lib/desk/exit-text";
-import { formatSigned } from "@/lib/desk/format";
 import type { RankRow } from "@/lib/desk/monthly-text";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }));
@@ -22,12 +21,15 @@ describe("holdExitRows", () => {
     const r = holdExitRows(MOMENTUM);
     expect(r.hold).toBe("65 days");
     expect(r.winRate).toBe("81%");
-    expect(r.median).toBe(`${formatSigned(39.55, 1)}%`);
+    expect(r.median).toBe("+39.5%");
     expect(r.stop).toBe("-10.1%");
     expect(r.basis).toBe("Based on 31 past trades");
     expect(r.isSmallSample).toBe(false);
     expect(r.lossPct).toBe(19);
     expect(r.targets[0]).toMatchObject({ tier: "T1", target: "+22.0%", book: "40%", hit: "90%" });
+  });
+  it("pins Python's f-string rounding for the Monthly rec", () => {
+    expect(holdExitRows(MONTHLY).median).toBe("+0.4%");
   });
   it("flags a small sample under 30 and handles missing numbers", () => {
     expect(holdExitRows({ ...MOMENTUM, sample_size: 29 }).isSmallSample).toBe(true);
