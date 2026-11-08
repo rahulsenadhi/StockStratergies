@@ -13,6 +13,8 @@ interface DeskTableProps<R> {
   onRowClick?: (row: R) => void;
   empty?: string;
   previewLimit?: number;
+  /** Start with every row shown (e.g. a deep-linked selection sits beyond the preview). */
+  defaultExpanded?: boolean;
 }
 
 const cellClass = (kind: DeskColumn<unknown>["kind"], priority: number, sorted: boolean, head: boolean) =>
@@ -28,9 +30,10 @@ const cellClass = (kind: DeskColumn<unknown>["kind"], priority: number, sorted: 
 /** Research table (Streamlit data_table in the v2 look) with sort, preview and column priorities. */
 export function DeskTable<R>({
   rows, columns, getRowId, caption, selectedId, onRowClick, empty = "No rows", previewLimit = PREVIEW_ROWS,
+  defaultExpanded = false,
 }: DeskTableProps<R>) {
   const [sort, setSort] = useState<SortSpec>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
   const sorted = useMemo(() => {
     if (!sort) return [...rows];

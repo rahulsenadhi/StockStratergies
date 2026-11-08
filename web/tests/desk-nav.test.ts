@@ -20,10 +20,16 @@ describe("desk nav", () => {
   });
 
   test("candidate and strategy rows map to their strategy page, falling back to Streamlit", () => {
-    for (const key of ["Monthly", "IPO", "Momentum", "PEAD", "monthly_rotation", "ipo_edge", "momentum_edge", "pead"]) {
+    for (const key of ["IPO", "Momentum", "PEAD", "ipo_edge", "momentum_edge", "pead"]) {
       expect(strategyPageHref(key, "BAJFINANCE")).toEqual({ href: STREAMLIT_URL, external: true });
     }
     expect(strategyPageHref("unknown_custom_id")).toEqual({ href: STREAMLIT_URL, external: true });
+  });
+
+  test("Monthly is built: candidate rows open /monthly with the ticker selected", () => {
+    expect(strategyPageHref("Monthly", "HAL")).toEqual({ href: "/monthly?ticker=HAL", external: false });
+    expect(strategyPageHref("monthly_rotation")).toEqual({ href: "/monthly", external: false });
+    expect(strategyPageHref("Monthly", "M&M")).toEqual({ href: "/monthly?ticker=M%26M", external: false });
   });
 });
 

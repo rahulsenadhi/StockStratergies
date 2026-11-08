@@ -223,7 +223,7 @@ details[open] > .desk-summary::after { content: "▴"; }
 .rd-bar__val { font-variant-numeric: tabular-nums; font-weight: 500; }
 
 /* Tabs: look of the Streamlit tab strip (ui_components.py ~434-438) */
-.desk-tabs [role="tablist"] { display:flex; gap: 4px; border-bottom: 1px solid var(--rd-line); }
+.desk-tabs [role="tablist"] { display:flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--rd-line); }
 .desk-tabs button[role="tab"] { all: unset; cursor: pointer; background:transparent; border-radius:0;
   padding: 6px 2px; margin-right: 18px; font-size: var(--rd-fs-md); font-weight:500; color: var(--rd-text-muted); }
 .desk-tabs button[role="tab"][aria-selected="true"] { color: var(--rd-text); font-weight:600; }
@@ -237,4 +237,20 @@ details[open] > .desk-summary::after { content: "▴"; }
 .explain-box b { color: var(--rd-text); font-weight: 600; }
 
 /* Sticky right rail on tall, wide screens */
-@media (min-width:1200px) and (min-height:900px) { .desk-rail { position: sticky; top: 16px; } }
+/* top clears the 46px sticky top bar (.desk-topbar) so the rail head is never hidden under it */
+@media (min-width:1200px) and (min-height:900px) { .desk-rail { position: sticky; top: 56px; } }
+.desk-rail { scroll-margin-top: 56px; } /* clears the sticky top bar when a row tap scrolls the rail into view */
+.desk-rail__title { font-size: var(--rd-fs-md) !important; font-weight: 600 !important; color: var(--rd-text) !important; }
+/* .rd-list__head span mutes every span; keep status pills in a list head looking like pills. */
+.rd-list__head .rd-pill { font-size: var(--rd-fs-xs); font-weight: 600; }
+.rd-list__head .rd-pill--gain { color: var(--rd-gain); } .rd-list__head .rd-pill--loss { color: var(--rd-loss); }
+.rd-list__head .rd-pill--warn { color: var(--rd-warn); } .rd-list__head .rd-pill--info { color: var(--rd-info); }
+
+/* Monthly page: summary card (1 : 2.3, stacks below 1024px), chart legends, exit metrics */
+.desk-duo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.3fr); gap: 24px; align-items: start; }
+@media (max-width: 1023px) { .desk-duo { grid-template-columns: minmax(0, 1fr); } }
+.desk-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; margin-bottom: 4px; }
+.desk-legend .rd-note { margin: 0; }
+.desk-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.desk-metric { font-size: var(--rd-fs-xl); font-weight: 600; color: var(--rd-text); font-variant-numeric: tabular-nums; }
+.desk-h3 { margin: 0; font-size: var(--rd-fs-lg); font-weight: 600; color: var(--rd-text); }
