@@ -127,7 +127,7 @@ def test_seven_opening_balances_fixture(path):
 
 
 def test_opening_balance_then_dated_sell(path):
-    add(path, opening("APLAPOLLO.NS", 20, 2202.38))
+    add(path, opening("APLAPOLLO.NS", 20, 2202.38, as_of="2026-11-01"))
     add(path, sell(qty=8, price=2300.00, d="2026-11-07", charges=40.0))
     pos = pf.positions(pf.load_ledger(path))["APLAPOLLO.NS"]
     # 8 * (2300 - 2202.38) = 780.96 ; buy charges unknown
@@ -139,7 +139,7 @@ def test_opening_balance_then_dated_sell(path):
 
 
 def test_opening_balance_then_later_buy_fifo_order(path):
-    add(path, opening("APLAPOLLO.NS", 20, 2000.0))
+    add(path, opening("APLAPOLLO.NS", 20, 2000.0, as_of="2026-10-01"))
     add(path, buy(qty=10, price=2100.0, d="2026-11-01", charges=5.0))
     add(path, sell(qty=22, price=2200.0, d="2026-11-05", charges=0.0))
     pos = pf.positions(pf.load_ledger(path))["APLAPOLLO.NS"]
@@ -315,3 +315,57 @@ def test_universe_index_real_file():
     assert idx["APLAPOLLO.NS"]["exchange"] == "NSE"
     assert set(idx["APLAPOLLO.NS"]) == {"name", "exchange", "isin"}
     assert len(idx) > 1000
+
+
+# ---------------- fix round 1 ----------------
+
+def test_sell_before_opening_as_of_rejected(path):
+    add(path, opening("APLAPOLLO.NS", 20, 2000.0, as_of="2026-11-05"))
+    errs = pf.validate_transaction(sell(qty=1, d="2026-11-04"), pf.load_ledger(path),
+                                   UNIVERSE, today=TODAY)
+    assert any("opening balance" in e and "double count" in e for e in errs)
+    assert pf.validate_transaction(sell(qty=1, d="2026-11-05"), pf.load_ledger(path),
+                                   UNIVERSE, today=TODAY) == []
+
+
+def test_unknown_key_rejected_and_never_stored(path):
+    with pytest.raises(pf.LedgerValidationError) as ei:
+        add(path, buy(hack="x" * 10000))
+    assert "hack" in str(ei.value)
+    assert not path.exists()
+
+
+def test_long_string_rejected_on_any_field():
+    assert pf.validate_transaction(buy(signal_ref="x" * 501), [], UNIVERSE, today=TODAY)
+
+
+def test_stored_record_only_whitelisted_keys(path):
+    stored = add(path, buy())
+    assert set(stored) <= pf._TRADE_KEYS | {"id", "created_at"}
+
+
+@pytest.mark.parametrize("missing", ["symbol", "quantity", "price", "type", "id"])
+def test_load_rejects_entry_missing_required_key(path, missing):
+    add(path, buy())
+    raw = json.loads(path.read_text())
+    del raw["transactions"][0][missing]
+    path.write_text(json.dumps(raw))
+    with pytest.raises(pf.LedgerCorrupt):
+        pf.load_ledger(path)
+
+
+def test_version_true_rejected(path):
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"version": True, "transactions": []}))
+    with pytest.raises(pf.LedgerCorrupt):
+        pf.load_ledger(path)
+
+
+def test_no_negative_zero(path):
+    add(path, buy(qty=1, price=100.0))
+    add(path, sell(qty=1, price=100.0))
+    pos = pf.positions(pf.load_ledger(path))["APLAPOLLO.NS"]
+    import math
+    assert pos.realised_pnl == 0.0 and math.copysign(1, pos.realised_pnl) == 1.0
+    from decimal import Decimal
+    assert math.copysign(1, pf._money(Decimal("-0.001"))) == 1.0

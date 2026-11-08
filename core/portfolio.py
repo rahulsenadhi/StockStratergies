@@ -73,7 +73,7 @@ def _dec(x: Any) -> Decimal:
 
 
 def _money(d: Decimal) -> float:
-    return float(d.quantize(_CENT, rounding=ROUND_HALF_UP))
+    return float(d.quantize(_CENT, rounding=ROUND_HALF_UP)) + 0.0  # -0.0 + 0.0 == 0.0
 
 
 def _price(d: Decimal) -> float:
@@ -123,15 +123,45 @@ def load_ledger(path: str | Path) -> list[dict]:
         return []
     try:
         raw = json.loads(p.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict) or raw.get("version") != LEDGER_VERSION:
+        ver = raw.get("version") if isinstance(raw, dict) else None
+        if not isinstance(raw, dict) or isinstance(ver, bool) or ver != LEDGER_VERSION:
             raise ValueError(f"unsupported ledger version: {raw.get('version') if isinstance(raw, dict) else None!r}")
         txs = raw.get("transactions")
         if not isinstance(txs, list) or not all(isinstance(t, dict) for t in txs):
             raise ValueError("transactions must be a list of objects")
+        for i, t in enumerate(txs):
+            bad = _shape_error(t)
+            if bad:
+                raise ValueError(f"transaction #{i}: {bad}")
     except (OSError, ValueError) as exc:  # JSONDecodeError is a ValueError
         _save_corrupt_copy(p)
         raise LedgerCorrupt(f"{p}: {exc}") from exc
     return txs
+
+
+def _shape_error(t: dict) -> str | None:
+    """Minimal structural check of a stored entry (None when usable)."""
+    if not isinstance(t.get("id"), str) or not t["id"]:
+        return "missing id"
+    if t.get("type") not in TX_TYPES:
+        return "bad or missing type"
+    if t["type"] == "VOID":
+        return None if isinstance(t.get("voids"), str) else "VOID missing voids"
+    if not isinstance(t.get("symbol"), str) or not t["symbol"]:
+        return "missing symbol"
+    q = t.get("quantity")
+    if isinstance(q, bool) or not isinstance(q, int) or q <= 0:
+        return "bad quantity"
+    if not _is_num(t.get("price")) or _dec(t["price"]) <= 0:
+        return "bad price"
+    if t.get("charges") is not None and not _is_num(t["charges"]):
+        return "bad charges"
+    if t.get("source") == "opening_balance":
+        if _parse_date(t.get("as_of")) is None:
+            return "opening balance missing as_of"
+    elif _parse_date(t.get("trade_date")) is None:
+        return "bad or missing trade_date"
+    return None
 
 
 def _save_corrupt_copy(p: Path) -> None:
@@ -187,8 +217,19 @@ def _current_strategy_version() -> str:
         return "unknown"
 
 
+_BASE_KEYS = {"type", "notes", "source", "trade_date", "voids"}
+_TRADE_KEYS = _BASE_KEYS | {"symbol", "exchange", "price", "quantity", "charges",
+                            "strategy", "strategy_version", "signal_ref",
+                            "date_known", "as_of"}
+_VOID_KEYS = _BASE_KEYS | {"symbol", "exchange"}
+
+
+def _allowed_keys(ttype: str) -> set[str]:
+    return _VOID_KEYS if ttype == "VOID" else _TRADE_KEYS
+
+
 def _normalise(tx: dict) -> dict:
-    out = dict(tx)
+    out = {k: v for k, v in tx.items() if k in _allowed_keys(tx["type"])}
     t = out["type"]
     if t == "VOID":
         out.setdefault("notes", "")
@@ -228,18 +269,40 @@ def validate_transaction(tx: dict, ledger: list[dict], universe: dict,
         errs += _check_trade_fields(tx, universe, today)
     if errs:
         return errs
+    errs = _check_sell_vs_opening(tx, ledger)
+    if errs:
+        return errs
     # Replay the ledger with the candidate to catch oversells (incl. backdated
     # sells and voids of buys that later sells depend on).
     _, replay_errs = _replay(list(ledger) + [dict(tx, id="__candidate__")])
     return replay_errs
 
 
+def _check_sell_vs_opening(tx: dict, ledger: list[dict]) -> list[str]:
+    if tx["type"] != "SELL":
+        return []
+    for _, b in _active(ledger):
+        if (b["type"] == "BUY" and b.get("source") == "opening_balance"
+                and b.get("symbol") == tx["symbol"]
+                and (b.get("as_of") or "") > tx["trade_date"]):
+            return [f"SELL dated {tx['trade_date']} is before the opening balance "
+                    f"as_of {b['as_of']} for {tx['symbol']}; that balance already "
+                    f"reflects earlier sales, so entering it would double count"]
+    return []
+
+
 def _check_text_fields(tx: dict) -> list[str]:
     errs = []
+    extra = sorted(str(k) for k in set(tx) - _allowed_keys(tx["type"]))
+    if extra:
+        errs.append(f"unknown field(s) not allowed: {', '.join(extra)[:100]}")
     for k in ("notes", "signal_ref", "symbol", "voids", "strategy_version"):
         v = tx.get(k)
-        if v is not None and (not isinstance(v, str) or len(v) > MAX_TEXT):
-            errs.append(f"{k} must be a string of at most {MAX_TEXT} characters")
+        if v is not None and not isinstance(v, str):
+            errs.append(f"{k} must be a string")
+    for k, v in tx.items():
+        if isinstance(v, str) and len(v) > MAX_TEXT:
+            errs.append(f"{k} must be at most {MAX_TEXT} characters")
     return errs
 
 
