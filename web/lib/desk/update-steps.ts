@@ -14,6 +14,7 @@ export const UPDATE_STEPS: Record<UpdateStrategy, string[][]> = {
     ["step3_dashboard.py"],
     ["precompute_suggestions.py"],
     ["precompute_insights.py"],
+    ["precompute_ui_monthly.py"],
     ["precompute_ui_home.py"],
   ],
   IPO: [
@@ -23,6 +24,7 @@ export const UPDATE_STEPS: Record<UpdateStrategy, string[][]> = {
     ["precompute_exit_recommendations.py"],
     ["precompute_suggestions.py"],
     ["precompute_insights.py"],
+    ["precompute_ui_monthly.py"],
     ["precompute_ui_home.py"],
   ],
   Momentum: [
@@ -34,6 +36,7 @@ export const UPDATE_STEPS: Record<UpdateStrategy, string[][]> = {
     ["precompute_exit_recommendations.py"],
     ["precompute_suggestions.py"],
     ["precompute_insights.py"],
+    ["precompute_ui_monthly.py"],
     ["precompute_ui_home.py"],
   ],
   PEAD: [
