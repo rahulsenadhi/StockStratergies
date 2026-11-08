@@ -272,6 +272,7 @@ def main():
             'precompute_ui_ipo.py',               # ui_ipo.json (Next.js IPO)
             'precompute_ui_momentum_charts.py',   # ui_momentum_charts/ (Next.js Momentum chart)
             'precompute_ui_home.py',              # ui_snapshot.json (Next.js Home)
+            'portfolio_monitor.py',               # ui_portfolio.json + holding exit checks (last)
         ]
         for script in PRECOMPUTE:
             try:

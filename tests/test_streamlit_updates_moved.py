@@ -74,10 +74,23 @@ def test_step_lists_still_defined_for_the_web_app():
     assert 'precompute_ui_monthly.py' not in md._PRECOMPUTE_FOR['PEAD']
     assert 'precompute_ui_momentum.py' in md._PRECOMPUTE_FOR['Momentum']
     assert 'precompute_ui_momentum.py' in md._PRECOMPUTE_FOR['IPO']
-    assert md._PRECOMPUTE_FOR['Momentum'][-1] == 'precompute_ui_momentum_charts.py'
-    assert md._PRECOMPUTE_FOR['Momentum'][-2] == 'precompute_ui_ipo.py'
+    assert md._PRECOMPUTE_FOR['Momentum'][-2] == 'precompute_ui_momentum_charts.py'
+    assert md._PRECOMPUTE_FOR['Momentum'][-3] == 'precompute_ui_ipo.py'
     others = md._PRECOMPUTE_FOR['IPO'] + md._PRECOMPUTE_FOR['Monthly'] + md._PRECOMPUTE_FOR['PEAD']
     assert 'precompute_ui_momentum_charts.py' not in others
-    assert md._PRECOMPUTE_FOR['IPO'][-1] == 'precompute_ui_ipo.py'
+    assert md._PRECOMPUTE_FOR['IPO'][-2] == 'precompute_ui_ipo.py'
     assert 'precompute_ui_ipo.py' not in md._PRECOMPUTE_FOR['Monthly'] + md._PRECOMPUTE_FOR['PEAD']
     assert 'precompute_ui_momentum.py' not in md._PRECOMPUTE_FOR['Monthly'] + md._PRECOMPUTE_FOR['PEAD']
+
+
+def test_portfolio_monitor_is_last_step_of_every_update_path():
+    from pathlib import Path
+    assert all(v[-1] == 'portfolio_monitor.py' for v in md._PRECOMPUTE_FOR.values())
+    root = Path(md.__file__).resolve().parent
+    run_all = (root / 'run_all.py').read_text(encoding='utf-8')
+    assert run_all.index("'portfolio_monitor.py'") > run_all.index("'precompute_ui_home.py'")
+    bat = (root / 'refresh_data.bat').read_text(encoding='utf-8')
+    assert bat.rindex('portfolio_monitor.py') > bat.rindex('precompute_ui_home.py')
+    assert '[12/12]' in bat and '/11]' not in bat
+    steps = (root / 'web' / 'lib' / 'desk' / 'update-steps.ts').read_text(encoding='utf-8')
+    assert steps.count('["portfolio_monitor.py"]') == 4

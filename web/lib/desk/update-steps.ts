@@ -16,6 +16,7 @@ export const UPDATE_STEPS: Record<UpdateStrategy, string[][]> = {
     ["precompute_insights.py"],
     ["precompute_ui_home.py"],
     ["precompute_ui_monthly.py"],
+    ["portfolio_monitor.py"],
   ],
   IPO: [
     ["ipo_edge_downloader.py"],
@@ -28,6 +29,7 @@ export const UPDATE_STEPS: Record<UpdateStrategy, string[][]> = {
     ["precompute_ui_monthly.py"],
     ["precompute_ui_momentum.py"],
     ["precompute_ui_ipo.py"],
+    ["portfolio_monitor.py"],
   ],
   Momentum: [
     ["build_universe.py"],
@@ -43,11 +45,13 @@ export const UPDATE_STEPS: Record<UpdateStrategy, string[][]> = {
     ["precompute_ui_momentum.py"],
     ["precompute_ui_ipo.py"],
     ["precompute_ui_momentum_charts.py"],
+    ["portfolio_monitor.py"],
   ],
   PEAD: [
     ["pead_downloader.py"],
     ["precompute_pead_screener.py"],
     ["precompute_insights.py"],
     ["precompute_ui_home.py"],
+    ["portfolio_monitor.py"],
   ],
 };

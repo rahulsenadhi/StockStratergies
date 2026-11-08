@@ -4941,18 +4941,23 @@ _PRECOMPUTE_FOR: dict[str, list[str]] = {
     # so a failure there cannot stop Home updating. PEAD has no Monthly data.
     # precompute_ui_momentum.py saves the Momentum page's data; precompute_ui_ipo.py (last)
     # saves the IPO page's data (Momentum's exit step rewrites the IPO exit research);
-    # precompute_ui_momentum_charts.py (Momentum only, last) saves each stock's indicator chart.
+    # precompute_ui_momentum_charts.py (Momentum only) saves each stock's indicator chart.
+    # portfolio_monitor.py (last in every list) checks every open holding against the exit
+    # rules, appends the audit log and alerts, and writes ui_portfolio.json.
     'Monthly':  ['precompute_suggestions.py', 'precompute_insights.py',
-                 'precompute_ui_home.py', 'precompute_ui_monthly.py'],
+                 'precompute_ui_home.py', 'precompute_ui_monthly.py',
+                 'portfolio_monitor.py'],
     'IPO':      ['precompute_exit_recommendations.py', 'precompute_suggestions.py',
                  'precompute_insights.py', 'precompute_ui_home.py', 'precompute_ui_monthly.py',
-                 'precompute_ui_momentum.py', 'precompute_ui_ipo.py'],
+                 'precompute_ui_momentum.py', 'precompute_ui_ipo.py',
+                 'portfolio_monitor.py'],
     'Momentum': ['precompute_momentum_signals.py', 'precompute_exit_recommendations.py',
                  'precompute_suggestions.py', 'precompute_insights.py',
                  'precompute_ui_home.py', 'precompute_ui_monthly.py',
                  'precompute_ui_momentum.py', 'precompute_ui_ipo.py',
-                 'precompute_ui_momentum_charts.py'],
-    'PEAD':     ['precompute_pead_screener.py', 'precompute_insights.py', 'precompute_ui_home.py'],
+                 'precompute_ui_momentum_charts.py', 'portfolio_monitor.py'],
+    'PEAD':     ['precompute_pead_screener.py', 'precompute_insights.py', 'precompute_ui_home.py',
+                 'portfolio_monitor.py'],
 }
 
 
