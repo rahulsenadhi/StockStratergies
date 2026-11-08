@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { isObj, loadVersionedJson } from "@/lib/desk/versioned-json";
 import type { Tone } from "@/lib/desk/format";
 
 /** Written by precompute_ui_home.py after every data update (schema version 1). */
@@ -75,8 +76,6 @@ export type SnapshotResult =
   | { ok: true; snapshot: UiSnapshot }
   | { ok: false; reason: "missing" | "invalid" | "version" };
 
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
-
 function hasShape(v: Record<string, unknown>): boolean {
   const { frame, home } = v;
   if (!isObj(frame) || !isObj(home)) return false;
@@ -107,22 +106,6 @@ export async function withLiveFreshness(
 
 /** Read and check the saved snapshot. Never throws: a broken file becomes an empty state. */
 export async function loadSnapshot(dataDir: string = DEFAULT_DATA_DIR): Promise<SnapshotResult> {
-  let text: string;
-  try {
-    text = await fs.readFile(path.join(dataDir, SNAPSHOT_FILE), "utf-8");
-  } catch {
-    return { ok: false, reason: "missing" };
-  }
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return { ok: false, reason: "invalid" };
-  }
-  if (!isObj(raw)) return { ok: false, reason: "invalid" };
-  if (raw.version !== SNAPSHOT_VERSION) {
-    return typeof raw.version === "number" ? { ok: false, reason: "version" } : { ok: false, reason: "invalid" };
-  }
-  if (!hasShape(raw)) return { ok: false, reason: "invalid" };
-  return { ok: true, snapshot: raw as unknown as UiSnapshot };
+  const res = await loadVersionedJson(path.join(dataDir, SNAPSHOT_FILE), SNAPSHOT_VERSION, hasShape);
+  return res.ok ? { ok: true, snapshot: res.value as unknown as UiSnapshot } : res;
 }

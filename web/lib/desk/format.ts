@@ -18,7 +18,7 @@ export const LOW_SAMPLE_TRADES = 30;
  * where Python rounds it to even, so ties are detected from the exact expansion and corrected.
  */
 export function pyFixed(value: number, decimals: number): string {
-  const rounded = value.toFixed(decimals);
+  const rounded = Object.is(value, -0) ? `-${value.toFixed(decimals)}` : value.toFixed(decimals);
   const exact = Math.abs(value).toFixed(Math.min(100, decimals + 30));
   const tail = exact.slice(exact.length - 30);
   if (!/^50*$/.test(tail)) return rounded;
@@ -77,8 +77,7 @@ export function freshnessTone(ageDays: number | null): Tone {
 /** Python `f"{value:+.{decimals}f}"`, e.g. 20.94 -> "+20.9", -4.93 -> "-4.93" (no `%`). */
 export function formatSigned(value: number, decimals: number): string {
   const text = pyFixed(value, decimals);
-  if (text.startsWith("-")) return text;
-  return Object.is(value, -0) ? `-${text}` : `+${text}`;
+  return text.startsWith("-") ? text : `+${text}`;
 }
 
 /** Python `f"₹{value:,.{decimals}f}"`, e.g. 1087.75 -> "₹1,087.75". */

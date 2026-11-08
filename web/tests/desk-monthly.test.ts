@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { bigValueParts, formatRupees, formatSigned, pyFixed } from "@/lib/desk/format";
+import { bigValueParts, formatNumber, formatRupees, formatSigned, pyFixed } from "@/lib/desk/format";
 import {
   benchSub, cagrText, cagrTone, exitTexts, loadMonthly, rankCells, rankStatus, rankSub, rankingAge,
   rebalanceCells, resolveSelected, summaryStats, MONTHLY_FILTERS, HOW_IT_WORKS,
@@ -148,5 +148,14 @@ describe("pyFixed matches Python round-half-even on exact ties", () => {
     expect(pyFixed(-3.125, 2)).toBe("-3.12");
     expect(pyFixed(1.005, 2)).toBe("1.00");
     expect(formatRupees(4785.125, 2)).toBe("₹4,785.12");
+  });
+});
+
+describe("pyFixed signs and grouping match Python", () => {
+  test("negative zero, tiny negatives and grouped negatives", () => {
+    expect(pyFixed(-0, 2)).toBe("-0.00"); // Python format(-0.0, '.2f')
+    expect(pyFixed(-0.001, 2)).toBe("-0.00"); // Python format(-0.001, '.2f')
+    expect(formatSigned(-0, 1)).toBe("-0.0");
+    expect(formatNumber(-1234567.5, 2)).toBe("-1,234,567.50"); // Python f"{-1234567.5:,.2f}"
   });
 });

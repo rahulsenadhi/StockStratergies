@@ -1,5 +1,5 @@
-import fs from "node:fs/promises";
 import path from "node:path";
+import { isObj, loadVersionedJson } from "@/lib/desk/versioned-json";
 import type { UiMonthly } from "@/lib/desk/monthly-text";
 
 export * from "@/lib/desk/monthly-text";
@@ -13,8 +13,6 @@ export type MonthlyResult =
   | { ok: true; data: UiMonthly }
   | { ok: false; reason: "missing" | "invalid" | "version" };
 
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
-
 function hasShape(v: Record<string, unknown>): boolean {
   const { rebalances } = v;
   return (
@@ -25,22 +23,6 @@ function hasShape(v: Record<string, unknown>): boolean {
 
 /** Read and check the saved Monthly page data. Never throws: a broken file becomes an empty state. */
 export async function loadMonthly(dataDir: string = DEFAULT_DATA_DIR): Promise<MonthlyResult> {
-  let text: string;
-  try {
-    text = await fs.readFile(path.join(dataDir, MONTHLY_FILE), "utf-8");
-  } catch {
-    return { ok: false, reason: "missing" };
-  }
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return { ok: false, reason: "invalid" };
-  }
-  if (!isObj(raw)) return { ok: false, reason: "invalid" };
-  if (raw.version !== MONTHLY_VERSION) {
-    return typeof raw.version === "number" ? { ok: false, reason: "version" } : { ok: false, reason: "invalid" };
-  }
-  if (!hasShape(raw)) return { ok: false, reason: "invalid" };
-  return { ok: true, data: raw as unknown as UiMonthly };
+  const res = await loadVersionedJson(path.join(dataDir, MONTHLY_FILE), MONTHLY_VERSION, hasShape);
+  return res.ok ? { ok: true, data: res.value as unknown as UiMonthly } : res;
 }
