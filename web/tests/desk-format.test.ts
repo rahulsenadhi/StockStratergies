@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { formatChange, formatNumber, freshnessLabel, freshnessTone } from "@/lib/desk/format";
+import { formatChange, formatNumber, freshnessLabel, freshnessTone, orDash } from "@/lib/desk/format";
 
 // Values must match core/ui_components.py change_pill / freshness_label / freshness_tone.
 describe("desk format", () => {
@@ -22,5 +22,14 @@ describe("desk format", () => {
   test("formatNumber matches Python {:,.2f}", () => {
     expect(formatNumber(25030.35)).toBe("25,030.35");
     expect(formatNumber(1234.5, 1)).toBe("1,234.5");
+  });
+});
+
+describe("orDash", () => {
+  test("formats finite numbers and shows a dash for null, undefined, NaN and Infinity", () => {
+    const pct = (v: number) => `${v.toFixed(1)}%`;
+    expect(orDash(12.34, pct)).toBe("12.3%");
+    expect(orDash(0, pct)).toBe("0.0%");
+    for (const v of [null, undefined, Number.NaN, Number.POSITIVE_INFINITY]) expect(orDash(v, pct)).toBe("—");
   });
 });

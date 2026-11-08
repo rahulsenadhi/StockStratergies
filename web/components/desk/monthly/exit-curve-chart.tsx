@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { createChart, LineSeries, LineStyle, type Time, type UTCTimestamp } from "lightweight-charts";
-import { deskChartOptions, toSeriesData, useThemeName } from "@/components/desk/monthly/chart-kit";
+import { deskChartOptions, toSeriesData, useThemeName } from "@/components/desk/chart-kit";
 
 const HEIGHT = 260;
 const AXIS_HEIGHT = 28;
@@ -19,7 +19,7 @@ const Y_TITLE = "Return %";
 type CurveRow = Record<string, number | null>;
 
 /** Return-by-day curve: saved median/p25/p75 per day held, with a dashed marker at the exploratory hold. */
-export function ExitCurveChart({ curve, holdDays }: { curve: CurveRow[]; holdDays: number }) {
+export function ExitCurveChart({ curve, holdDays }: { curve: CurveRow[]; holdDays: number | null }) {
   const ref = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
   const theme = useThemeName();
@@ -44,7 +44,7 @@ export function ExitCurveChart({ curve, holdDays }: { curve: CurveRow[]; holdDay
       s.setData(toSeriesData<Time>(days.map((c) => [c.day as UTCTimestamp, c[t.key] ?? null])));
     }
     const place = () => {
-      const x = chart.timeScale().timeToCoordinate(holdDays as UTCTimestamp);
+      const x = holdDays == null ? null : chart.timeScale().timeToCoordinate(holdDays as UTCTimestamp);
       marker.style.display = x == null ? "none" : "block";
       if (x != null) marker.style.left = `${x}px`;
     };
@@ -65,7 +65,7 @@ export function ExitCurveChart({ curve, holdDays }: { curve: CurveRow[]; holdDay
       </div>
       <div style={{ position: "relative" }}>
         <div ref={ref} style={{ width: "100%", height: HEIGHT }} role="img"
-          aria-label={`${Y_TITLE} by ${X_TITLE.toLowerCase()}: median, p25 and p75, marker at ${holdDays} days`} />
+          aria-label={`${Y_TITLE} by ${X_TITLE.toLowerCase()}: median, p25 and p75${holdDays == null ? "" : `, marker at ${holdDays} days`}`} />
         <div ref={markerRef} aria-hidden="true" style={{
           position: "absolute", top: 0, bottom: AXIS_HEIGHT, width: 0, display: "none", pointerEvents: "none",
           borderLeft: `1px dashed ${HOLD_COLOUR}`,

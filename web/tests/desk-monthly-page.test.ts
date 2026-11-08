@@ -115,3 +115,36 @@ describe("Monthly sections with partial data", () => {
     expect(renderToStaticMarkup(h(ExitResearch, { rec: null }))).toContain(EXIT_EMPTY);
   });
 });
+
+describe("/monthly with null saved numbers", () => {
+  it("renders every section and shows a dash instead of crashing", async () => {
+    const nullRow = { ...row(1, "AAA", "Alpha Ltd"), price: null, month_ret: null, bench_ret: null, rs: null };
+    const base = data();
+    load.result = { ok: true, data: data({
+      summary: { ...base.summary!, cagr: null, bench_ret: null, bench_cagr: null, alpha: null, max_dd: null },
+      ranking: [nullRow, RANKING[1]],
+      rebalances: { total: 1, rows: [{ ...base.rebalances.rows[0], value: null }] },
+      exit_rec: { hold_days: null, hold_median_return: null, hold_win_rate: null, stop_pct: null, sample_size: null,
+        data_quality: "close", targets: null },
+    }) };
+    const html = await page({ ticker: "AAA" });
+    expect(html).toContain("Alpha Ltd");
+    expect(html).toContain("vs Nifty — per year, same period");
+    expect(html).toContain("Extra vs Nifty</span><span class=\"rd-bar__val\">—</span>");
+    expect(html).not.toMatch(/NaN|null|undefined/);
+  });
+
+  it("formats null exit numbers and missing targets as dashes", () => {
+    const html = renderToStaticMarkup(h(ExitResearch, { rec: {
+      hold_days: null, hold_median_return: null, hold_win_rate: null, stop_pct: null, sample_size: null,
+      data_quality: "close", targets: [{ pct: null, book_pct: null, hit_rate: null }],
+    } }));
+    expect(html).toContain("Stop level: —");
+    expect(html).not.toMatch(/NaN|null|undefined/);
+    const noTargets = renderToStaticMarkup(h(ExitResearch, { rec: {
+      hold_days: 2, hold_median_return: 0.44, hold_win_rate: 0.56, stop_pct: -12.8, sample_size: 152, data_quality: "close",
+    } }));
+    expect(noTargets).toContain("2 days");
+    expect(noTargets).not.toContain("<table");
+  });
+});

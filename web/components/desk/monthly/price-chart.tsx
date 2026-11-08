@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { createChart, LineSeries, type Time } from "lightweight-charts";
-import { deskChartOptions, toSeriesData, useThemeName } from "@/components/desk/monthly/chart-kit";
+import { deskChartOptions, toSeriesData, useThemeName } from "@/components/desk/chart-kit";
 import { formatRupees } from "@/lib/desk/format";
 
 const HEIGHT = 180;

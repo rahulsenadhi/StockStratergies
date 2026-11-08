@@ -4,7 +4,7 @@
  * was computed in Python and saved in ui_monthly.json. No node:fs here.
  */
 import {
-  formatChange, formatRupees, formatSigned, pyFixed, freshnessLabel, freshnessTone, type Direction, type Tone,
+  formatChange, formatRupees, formatSigned, orDash, pyFixed, freshnessLabel, freshnessTone, type Direction, type Tone,
 } from "@/lib/desk/format";
 
 export type ChartWindow = "1Y" | "3Y" | "All";
@@ -18,9 +18,9 @@ export interface MonthlySummary {
   max_dd: number | null;
   start: string;
   end: string;
-  bench_ret: number;
-  bench_cagr: number;
-  alpha: number;
+  bench_ret: number | null;
+  bench_cagr: number | null;
+  alpha: number | null;
   n_months: number | null;
 }
 
@@ -36,10 +36,10 @@ export interface RankRow {
   ticker: string;
   symbol: string;
   company: string;
-  price: number;
+  price: number | null;
   month_ret: number | null;
   bench_ret: number | null;
-  rs: number;
+  rs: number | null;
   label: string;
 }
 
@@ -53,7 +53,7 @@ export interface RebalanceRow {
   top5: string;
   bought: string;
   sold: string;
-  value: number;
+  value: number | null;
 }
 
 export interface CheckRow {
@@ -63,21 +63,22 @@ export interface CheckRow {
   note: string;
 }
 
+/** Saved numbers that Python wrote as NaN arrive as null; `targets` may be missing (Python reads it with .get). */
 export interface ExitTarget {
-  pct: number;
-  book_pct: number;
-  hit_rate: number;
+  pct: number | null;
+  book_pct: number | null;
+  hit_rate: number | null;
 }
 
 export interface ExitRec {
   strategy?: string;
   bucket?: string;
-  hold_days: number;
-  hold_median_return: number;
-  hold_win_rate: number;
-  targets: ExitTarget[];
-  stop_pct: number;
-  sample_size: number;
+  hold_days: number | null;
+  hold_median_return: number | null;
+  hold_win_rate: number | null;
+  targets?: ExitTarget[] | null;
+  stop_pct: number | null;
+  sample_size: number | null;
   data_quality: string;
   curve?: Record<string, number | null>[];
 }
@@ -112,7 +113,7 @@ export function resolveSelected(
 // ---- summary (_render_monthly_summary) ---------------------------------------------------
 
 const DASH = "—";
-const pct1 = (v: number | null) => (v == null ? DASH : `${formatSigned(v, 1)}%`);
+const pct1 = (v: number | null) => orDash(v, (n) => `${formatSigned(n, 1)}%`);
 
 export function cagrText(s: MonthlySummary): string {
   return pct1(s.cagr);
@@ -123,15 +124,21 @@ export function cagrTone(s: MonthlySummary): Tone {
 }
 
 export function benchSub(s: MonthlySummary): string {
-  return `vs Nifty ${formatSigned(s.bench_cagr, 1)}% per year, same period`;
+  return `vs Nifty ${pct1(s.bench_cagr)} per year, same period`;
+}
+
+/** A missing alpha has no direction, so it is muted rather than green or red. */
+function alphaTone(alpha: number | null): Tone {
+  if (alpha == null || !Number.isFinite(alpha)) return "muted";
+  return alpha >= 0 ? "gain" : "loss";
 }
 
 export function summaryStats(s: MonthlySummary): { label: string; value: string; tone: Tone }[] {
   return [
-    { label: "Extra vs Nifty", value: `${formatSigned(s.alpha, 1)}% / yr`, tone: s.alpha >= 0 ? "gain" : "loss" },
+    { label: "Extra vs Nifty", value: orDash(s.alpha, (n) => `${formatSigned(n, 1)}% / yr`), tone: alphaTone(s.alpha) },
     { label: "Total return", value: pct1(s.total_ret), tone: "info" },
-    { label: "Nifty total", value: `${formatSigned(s.bench_ret, 1)}%`, tone: "muted" },
-    { label: "Worst fall from a peak", value: s.max_dd == null ? DASH : `${pyFixed(s.max_dd, 1)}%`, tone: "loss" },
+    { label: "Nifty total", value: pct1(s.bench_ret), tone: "muted" },
+    { label: "Worst fall from a peak", value: orDash(s.max_dd, (n) => `${pyFixed(n, 1)}%`), tone: "loss" },
     { label: "Sample", value: s.n_months ? `${s.n_months} monthly rebalances` : DASH, tone: "muted" },
   ];
 }
@@ -169,9 +176,9 @@ export function rankCells(r: RankRow): RankCells {
     rank: `${r.rank}`,
     company: r.company,
     sub: rankSub(r),
-    price: formatRupees(r.price, 2),
+    price: orDash(r.price, (n) => formatRupees(n, 2)),
     move: formatChange(r.month_ret),
-    rs: `${formatSigned(r.rs, 2)}%`,
+    rs: orDash(r.rs, (n) => `${formatSigned(n, 2)}%`),
     label: r.label,
   };
 }
@@ -183,7 +190,7 @@ export function rankingAge(ageDays: number | null): { label: string; tone: Tone 
 // ---- rebalances (_render_monthly_rebalances) ---------------------------------------------------
 
 export function rebalanceCells(r: RebalanceRow): [string, string, string, string, string] {
-  return [r.date, r.top5, r.bought, r.sold, formatRupees(r.value, 0)];
+  return [r.date, r.top5, r.bought, r.sold, orDash(r.value, (n) => formatRupees(n, 0))];
 }
 
 export const REBALANCE_NOTE = (total: number): string =>
@@ -195,16 +202,17 @@ export const REBALANCE_NOTE = (total: number): string =>
 export function exitTexts(rec: ExitRec) {
   const dq = rec.data_quality === "ohlcv" ? "daily OHLCV" : "close-only (approx.)";
   return {
-    hold: `${rec.hold_days} days`,
-    median: `${pyFixed(rec.hold_median_return, 1)}%`,
-    winRate: `${pyFixed(rec.hold_win_rate * 100, 0)}%`,
-    targets: rec.targets.map((t, n) => ({
+    hold: orDash(rec.hold_days, (n) => `${n} days`),
+    median: orDash(rec.hold_median_return, (n) => `${pyFixed(n, 1)}%`),
+    winRate: orDash(rec.hold_win_rate, (n) => `${pyFixed(n * 100, 0)}%`),
+    targets: (rec.targets ?? []).map((t, n) => ({
       tier: `T${n + 1}`,
-      target: `+${pyFixed(t.pct, 1)}%`,
-      book: `${t.book_pct}%`,
-      hit: `${pyFixed(t.hit_rate * 100, 0)}%`,
+      target: orDash(t.pct, (v) => `+${pyFixed(v, 1)}%`),
+      book: orDash(t.book_pct, (v) => `${v}%`),
+      hit: orDash(t.hit_rate, (v) => `${pyFixed(v * 100, 0)}%`),
     })),
-    caption: `Stop level: ${pyFixed(rec.stop_pct, 1)}%  -  sample: ${rec.sample_size} trades  -  data: ${dq}`,
+    caption: `Stop level: ${orDash(rec.stop_pct, (n) => `${pyFixed(n, 1)}%`)}  -  ` +
+      `sample: ${orDash(rec.sample_size, String)} trades  -  data: ${dq}`,
   };
 }
 

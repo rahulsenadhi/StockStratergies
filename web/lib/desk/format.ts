@@ -27,6 +27,14 @@ export function pyFixed(value: number, decimals: number): string {
   return even ? `${value < 0 ? "-" : ""}${kept}` : rounded;
 }
 
+/**
+ * The one null-tolerant path for saved numbers: a value Python saved as NaN arrives as null,
+ * so null, undefined and non-finite values show "—" instead of reaching `toFixed`.
+ */
+export function orDash(value: number | null | undefined, format: (value: number) => string): string {
+  return value == null || !Number.isFinite(value) ? "—" : format(value);
+}
+
 /** Python `f"{value:,.{decimals}f}"`, e.g. 25030.35 -> "25,030.35". */
 export function formatNumber(value: number, decimals = 2): string {
   const [int, frac] = pyFixed(value, decimals).split(".");

@@ -33,7 +33,7 @@ export function hexRgba(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
 
-/** Shared desk chart look (same as Home's GrowthChart): no grid columns, no scroll/zoom. */
+/** Shared desk chart look (Home GrowthChart and the Monthly charts): no grid columns, no scroll/zoom. */
 export function deskChartOptions(height: number, priceFormatter: (p: number) => string): DeepPartial<ChartOptions> {
   const muted = readCss("--rd-text-muted", "#77756E");
   const line = readCss("--rd-line", "#E7E4DD");

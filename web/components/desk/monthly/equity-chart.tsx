@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { BaselineSeries, createChart, LineSeries, LineStyle, type Time } from "lightweight-charts";
-import { deskChartOptions, hexRgba, readCss, toSeriesData, useThemeName } from "@/components/desk/monthly/chart-kit";
+import { deskChartOptions, hexRgba, readCss, toSeriesData, useThemeName } from "@/components/desk/chart-kit";
 import type { ChartTrace } from "@/lib/desk/monthly-text";
 
 const HEIGHT = 270;

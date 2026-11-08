@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ColorType, createChart, LineSeries, LineStyle } from "lightweight-charts";
+import { createChart, LineSeries, LineStyle } from "lightweight-charts";
+import { deskChartOptions, readCss } from "@/components/desk/chart-kit";
 import { DeskTable, NameCell } from "@/components/desk/desk-table";
 import { ChangePill, SectionHead, StatusPill } from "@/components/desk/primitives";
 import { Segmented } from "@/components/desk/segmented";
@@ -69,27 +70,13 @@ export function StrategiesCard({ strategies }: { strategies: StrategyRow[] }) {
 
 const WINDOWS: readonly GrowthWindow[] = ["1Y", "3Y", "5Y", "Max"];
 
-function readCss(name: string, fallback: string): string {
-  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return v || fallback;
-}
-
 function GrowthChart({ series }: { series: GrowthSeries[] }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el || series.length === 0) return;
     const muted = readCss("--rd-text-muted", "#77756E");
-    const line = readCss("--rd-line", "#E7E4DD");
-    const chart = createChart(el, {
-      height: 290, autoSize: true,
-      layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: muted, fontFamily: "inherit" },
-      grid: { vertLines: { visible: false }, horzLines: { color: line } },
-      rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false },
-      handleScroll: false, handleScale: false,
-      localization: { priceFormatter: (p: number) => `${p.toFixed(0)}%` },
-    });
+    const chart = createChart(el, deskChartOptions(290, (p: number) => `${p.toFixed(0)}%`));
     series.forEach((s, i) => {
       const ls = chart.addSeries(LineSeries, { color: s.colour, lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
       ls.setData(s.points.map(([time, value]) => ({ time, value })));

@@ -48,7 +48,7 @@ function RulesAndChecks({ checks, colour }: { checks: CheckRow[]; colour: string
   );
 }
 
-interface TargetRow { tier: string; target: string; book: string; hit: string; pct: number; hitRate: number }
+interface TargetRow { tier: string; target: string; book: string; hit: string; pct: number | null; hitRate: number | null }
 
 const [TIER, TARGET, BOOK, HIT] = EXIT_LABELS.columns;
 const TARGET_COLUMNS: DeskColumn<TargetRow>[] = [
@@ -71,8 +71,9 @@ function Metric({ label, value, help }: { label: string; value: string; help?: s
 export function ExitResearch({ rec }: { rec: ExitRec | null }) {
   if (!rec) return <EmptyState title={EXIT_EMPTY} />;
   const t = exitTexts(rec);
+  const saved = rec.targets ?? [];
   const targets: TargetRow[] = t.targets.map((row, i) => ({
-    ...row, pct: rec.targets[i].pct, hitRate: rec.targets[i].hit_rate,
+    ...row, pct: saved[i]?.pct ?? null, hitRate: saved[i]?.hit_rate ?? null,
   }));
   return (
     <div className="desk-stack" style={{ gap: 10 }}>
