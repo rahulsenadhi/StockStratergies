@@ -4859,16 +4859,17 @@ _PRECOMPUTE_FOR: dict[str, list[str]] = {
     # precompute_ui_home.py saves Home's data for the Next.js app in web/;
     # precompute_ui_monthly.py (last) saves the Monthly page's data. It runs after Home
     # so a failure there cannot stop Home updating. PEAD has no Monthly data.
-    # precompute_ui_momentum.py (last) saves the Momentum page's data.
+    # precompute_ui_momentum.py saves the Momentum page's data; precompute_ui_ipo.py (last)
+    # saves the IPO page's data (Momentum's exit step rewrites the IPO exit research).
     'Monthly':  ['precompute_suggestions.py', 'precompute_insights.py',
                  'precompute_ui_home.py', 'precompute_ui_monthly.py'],
     'IPO':      ['precompute_exit_recommendations.py', 'precompute_suggestions.py',
                  'precompute_insights.py', 'precompute_ui_home.py', 'precompute_ui_monthly.py',
-                 'precompute_ui_momentum.py'],
+                 'precompute_ui_momentum.py', 'precompute_ui_ipo.py'],
     'Momentum': ['precompute_momentum_signals.py', 'precompute_exit_recommendations.py',
                  'precompute_suggestions.py', 'precompute_insights.py',
                  'precompute_ui_home.py', 'precompute_ui_monthly.py',
-                 'precompute_ui_momentum.py'],
+                 'precompute_ui_momentum.py', 'precompute_ui_ipo.py'],
     'PEAD':     ['precompute_pead_screener.py', 'precompute_insights.py', 'precompute_ui_home.py'],
 }
 

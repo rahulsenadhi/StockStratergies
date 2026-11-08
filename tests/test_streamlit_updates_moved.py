@@ -72,6 +72,9 @@ def test_step_lists_still_defined_for_the_web_app():
                and v.index('precompute_ui_monthly.py') > v.index('precompute_ui_home.py')
                for k, v in md._PRECOMPUTE_FOR.items() if k != 'PEAD')
     assert 'precompute_ui_monthly.py' not in md._PRECOMPUTE_FOR['PEAD']
-    assert md._PRECOMPUTE_FOR['Momentum'][-1] == 'precompute_ui_momentum.py'
-    assert md._PRECOMPUTE_FOR['IPO'][-1] == 'precompute_ui_momentum.py'
+    assert 'precompute_ui_momentum.py' in md._PRECOMPUTE_FOR['Momentum']
+    assert 'precompute_ui_momentum.py' in md._PRECOMPUTE_FOR['IPO']
+    assert md._PRECOMPUTE_FOR['Momentum'][-1] == 'precompute_ui_ipo.py'
+    assert md._PRECOMPUTE_FOR['IPO'][-1] == 'precompute_ui_ipo.py'
+    assert 'precompute_ui_ipo.py' not in md._PRECOMPUTE_FOR['Monthly'] + md._PRECOMPUTE_FOR['PEAD']
     assert 'precompute_ui_momentum.py' not in md._PRECOMPUTE_FOR['Monthly'] + md._PRECOMPUTE_FOR['PEAD']

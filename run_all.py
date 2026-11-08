@@ -269,6 +269,7 @@ def main():
             'precompute_insights.py',             # insights.json
             'precompute_ui_monthly.py',           # ui_monthly.json (Next.js Monthly)
             'precompute_ui_momentum.py',          # ui_momentum.json (Next.js Momentum)
+            'precompute_ui_ipo.py',               # ui_ipo.json (Next.js IPO)
             'precompute_ui_home.py',              # ui_snapshot.json (Next.js Home)
         ]
         for script in PRECOMPUTE:
