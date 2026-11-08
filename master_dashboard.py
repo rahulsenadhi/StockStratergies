@@ -4010,13 +4010,47 @@ def _parquet_is_fresh(parquet_dir: Path, csv_folder: Path, tol_days: int = 1) ->
 def _empty_funnel() -> dict:
     return {'total': 0, 'sufficient_data': 0,
             'f1': 0, 'f2': 0, 'f3': 0, 'f4': 0, 'f5': 0, 'f6': 0,
-            'vol_bk': 0, 'final': 0}
+            'vol_bk': 0, 'final': 0, 'stale_cache': 0}
+
+
+def _csv_last_date(path: Path) -> pd.Timestamp | None:
+    """Date of the last row of a price CSV, read from the file tail (no full parse)."""
+    try:
+        with open(path, 'rb') as fh:
+            fh.seek(0, 2)
+            fh.seek(max(fh.tell() - 4096, 0))
+            lines = [ln for ln in fh.read().decode('utf-8', 'ignore').splitlines() if ln.strip()]
+        return pd.Timestamp(lines[-1].split(',')[0])
+    except Exception:
+        return None
+
+
+def _stale_cache_tickers(parquet_dir: Path, csv_folder: Path, tol_days: int = 1) -> set[str]:
+    """Tickers whose indicator cache ends more than tol_days before their own CSV.
+
+    The backtest only refreshes the cache of tickers that pass its liquidity filters, so a
+    folder-level freshness probe (`_parquet_is_fresh`) cannot vouch for every file.
+    """
+    stale: set[str] = set()
+    for pq in parquet_dir.glob('*.parquet'):
+        cs_last = _csv_last_date(csv_folder / f'{pq.stem}.csv')
+        if cs_last is None:
+            continue
+        try:
+            pq_last = pd.read_parquet(pq, columns=['close']).index[-1]
+        except Exception:
+            stale.add(pq.stem)   # unreadable cache is not trusted either
+            continue
+        if (cs_last - pd.Timestamp(pq_last)).days > tol_days:
+            stale.add(pq.stem)
+    return stale
 
 
 def _compute_momentum_signals_from_parquet(
     cache_dir: Path,
     universe: dict[str, str],
     bench: pd.Series | None,
+    skip: set[str] | None = None,
 ) -> tuple[pd.DataFrame, dict]:
     """Parquet fast-path. ~3-5s for 2000 tickers vs 30-60s via CSV+recompute.
 
@@ -4046,7 +4080,7 @@ def _compute_momentum_signals_from_parquet(
         return pd.DataFrame(), _empty_funnel()
 
     rows = []
-    skip_stems = {'NIFTYBEES.NS', 'me_summary', '^NSEI'}
+    skip_stems = {'NIFTYBEES.NS', 'me_summary', '^NSEI'} | set(skip or ())
     funnel = _empty_funnel()
     funnel['total'] = len([t for t in parquet_map if t not in skip_stems])
 
@@ -4172,6 +4206,7 @@ def _compute_momentum_signals_from_parquet(
         rows.append({
             'Ticker':       ticker.replace('.NS', ''),
             'Company':      universe.get(ticker, ticker.replace('.NS', '')),
+            'Data as of':   pd.Timestamp(ind.index[-1]).strftime('%Y-%m-%d'),
             'Signal':       signal,
             'Close':        round(close_now, 2),
             'ATH (₹)':      round(ath_now, 2),
@@ -4331,7 +4366,21 @@ def _scan_all_breakouts() -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values('Days Ago').reset_index(drop=True)
 
 
-def _compute_momentum_signals() -> tuple[pd.DataFrame, dict]:
+_SIGNAL_RANK = {'Breakout Today': 0, 'Near Breakout': 1, 'Watch Zone': 2}
+
+
+def _merge_momentum_signals(a: pd.DataFrame, b: pd.DataFrame) -> pd.DataFrame:
+    """Concatenate two signal frames and restore the scanner's ordering (signal, then score)."""
+    parts = [d for d in (a, b) if d is not None and not d.empty]
+    if not parts:
+        return pd.DataFrame()
+    out = pd.concat(parts, ignore_index=True)
+    out['_rank'] = out['Signal'].map(_SIGNAL_RANK).fillna(3)
+    out = out.sort_values(['_rank', 'Score'], ascending=[True, False], kind='stable')
+    return out.drop(columns=['_rank']).reset_index(drop=True)
+
+
+def _compute_momentum_signals(only_tickers: set[str] | None = None) -> tuple[pd.DataFrame, dict]:
     """Detect Momentum Edge live signals — SPEC-ALIGNED with momentum_edge_dashboard.py.
 
     F1-F4 use day-T values (per spec); F5/F6 use T-1; breakout-ref uses T-1 (resistance =
@@ -4343,7 +4392,11 @@ def _compute_momentum_signals() -> tuple[pd.DataFrame, dict]:
     momentum_edge_backtest.py). If those exist and are fresh (latest index
     within _parquet_is_fresh's tol_days=1 of CSV's latest), takes the fast path
     (~3s instead of ~30s); otherwise falls back to the CSV recompute path so a
-    stale cache never shadows freshly downloaded bars.
+    stale cache never shadows freshly downloaded bars. Within a fresh cache, any ticker
+    whose own cache file ends before its CSV is recomputed from the CSV (counted in
+    funnel['stale_cache']), because the backtest never refreshes illiquid tickers' cache.
+
+    only_tickers: restrict the CSV path to these tickers (used for the stale ones).
     """
     full_folder   = Path(BASE_DIR) / 'data' / 'nse_bse'
     legacy_folder = Path(BASE_DIR) / 'momentum_edge_data'
@@ -4365,8 +4418,16 @@ def _compute_momentum_signals() -> tuple[pd.DataFrame, dict]:
 
     # ── Parquet fast path ──────────────────────────────────────────────────
     cache_dir = Path(BASE_DIR) / 'data' / 'indicator_cache'
-    if cache_dir.exists() and _parquet_is_fresh(cache_dir, folder):
-        df_fast, funnel_fast = _compute_momentum_signals_from_parquet(cache_dir, universe, bench)
+    if only_tickers is None and cache_dir.exists() and _parquet_is_fresh(cache_dir, folder):
+        stale = _stale_cache_tickers(cache_dir, folder)
+        df_fast, funnel_fast = _compute_momentum_signals_from_parquet(
+            cache_dir, universe, bench, skip=stale)
+        if stale:
+            df_stale, funnel_stale = _compute_momentum_signals(only_tickers=stale)
+            funnel_fast = {k: funnel_fast.get(k, 0) + funnel_stale.get(k, 0) for k in funnel_fast}
+            funnel_fast['stale_cache'] = len(stale)
+            df_fast = _merge_momentum_signals(df_fast, df_stale)
+            funnel_fast['final'] = len(df_fast)
         if not df_fast.empty:
             return df_fast, funnel_fast
         # parquet exists but yielded nothing → fall through to CSV
@@ -4397,7 +4458,8 @@ def _compute_momentum_signals() -> tuple[pd.DataFrame, dict]:
 
     rows       = []
     skip_stems = {'NIFTYBEES.NS', 'me_summary', '^NSEI'}
-    all_csv = [c for c in sorted(folder.glob('*.csv')) if c.stem not in skip_stems]
+    all_csv = [c for c in sorted(folder.glob('*.csv')) if c.stem not in skip_stems
+               and (only_tickers is None or c.stem in only_tickers)]
     funnel['total'] = len(all_csv)
 
     for csv_path in all_csv:
@@ -4539,6 +4601,7 @@ def _compute_momentum_signals() -> tuple[pd.DataFrame, dict]:
         rows.append({
             'Ticker':       ticker.replace('.NS', ''),
             'Company':      company,
+            'Data as of':   df.index[-1].strftime('%Y-%m-%d'),
             'Signal':       signal,
             'Close':        round(close_now, 2),
             'ATH (₹)':      round(float(ath.iloc[-1]), 2),
