@@ -20,7 +20,7 @@ describe("desk nav", () => {
   });
 
   test("candidate and strategy rows map to their strategy page, falling back to Streamlit", () => {
-    for (const key of ["IPO", "Momentum", "PEAD", "ipo_edge", "momentum_edge", "pead"]) {
+    for (const key of ["IPO", "PEAD", "ipo_edge", "pead"]) {
       expect(strategyPageHref(key, "BAJFINANCE")).toEqual({ href: STREAMLIT_URL, external: true });
     }
     expect(strategyPageHref("unknown_custom_id")).toEqual({ href: STREAMLIT_URL, external: true });
@@ -30,6 +30,13 @@ describe("desk nav", () => {
     expect(strategyPageHref("Monthly", "HAL")).toEqual({ href: "/monthly?ticker=HAL", external: false });
     expect(strategyPageHref("monthly_rotation")).toEqual({ href: "/monthly", external: false });
     expect(strategyPageHref("Monthly", "M&M")).toEqual({ href: "/monthly?ticker=M%26M", external: false });
+  });
+});
+
+describe("desk nav: Momentum", () => {
+  test("Momentum is built: rows open /momentum with the ticker selected", () => {
+    expect(strategyPageHref("Momentum", "TITAN")).toEqual({ href: "/momentum?ticker=TITAN", external: false });
+    expect(strategyPageHref("momentum_edge")).toEqual({ href: "/momentum", external: false });
   });
 });
 

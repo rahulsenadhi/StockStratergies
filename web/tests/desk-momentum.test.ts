@@ -99,9 +99,9 @@ describe("visibleTrades", () => {
   });
   test("tradesCaption", () => {
     expect(tradesCaption(2, 3, "2026-05-01", "2026-10-01", false, 0)).toBe(
-      "Showing 2 trades of 3 total. Range: May 2026 → Oct 2026. Toggle Strict mode to hide marginal-breakout entries.");
+      "Showing 2 trades of 3 total. Range: May 2026 → Oct 2026. Turn on Clean signals only to hide marginal-breakout entries.");
     expect(tradesCaption(1, 3, "2026-10-01", "2026-10-26", true, 1)).toBe(
-      "Showing 1 trades of 3 total. Range: Oct 2026 → Oct 2026. Strict mode hid 1 marginal trade(s) in this window.");
+      "Showing 1 trades of 3 total. Range: Oct 2026 → Oct 2026. Clean signals only hid 1 marginal trade(s) in this window.");
     expect(tradesCaption(0, 3, null, null, false, 0)).toContain("Range: — → —.");
   });
 });

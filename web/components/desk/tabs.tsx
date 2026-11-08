@@ -9,8 +9,11 @@ export interface TabItem {
 }
 
 /** Accessible tab strip: Left/Right arrows move and select; only the selected panel renders. */
-export function Tabs({ tabs }: { tabs: TabItem[] }) {
-  const [selected, setSelected] = useState(tabs[0]?.id ?? "");
+export function Tabs({ tabs, value, onChange }: { tabs: TabItem[]; value?: string; onChange?: (id: string) => void }) {
+  const [own, setOwn] = useState(tabs[0]?.id ?? "");
+  // Controlled when `value` is given (the caller owns the selection); otherwise the strip keeps its own.
+  const selected = value ?? own;
+  const setSelected = (id: string) => { setOwn(id); onChange?.(id); };
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>, index: number) => {

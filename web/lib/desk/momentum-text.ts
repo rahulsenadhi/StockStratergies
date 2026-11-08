@@ -220,8 +220,8 @@ export function tradesCaption(
 ): string {
   return `Showing ${shown} trades of ${total} total. Range: ${monthYear(firstExit)} → ${monthYear(lastExit)}. ` +
     (strict
-      ? `Strict mode hid ${hidden} marginal trade(s) in this window.`
-      : "Toggle Strict mode to hide marginal-breakout entries.");
+      ? `Clean signals only hid ${hidden} marginal trade(s) in this window.`
+      : "Turn on Clean signals only to hide marginal-breakout entries.");
 }
 
 // ---- strategy health (_render_health_hero and the render_momentum metric row) -----------------

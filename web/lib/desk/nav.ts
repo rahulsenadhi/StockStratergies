@@ -33,7 +33,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Monthly stock rotation", icon: "RefreshCw", href: "/monthly" },
       { label: "Newly listed stocks (IPO)", icon: "Rocket", href: null },
-      { label: "Price strength (Momentum)", icon: "TrendingUp", href: null },
+      { label: "Price strength (Momentum)", icon: "TrendingUp", href: "/momentum" },
       { label: "After earnings (PEAD)", icon: "CalendarDays", href: null },
       { label: "Stocks to review", icon: "ListChecks", href: null },
     ],

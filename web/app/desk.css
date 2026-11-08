@@ -254,3 +254,15 @@ details[open] > .desk-summary::after { content: "▴"; }
 .desk-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
 .desk-metric { font-size: var(--rd-fs-xl); font-weight: 600; color: var(--rd-text); font-variant-numeric: tabular-nums; }
 .desk-h3 { margin: 0; font-size: var(--rd-fs-lg); font-weight: 600; color: var(--rd-text); }
+
+/* Momentum page: on/off toggle and funnel bars */
+.desk-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: var(--rd-fs-sm); color: var(--rd-text-muted); cursor: pointer; }
+.desk-toggle input { accent-color: var(--rd-info); width: 16px; height: 16px; }
+.desk-select { height: 32px; padding: 0 8px; border: 1px solid var(--rd-line); border-radius: 8px; background: var(--rd-card);
+  color: var(--rd-text); font: inherit; font-size: var(--rd-fs-sm); }
+.desk-funnel { display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) 60px; gap: 6px 14px; align-items: center;
+  font-size: var(--rd-fs-base); color: var(--rd-text); }
+.desk-funnel__track { height: 10px; border-radius: 3px; background: var(--rd-line); overflow: hidden; }
+.desk-funnel__fill { display: block; height: 100%; min-width: 3px; border-radius: 3px; background: var(--rd-info); }
+.desk-funnel__fill--gain { background: var(--rd-gain); } .desk-funnel__fill--loss { background: var(--rd-loss); }
+.desk-funnel__val { text-align: right; font-variant-numeric: tabular-nums; }
