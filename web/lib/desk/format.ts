@@ -13,12 +13,25 @@ const AGING_MAX_DAYS = 21;
 /** Python LOW_SAMPLE_TRADES: below this, a KPI is labelled "small sample". */
 export const LOW_SAMPLE_TRADES = 30;
 
-const grouped = (decimals: number) =>
-  new Intl.NumberFormat("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+/**
+ * Python `f"{value:.{decimals}f}"`. JS toFixed rounds an exact tie (3.125 at 2 decimals) up
+ * where Python rounds it to even, so ties are detected from the exact expansion and corrected.
+ */
+export function pyFixed(value: number, decimals: number): string {
+  const rounded = value.toFixed(decimals);
+  const exact = Math.abs(value).toFixed(Math.min(100, decimals + 30));
+  const tail = exact.slice(exact.length - 30);
+  if (!/^50*$/.test(tail)) return rounded;
+  const kept = exact.slice(0, exact.length - 30).replace(/\.$/, "");
+  const even = Number(kept[kept.length - 1]) % 2 === 0;
+  return even ? `${value < 0 ? "-" : ""}${kept}` : rounded;
+}
 
 /** Python `f"{value:,.{decimals}f}"`, e.g. 25030.35 -> "25,030.35". */
 export function formatNumber(value: number, decimals = 2): string {
-  return grouped(decimals).format(value);
+  const [int, frac] = pyFixed(value, decimals).split(".");
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return frac === undefined ? grouped : `${grouped}.${frac}`;
 }
 
 /** Python `f"{value:,}"` for floats already rounded to 2 decimals, e.g. 23264.1 -> "23,264.1". */
@@ -34,7 +47,7 @@ export function formatChange(
   if (value == null || Number.isNaN(value)) return { text: "—", direction: "flat" };
   const direction: Direction = value > 0 ? "up" : value < 0 ? "down" : "flat";
   const icon = direction === "up" ? "↗ " : direction === "down" ? "↘ " : "";
-  return { text: `${icon}${Math.abs(value).toFixed(decimals)}%`, direction };
+  return { text: `${icon}${pyFixed(Math.abs(value), decimals)}%`, direction };
 }
 
 const HEADLINE_MAX = 120;
@@ -59,4 +72,22 @@ export function freshnessTone(ageDays: number | null): Tone {
   if (ageDays <= FRESH_MAX_DAYS) return "gain";
   if (ageDays <= AGING_MAX_DAYS) return "warn";
   return "loss";
+}
+
+/** Python `f"{value:+.{decimals}f}"`, e.g. 20.94 -> "+20.9", -4.93 -> "-4.93" (no `%`). */
+export function formatSigned(value: number, decimals: number): string {
+  const text = pyFixed(value, decimals);
+  if (text.startsWith("-")) return text;
+  return Object.is(value, -0) ? `-${text}` : `+${text}`;
+}
+
+/** Python `f"₹{value:,.{decimals}f}"`, e.g. 1087.75 -> "₹1,087.75". */
+export function formatRupees(value: number, decimals: number): string {
+  return `₹${formatNumber(value, decimals)}`;
+}
+
+/** Python `big_value` split: text before the first "." is large, the rest ("." included) is small. */
+export function bigValueParts(text: string): { head: string; dec: string | null } {
+  const at = text.indexOf(".");
+  return at < 0 ? { head: text, dec: null } : { head: text.slice(0, at), dec: text.slice(at) };
 }
