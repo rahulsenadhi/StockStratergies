@@ -4010,7 +4010,7 @@ def _parquet_is_fresh(parquet_dir: Path, csv_folder: Path, tol_days: int = 1) ->
 def _empty_funnel() -> dict:
     return {'total': 0, 'sufficient_data': 0,
             'f1': 0, 'f2': 0, 'f3': 0, 'f4': 0, 'f5': 0, 'f6': 0,
-            'vol_bk': 0, 'final': 0, 'stale_cache': 0}
+            'vol_bk': 0, 'final': 0, 'stale_cache': 0, 'cache_without_csv': 0}
 
 
 def _csv_last_date(path: Path) -> pd.Timestamp | None:
@@ -4025,25 +4025,38 @@ def _csv_last_date(path: Path) -> pd.Timestamp | None:
         return None
 
 
-def _stale_cache_tickers(parquet_dir: Path, csv_folder: Path, tol_days: int = 1) -> set[str]:
-    """Tickers whose indicator cache ends more than tol_days before their own CSV.
+def _naive_ts(value) -> pd.Timestamp:
+    """Timestamp with any timezone dropped, so CSV and cache dates compare safely."""
+    ts = pd.Timestamp(value)
+    return ts.tz_localize(None) if ts.tzinfo is not None else ts
 
-    The backtest only refreshes the cache of tickers that pass its liquidity filters, so a
-    folder-level freshness probe (`_parquet_is_fresh`) cannot vouch for every file.
+
+def _stale_cache_tickers(
+    parquet_dir: Path, csv_folder: Path, tol_days: int = 1,
+) -> tuple[set[str], set[str]]:
+    """Return (stale, cache_without_csv) ticker stems.
+
+    stale: the cache ends more than tol_days before its CSV, or the cache / CSV cannot be
+    read (a cache we cannot vouch for is not trusted). The backtest only refreshes the
+    cache of tickers passing its liquidity filters, so the folder-level probe
+    (`_parquet_is_fresh`) cannot vouch for every file.
+    cache_without_csv: a cache file with no CSV at all; the cache is kept but reported.
     """
     stale: set[str] = set()
+    no_csv: set[str] = set()
     for pq in parquet_dir.glob('*.parquet'):
-        cs_last = _csv_last_date(csv_folder / f'{pq.stem}.csv')
-        if cs_last is None:
+        csv_path = csv_folder / f'{pq.stem}.csv'
+        if not csv_path.exists():
+            no_csv.add(pq.stem)
             continue
         try:
+            cs_last = _csv_last_date(csv_path)
             pq_last = pd.read_parquet(pq, columns=['close']).index[-1]
+            if cs_last is None or (_naive_ts(cs_last) - _naive_ts(pq_last)).days > tol_days:
+                stale.add(pq.stem)
         except Exception:
-            stale.add(pq.stem)   # unreadable cache is not trusted either
-            continue
-        if (cs_last - pd.Timestamp(pq_last)).days > tol_days:
             stale.add(pq.stem)
-    return stale
+    return stale, no_csv
 
 
 def _compute_momentum_signals_from_parquet(
@@ -4419,7 +4432,10 @@ def _compute_momentum_signals(only_tickers: set[str] | None = None) -> tuple[pd.
     # ── Parquet fast path ──────────────────────────────────────────────────
     cache_dir = Path(BASE_DIR) / 'data' / 'indicator_cache'
     if only_tickers is None and cache_dir.exists() and _parquet_is_fresh(cache_dir, folder):
-        stale = _stale_cache_tickers(cache_dir, folder)
+        stale, no_csv = _stale_cache_tickers(cache_dir, folder)
+        if no_csv:
+            print(f'momentum scan: {len(no_csv)} cached tickers have no CSV; cache trusted',
+                  file=sys.stderr)
         df_fast, funnel_fast = _compute_momentum_signals_from_parquet(
             cache_dir, universe, bench, skip=stale)
         if stale:
@@ -4428,6 +4444,7 @@ def _compute_momentum_signals(only_tickers: set[str] | None = None) -> tuple[pd.
             funnel_fast['stale_cache'] = len(stale)
             df_fast = _merge_momentum_signals(df_fast, df_stale)
             funnel_fast['final'] = len(df_fast)
+        funnel_fast['cache_without_csv'] = len(no_csv)
         if not df_fast.empty:
             return df_fast, funnel_fast
         # parquet exists but yielded nothing → fall through to CSV

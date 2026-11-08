@@ -80,3 +80,34 @@ def test_every_signal_row_carries_data_as_of(tmp_path, monkeypatch):
     sigs, funnel = md._compute_momentum_signals()
     assert sigs['Data as of'].notna().all()
     assert funnel['final'] == len(sigs)
+
+
+def test_unreadable_csv_is_treated_as_stale_and_counted(tmp_path, monkeypatch):
+    _build(tmp_path, monkeypatch)
+    (tmp_path / 'data' / 'nse_bse' / 'ZZZ.NS.csv').write_bytes(b'\xff\xfe\x00garbage')
+    stale, no_csv = md._stale_cache_tickers(
+        tmp_path / 'data' / 'indicator_cache', tmp_path / 'data' / 'nse_bse')
+    assert stale == {'ZZZ.NS'} and no_csv == set()
+    _, funnel = md._compute_momentum_signals()
+    assert funnel['stale_cache'] == 1
+
+
+def test_cache_without_csv_is_trusted_but_counted(tmp_path, monkeypatch, capsys):
+    _build(tmp_path, monkeypatch)
+    (tmp_path / 'data' / 'nse_bse' / 'ZZZ.NS.csv').unlink()
+    sigs, funnel = md._compute_momentum_signals()
+    assert funnel['cache_without_csv'] == 1
+    assert funnel['stale_cache'] == 0
+    assert funnel['total'] == 2   # the CSV-less cached ticker is still scanned from cache
+    assert '1 cached tickers have no CSV' in capsys.readouterr().err
+
+
+def test_tz_aware_csv_date_does_not_break_freshness_check(tmp_path, monkeypatch):
+    _build(tmp_path, monkeypatch)
+    csv = tmp_path / 'data' / 'nse_bse' / 'ZZZ.NS.csv'
+    text = csv.read_text().splitlines()
+    text[-1] = text[-1].replace(LAST_DATE, f'{LAST_DATE} 00:00:00+05:30', 1)
+    csv.write_text('\n'.join(text) + '\n')
+    stale, _ = md._stale_cache_tickers(
+        tmp_path / 'data' / 'indicator_cache', tmp_path / 'data' / 'nse_bse')
+    assert stale == {'ZZZ.NS'}
