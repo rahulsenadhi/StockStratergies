@@ -192,3 +192,50 @@ def test_corrupt_alerts_file_is_named(env):
     (d / "alerts.json").write_text("nope", encoding="utf-8")
     rc, ui = run(env, {})
     assert rc == 1 and "alerts file unreadable" in ui["monitor"]["errors"][0]
+
+
+def test_append_stores_through_python(env, capsys):
+    d, _ = env
+    p = d.parent / "tx.json"
+    p.write_text(json.dumps(buy("APLAPOLLO.NS", qty=5, d="2026-10-01")), encoding="utf-8")
+    assert pm.main(["--dir", str(d), "--append", str(p)]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["ok"] is True and out["transaction"]["id"] and out["transaction"]["created_at"]
+    assert [t["id"] for t in load_ledger(d / "ledger.json")] == [out["transaction"]["id"]]
+
+
+def test_append_rejects_without_writing(env, capsys):
+    d, _ = env
+    p = d.parent / "tx.json"
+    p.write_text(json.dumps(dict(buy("APLAPOLLO.NS"), type="SELL")), encoding="utf-8")
+    assert pm.main(["--dir", str(d), "--append", str(p)]) == 2
+    out = json.loads(capsys.readouterr().out)
+    assert out["ok"] is False and out["errors"] and not (d / "ledger.json").exists()
+    p.write_text("{not json", encoding="utf-8")
+    assert pm.main(["--dir", str(d), "--append", str(p)]) == 2
+    assert json.loads(capsys.readouterr().out)["ok"] is False
+
+
+def test_append_never_overwrites_corrupt_ledger(env, capsys):
+    d, _ = env
+    (d / "ledger.json").write_text("{broken", encoding="utf-8")
+    p = d.parent / "tx.json"
+    p.write_text(json.dumps(buy("APLAPOLLO.NS", d="2026-10-01")), encoding="utf-8")
+    assert pm.main(["--dir", str(d), "--append", str(p)]) == 1
+    assert json.loads(capsys.readouterr().out)["ok"] is False
+    assert (d / "ledger.json").read_text(encoding="utf-8") == "{broken"
+
+
+def test_ack_marks_alert_and_touches_only_alerts(env, capsys):
+    d, _ = env
+    add(d, buy("APLAPOLLO.NS", d="2026-10-01"))
+    run(env, {"APLAPOLLO.NS": make_bars(uptrend(last=80))})
+    capsys.readouterr()
+    ledger_before = (d / "ledger.json").read_bytes()
+    aid = load_alerts(d / "alerts.json")["alerts"][0]["id"]
+    assert pm.main(["--dir", str(d), "--ack", aid]) == 0
+    assert json.loads(capsys.readouterr().out)["ok"] is True
+    assert load_alerts(d / "alerts.json")["acknowledgements"][0]["alert_id"] == aid
+    assert (d / "ledger.json").read_bytes() == ledger_before
+    assert pm.main(["--dir", str(d), "--ack", "nope"]) == 2
+    assert json.loads(capsys.readouterr().out)["ok"] is False

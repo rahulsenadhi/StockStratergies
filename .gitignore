@@ -51,4 +51,4 @@ ui_portfolio.json
 ui_portfolio.json.tmp
 
 # user portfolio data (never committed)
-portfolio/
+/portfolio/

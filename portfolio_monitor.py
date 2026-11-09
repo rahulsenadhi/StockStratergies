@@ -7,8 +7,10 @@ are evaluated even when they no longer pass the entry scanner.  Outputs:
   ui_portfolio.json            - what the Next.js /portfolio page reads
 
 Exit code: 0 normally (per-holding problems are listed in monitor.errors), 1 when the
-ledger/settings/alerts file is corrupt, 2 for --validate-only with a rejected transaction.
+ledger/settings/alerts file is corrupt, 2 for --validate-only/--append/--ack when the request is rejected.
   python portfolio_monitor.py [--dir D] [--ledger F] [--out F] [--validate-only CANDIDATE]
+                              [--append TX.json] [--ack ALERT_ID]
+--append and --ack are the only writers of ledger.json / acknowledgements (the web app calls them).
 """
 from __future__ import annotations
 
@@ -20,10 +22,10 @@ from datetime import datetime
 from pathlib import Path
 
 from core.exit_monitor import IST, Evaluation, _as_ist, completed_cutoff, evaluate_holding
-from core.portfolio import (DEFAULT_SETTINGS, LedgerCorrupt, _atomic_write,
-                            estimated_exit_costs, load_ledger, load_settings, positions,
+from core.portfolio import (DEFAULT_SETTINGS, LedgerCorrupt, LedgerValidationError,
+                            _atomic_write, append_transaction, estimated_exit_costs, load_ledger, load_settings, positions,
                             universe_index, validate_transaction)
-from core.portfolio_alerts import load_alerts, update_alerts, with_ack_status
+from core.portfolio_alerts import acknowledge, load_alerts, update_alerts, with_ack_status
 
 ROOT = Path(__file__).resolve().parent
 PORTFOLIO_DIR = ROOT / "portfolio"
@@ -235,6 +237,38 @@ def validate_only(candidate: Path) -> int:
     return 0 if not errors else 2
 
 
+def _emit(payload: dict, rc: int) -> int:
+    print(json.dumps(payload))
+    return rc
+
+
+def append_only(ledger_path: Path, tx_file: Path) -> int:
+    """Validate and append one transaction (Python is the only ledger writer)."""
+    try:
+        tx = json.loads(tx_file.read_text(encoding="utf-8"))
+        if not isinstance(tx, dict):
+            raise ValueError("transaction must be a JSON object")
+        stored = append_transaction(ledger_path, tx, universe_index())
+    except LedgerValidationError as exc:
+        return _emit({"ok": False, "errors": exc.errors}, 2)
+    except LedgerCorrupt as exc:
+        return _emit({"ok": False, "errors": [f"ledger unreadable, nothing written: {exc}"]}, 1)
+    except Exception as exc:  # malformed input must give ok:false, never a traceback
+        return _emit({"ok": False, "errors": [f"cannot append: {type(exc).__name__}: {exc}"]}, 2)
+    return _emit({"ok": True, "transaction": stored}, 0)
+
+
+def ack_only(alerts_path: Path, alert_id: str) -> int:
+    """Acknowledge an alert; never touches the ledger."""
+    try:
+        found = acknowledge(alerts_path, alert_id)
+    except LedgerCorrupt as exc:
+        return _emit({"ok": False, "errors": [f"alerts file unreadable: {exc}"]}, 1)
+    if not found:
+        return _emit({"ok": False, "errors": ["unknown alert id"]}, 2)
+    return _emit({"ok": True}, 0)
+
+
 def main(argv: list[str] | None = None, *, now: datetime | None = None,
          bars_loader=None, nifty_last_date=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -242,7 +276,13 @@ def main(argv: list[str] | None = None, *, now: datetime | None = None,
     ap.add_argument("--ledger", type=Path, help="ledger file (default: <dir>/ledger.json)")
     ap.add_argument("--out", type=Path, default=UI_OUT, help="ui_portfolio.json path")
     ap.add_argument("--validate-only", type=Path, metavar="CANDIDATE_LEDGER")
+    ap.add_argument("--append", type=Path, metavar="TX_JSON", help="validate and append one transaction")
+    ap.add_argument("--ack", metavar="ALERT_ID", help="acknowledge an alert (not a sale)")
     args = ap.parse_args(argv)
+    if args.append:
+        return append_only(args.ledger or args.dir / "ledger.json", args.append)
+    if args.ack:
+        return ack_only(args.dir / "alerts.json", args.ack)
     if args.validate_only:
         return validate_only(args.validate_only)
     return run(args.dir, args.ledger or args.dir / "ledger.json", args.out,
