@@ -8,7 +8,12 @@ touches the ledger or positions.  ``alerts.json`` shape:
 from __future__ import annotations
 
 import hashlib
+import errno
 import json
+import math
+import os
+import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
@@ -17,6 +22,65 @@ from core.portfolio import LedgerCorrupt, _atomic_write
 ALERTS_VERSION = 1
 MAX_ALERTS = 200
 TRANSIENT_ACTIONS = ("STALE", "DATA UNAVAILABLE")
+LOCK_TIMEOUT_SECONDS = 10.0
+
+
+class AlertsLockTimeout(TimeoutError):
+    """Another process did not finish writing alerts within the allotted time."""
+
+
+@contextmanager
+def alerts_lock(path: str | Path, timeout: float = LOCK_TIMEOUT_SECONDS):
+    """Serialize alert writers across processes; the OS releases locks on exit.
+
+    Lock a permanent sidecar, not alerts.json itself: atomic replacement changes
+    that file's identity. Never unlink the sidecar, which would split the lock
+    between processes already holding it and processes opening a new file.
+    """
+    if not math.isfinite(timeout) or timeout < 0:
+        raise ValueError("alerts lock timeout must be finite and non-negative")
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = p.with_name(p.name + ".lock")
+    with open(lock_path, "a+b") as handle:
+        if os.name == "nt":
+            import msvcrt
+
+            def acquire():
+                handle.seek(0)
+                # Windows permits locking bytes beyond EOF, even in an empty file.
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+
+            def release():
+                handle.seek(0)
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            def acquire():
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+            def release():
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                acquire()
+                break
+            except OSError as exc:
+                if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                    raise
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise AlertsLockTimeout(
+                        f"Timed out waiting to write alerts at {p}; another process is busy. Retry shortly."
+                    ) from exc
+                time.sleep(min(0.05, remaining))
+        try:
+            yield
+        finally:
+            release()
 
 
 def _empty() -> dict:
@@ -75,15 +139,26 @@ def update_alerts(data: dict, evaluations: list[dict], open_symbols: set[str],
 
 def acknowledge(path: str | Path, alert_id_: str, now: datetime | None = None) -> bool:
     """Record an acknowledgement.  Returns False when the alert id is unknown."""
-    data = load_alerts(path)
-    if not any(a["id"] == alert_id_ for a in data["alerts"]):
-        return False
-    if not any(a.get("alert_id") == alert_id_ for a in data["acknowledgements"]):
-        data["acknowledgements"].append(
-            {"alert_id": alert_id_,
-             "acknowledged_at": (now or datetime.now()).isoformat(timespec="seconds")})
+    with alerts_lock(path):
+        data = load_alerts(path)
+        if not any(a["id"] == alert_id_ for a in data["alerts"]):
+            return False
+        if not any(a.get("alert_id") == alert_id_ for a in data["acknowledgements"]):
+            data["acknowledgements"].append(
+                {"alert_id": alert_id_,
+                 "acknowledged_at": (now or datetime.now()).isoformat(timespec="seconds")})
+            _atomic_write(Path(path), data)
+        return True
+
+
+def update_saved_alerts(path: str | Path, evaluations: list[dict],
+                        open_symbols: set[str], now: datetime) -> dict:
+    """Merge evaluations into the latest saved alerts, preserving concurrent acks."""
+    with alerts_lock(path):
+        data = load_alerts(path)
+        data, _ = update_alerts(data, evaluations, open_symbols, now)
         _atomic_write(Path(path), data)
-    return True
+        return data
 
 
 def with_ack_status(data: dict) -> list[dict]:
