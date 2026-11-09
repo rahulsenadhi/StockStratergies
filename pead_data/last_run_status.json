@@ -1,9 +1,9 @@
 {
-  "run_date": "2026-06-03",
+  "run_date": "2026-11-07",
   "declared_count": 0,
   "rows_written": 0,
   "qualified_long": 0,
   "qualified_short": 0,
-  "universe_size": 0,
+  "universe_size": 54,
   "error": null
 }

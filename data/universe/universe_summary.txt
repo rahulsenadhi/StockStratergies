@@ -1,10 +1,10 @@
 NSE + BSE Universe Build Summary
 ========================================
-Build date              : 2026-06-03 02:52:54
-NSE symbols found       : 2133
-BSE symbols found       : 2554
-Duplicates removed      : 2025
+Build date              : 2026-11-07 09:08:53
+NSE symbols found       : 2390
+BSE symbols found       : 2831
+Duplicates removed      : 2290
 Failed validation       : 0
-FINAL UNIVERSE SIZE     : 2662
-  - NSE symbols         : 2133
-  - BSE-exclusive       : 529
+FINAL UNIVERSE SIZE     : 2931
+  - NSE symbols         : 2390
+  - BSE-exclusive       : 541

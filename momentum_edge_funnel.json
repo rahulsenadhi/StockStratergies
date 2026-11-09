@@ -1,1 +1,1 @@
-{"total": 2321, "sufficient_data": 1045, "f1": 209, "f2": 113, "f3": 24, "f4": 20, "f5": 20, "f6": 15, "vol_bk": 0, "final": 15}
+{"total": 1242, "sufficient_data": 1006, "f1": 345, "f2": 103, "f3": 30, "f4": 29, "f5": 28, "f6": 28, "vol_bk": 0, "final": 28, "stale_cache": 240, "cache_without_csv": 0}
