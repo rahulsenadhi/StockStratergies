@@ -198,7 +198,16 @@ def run(pdir: Path, ledger_path: Path, out: Path, now: datetime, loader, nifty) 
     rows = [_position_row(p, ev, universe, settings) for p, ev in pairs]
     closed = [dict(p.to_dict(), name=universe.get(s, {}).get("name"))
               for s, p in allpos.items() if p.closed]
-    _atomic_write(out, _doc(now, True, errors, rows, closed, with_ack_status(alert_doc), settings))
+    last_good = None
+    if errors:
+        try:
+            previous = json.loads(out.read_text(encoding="utf-8"))
+            if isinstance(previous, dict) and isinstance(previous.get("monitor"), dict):
+                last_good = previous["monitor"].get("last_good_check")
+        except (OSError, ValueError):
+            pass
+    _atomic_write(out, _doc(now, not errors, errors, rows, closed, with_ack_status(alert_doc),
+                           settings, last_good=last_good))
     print(f"portfolio_monitor: {len(rows)} open, {len(closed)} closed, {len(errors)} errors")
     return 0
 
@@ -210,6 +219,8 @@ def _write_unreadable(out: Path, now: datetime, message: str) -> None:
         prev = json.loads(out.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         pass
+    if not isinstance(prev, dict):
+        prev = {}
     old_mon = prev.get("monitor") if isinstance(prev.get("monitor"), dict) else {}
     last_good = old_mon.get("last_good_check") or (old_mon.get("last_run") if old_mon.get("ok") else None)
     rows = []

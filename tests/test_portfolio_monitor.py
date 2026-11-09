@@ -42,6 +42,24 @@ def test_empty_ledger_gives_zero_positions(env):
     assert (env[0] / "settings.json").exists()
 
 
+@pytest.mark.parametrize("previous", [None, [], "invalid", 42])
+def test_corrupt_ledger_with_non_object_previous_snapshot(env, previous):
+    d, out = env
+    (d / "ledger.json").write_text("{broken", encoding="utf-8")
+    out.write_text(json.dumps(previous), encoding="utf-8")
+    rc, ui = run(env, {})
+    assert rc == 1
+    assert ui["monitor"]["ok"] is False
+    assert ui["positions"] == []
+
+
+def test_missing_calendar_is_not_a_successful_check(env):
+    add(env[0], buy("APLAPOLLO.NS", d="2026-10-01"))
+    _, ui = run(env, {"APLAPOLLO.NS": make_bars(uptrend(last=140))}, nifty=lambda now: None)
+    assert ui["monitor"]["ok"] is False
+    assert ui["monitor"]["last_good_check"] is None
+
+
 def test_holding_absent_from_scanner_is_still_evaluated(env):
     add(env[0], dict(opening("BHARATGEAR.NS", 10, 100.0), strategy="momentum_edge"))
     rc, ui = run(env, {"BHARATGEAR.NS": make_bars(uptrend(last=80))})
