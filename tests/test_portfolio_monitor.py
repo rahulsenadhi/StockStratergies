@@ -60,6 +60,23 @@ def test_missing_calendar_is_not_a_successful_check(env):
     assert ui["monitor"]["last_good_check"] is None
 
 
+def test_acknowledgement_during_evaluation_survives_monitor_write(env):
+    d, out = env
+    add(d, buy("APLAPOLLO.NS", d="2026-10-01"))
+    bars = make_bars(uptrend(last=80))
+    run(env, {"APLAPOLLO.NS": bars})
+    aid = load_alerts(d / "alerts.json")["alerts"][0]["id"]
+
+    def loader(symbol):
+        assert acknowledge(d / "alerts.json", aid)
+        return bars
+
+    assert pm.main(["--dir", str(d), "--out", str(out)], now=NOW,
+                   bars_loader=loader, nifty_last_date=NIFTY) == 0
+    assert load_alerts(d / "alerts.json")["acknowledgements"][0]["alert_id"] == aid
+    assert json.loads(out.read_text(encoding="utf-8"))["alerts"][0]["acknowledged_at"]
+
+
 def test_holding_absent_from_scanner_is_still_evaluated(env):
     add(env[0], dict(opening("BHARATGEAR.NS", 10, 100.0), strategy="momentum_edge"))
     rc, ui = run(env, {"BHARATGEAR.NS": make_bars(uptrend(last=80))})

@@ -25,7 +25,8 @@ from core.exit_monitor import IST, Evaluation, _as_ist, completed_cutoff, evalua
 from core.portfolio import (DEFAULT_SETTINGS, LedgerCorrupt, LedgerValidationError,
                             _atomic_write, append_transaction, estimated_exit_costs, load_ledger, load_settings, positions,
                             universe_index, validate_transaction)
-from core.portfolio_alerts import acknowledge, load_alerts, update_alerts, with_ack_status
+from core.portfolio_alerts import (AlertsLockTimeout, acknowledge, load_alerts,
+                                   update_saved_alerts, with_ack_status)
 
 ROOT = Path(__file__).resolve().parent
 PORTFOLIO_DIR = ROOT / "portfolio"
@@ -193,8 +194,12 @@ def run(pdir: Path, ledger_path: Path, out: Path, now: datetime, loader, nifty) 
     errors = errors_pre + errors
     evals = [ev.to_dict() for _, ev in pairs]
     _append_jsonl(pdir / "evaluations.jsonl", evals)
-    alert_doc, _ = update_alerts(alert_doc, evals, set(open_pos), now)
-    _atomic_write(pdir / "alerts.json", alert_doc)
+    try:
+        alert_doc = update_saved_alerts(pdir / "alerts.json", evals, set(open_pos), now)
+    except (LedgerCorrupt, AlertsLockTimeout) as exc:
+        _write_unreadable(out, now, f"alerts update failed: {exc}")
+        print(f"portfolio_monitor: alerts update failed: {exc}", file=sys.stderr)
+        return 1
     rows = [_position_row(p, ev, universe, settings) for p, ev in pairs]
     closed = [dict(p.to_dict(), name=universe.get(s, {}).get("name"))
               for s, p in allpos.items() if p.closed]
@@ -273,8 +278,8 @@ def ack_only(alerts_path: Path, alert_id: str) -> int:
     """Acknowledge an alert; never touches the ledger."""
     try:
         found = acknowledge(alerts_path, alert_id)
-    except LedgerCorrupt as exc:
-        return _emit({"ok": False, "errors": [f"alerts file unreadable: {exc}"]}, 1)
+    except (LedgerCorrupt, AlertsLockTimeout) as exc:
+        return _emit({"ok": False, "errors": [f"alerts acknowledgement failed: {exc}"]}, 1)
     if not found:
         return _emit({"ok": False, "errors": ["unknown alert id"]}, 2)
     return _emit({"ok": True}, 0)
