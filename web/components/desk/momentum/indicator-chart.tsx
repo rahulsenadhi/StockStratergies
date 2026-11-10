@@ -6,6 +6,7 @@ import {
   type ISeriesApi, type SeriesType, type Time,
 } from "lightweight-charts";
 import { deskChartOptions, readCss, useThemeName } from "@/components/desk/chart-kit";
+import { abbreviateIndian, priceAxisText } from "@/lib/desk/format";
 import { EmptyState } from "@/components/desk/primitives";
 import { Segmented } from "@/components/desk/segmented";
 import {
@@ -31,6 +32,9 @@ export type ChartState =
 
 const DASH: Record<string, LineStyle> = { solid: LineStyle.Solid, dot: LineStyle.Dotted, dash: LineStyle.Dashed };
 
+/** Volume/OBV and other lower panes: large values in K, L, Cr instead of raw digits. */
+const SUB_PANE_FORMAT = { type: "custom", formatter: abbreviateIndian, minMove: 0.01 } as const;
+
 const chartHeight = (plan: ChartPlan) => PRICE_PANE_HEIGHT + (plan.paneCount - 1) * SUB_PANE_HEIGHT;
 
 function addSeries(chart: ReturnType<typeof createChart>, s: SeriesSpec, text: string): ISeriesApi<SeriesType> {
@@ -42,18 +46,18 @@ function addSeries(chart: ReturnType<typeof createChart>, s: SeriesSpec, text: s
     }, s.pane);
   }
   if (s.kind === "hist") {
-    return chart.addSeries(HistogramSeries, { ...common, priceFormat: { type: "volume" }, base: 0 }, s.pane);
+    return chart.addSeries(HistogramSeries, { ...common, priceFormat: SUB_PANE_FORMAT, base: 0 }, s.pane);
   }
   const color = s.colour.toUpperCase() === NEAR_WHITE.toUpperCase() ? text : s.colour;
   return chart.addSeries(LineSeries, {
-    ...common, color, lineWidth: 1, lineStyle: DASH[s.dash] ?? LineStyle.Solid, crosshairMarkerVisible: false,
+    ...common, color, lineWidth: 1, ...(s.pane > 0 ? { priceFormat: SUB_PANE_FORMAT } : {}), lineStyle: DASH[s.dash] ?? LineStyle.Solid, crosshairMarkerVisible: false,
   }, s.pane);
 }
 
 /** Draw a plan on a new chart; the caller removes the chart. */
 function draw(el: HTMLElement, plan: ChartPlan): ReturnType<typeof createChart> {
   const height = chartHeight(plan);
-  const base = deskChartOptions(height, (p: number) => (Math.abs(p) >= 1000 ? p.toFixed(0) : p.toFixed(2)));
+  const base = deskChartOptions(height, priceAxisText);
   const chart = createChart(el, { ...base, height, handleScroll: false, handleScale: false });
   const text = readCss("--rd-text", "#1D1D1B");
   const apis = plan.series.map((s) => {

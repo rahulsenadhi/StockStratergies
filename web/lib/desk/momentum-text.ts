@@ -452,8 +452,8 @@ export const HOLD_EXIT_TITLE = "Hold and exit plan: Price strength (Momentum)";
 /** Extra Hold and exit rows from the current ATH view's health numbers. */
 export function holdExitExtras(h: Health): { label: string; value: string }[] {
   return [
-    { label: "Trades in profit at exit",
-      value: h.win_rate == null ? DASH : `${pyFixed(h.win_rate, 0)}% of ${orDash(h.n_trades, String)}` },
+    { label: `Trades in profit at their actual exit (${orDash(h.n_trades, String)} trades)`,
+      value: h.win_rate == null ? DASH : `${pyFixed(h.win_rate, 0)}%` },
     { label: "Stayed above entry 20+ days", value: orDash(h.safe_20d_pct, (n) => `${pyFixed(n, 0)}%`) },
   ];
 }

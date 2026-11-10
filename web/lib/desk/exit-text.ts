@@ -58,8 +58,7 @@ export const EXIT_EMPTY = "Exit Playbook: insufficient trade history to recommen
 // ---- Hold and exit plan card ----
 
 export const HOLD_EXIT_LABELS = {
-  hold: "Suggested hold",
-  winRate: "Success rate at that hold",
+  hold: "Researched hold",
   median: "Median return at that hold",
   sellPlan: "Sell plan",
   stop: "Stop level",
@@ -67,6 +66,8 @@ export const HOLD_EXIT_LABELS = {
 } as const;
 
 export const SMALL_SAMPLE_NOTE = `Small sample: fewer than ${LOW_SAMPLE_TRADES} past trades, so treat these numbers as rough.`;
+
+export const HOLD_RESEARCH_NOTE = "Hold research uses all past trades.";
 
 /** Plain statement that the numbers are history, never a promise. */
 export const HONESTY_NOTE = (lossPct: number) =>
@@ -79,6 +80,8 @@ export function holdExitRows(rec: ExitRec) {
   return {
     hold: t.hold,
     winRate: t.winRate,
+    winRateLabel: `Success rate if held exactly ${orDash(rec.hold_days, String)} days ` +
+      `(${orDash(sample, String)} trades tested)`,
     median: orDash(rec.hold_median_return, (n) => `${formatSigned(n, 1)}%`),
     stop: orDash(rec.stop_pct, (n) => `${pyFixed(n, 1)}%`),
     basis: `Based on ${orDash(sample, String)} past trades`,

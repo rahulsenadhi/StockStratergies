@@ -4,7 +4,7 @@ import { DeskTable } from "@/components/desk/desk-table";
 import { ExitCurveChart } from "@/components/desk/exit-curve-chart";
 import { EmptyState, SectionHead, StatBar } from "@/components/desk/primitives";
 import {
-  EXIT_EMPTY, HOLD_EXIT_LABELS, HONESTY_NOTE, SMALL_SAMPLE_NOTE, holdExitRows, type ExitRec,
+  EXIT_CAPTION, EXIT_EMPTY, HOLD_EXIT_LABELS, HOLD_RESEARCH_NOTE, HONESTY_NOTE, SMALL_SAMPLE_NOTE, holdExitRows, type ExitRec,
 } from "@/lib/desk/exit-text";
 import type { DeskColumn } from "@/lib/desk/table";
 
@@ -36,7 +36,7 @@ export function HoldExitCard({ rec, title, extra = [] }: { rec: ExitRec | null; 
       <div className="hx-grid">
         <div className="desk-stack" style={{ gap: 4 }}>
           <StatBar label={HOLD_EXIT_LABELS.hold} value={r.hold} tone="info" />
-          <StatBar label={HOLD_EXIT_LABELS.winRate} value={r.winRate} />
+          <StatBar label={r.winRateLabel} value={r.winRate} />
           <StatBar label={HOLD_EXIT_LABELS.median} value={r.median} />
           <StatBar label={HOLD_EXIT_LABELS.stop} value={r.stop} tone="loss" />
           {extra.map((e) => (
@@ -53,6 +53,8 @@ export function HoldExitCard({ rec, title, extra = [] }: { rec: ExitRec | null; 
       <p className="rd-note" style={{ margin: 0 }}>
         {r.basis} (price data: {r.dataQuality}).{r.isSmallSample ? ` ${SMALL_SAMPLE_NOTE}` : ""}
       </p>
+      <p className="rd-note" style={{ margin: 0 }}>{HOLD_RESEARCH_NOTE}</p>
+      <p className="rd-note" style={{ margin: 0 }}>{EXIT_CAPTION}</p>
       {r.lossPct != null ? <p className="rd-note" style={{ margin: 0 }}>{HONESTY_NOTE(r.lossPct)}</p> : null}
       {rec.curve && rec.curve.length > 0 ? (
         <details className="desk-disclosure">

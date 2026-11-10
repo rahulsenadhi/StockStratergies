@@ -60,7 +60,7 @@ def test_missing_file_sets_note_and_no_traces(pre):
     assert chart['traces'] == [] and chart['shapes'] == [] and chart['badges'] == []
 
 
-def test_streamlit_and_plot_restored_after_exception(pre, tmp_path, monkeypatch):
+def test_streamlit_and_plot_restored_after_exception(pre, tmp_path, monkeypatch, capsys):
     _write_csv(tmp_path, 'AAA')
     real_st, real_plot = _md.st, _md._plot
 
@@ -69,7 +69,10 @@ def test_streamlit_and_plot_restored_after_exception(pre, tmp_path, monkeypatch)
     monkeypatch.setattr(_md, '_indicator_badge', boom)
     chart = pre.build_chart('AAA', None)
     assert _md.st is real_st and _md._plot is real_plot
-    assert chart['traces'] == [] and 'boom' in chart['note']
+    assert chart['traces'] == []
+    assert chart['note'] == 'Chart could not be prepared for this stock in the last update.'
+    assert 'boom' not in chart['note'] and 'RuntimeError' not in chart['note']
+    assert 'boom' in capsys.readouterr().err
 
 
 def test_index_lists_written_symbols_and_stale_file_is_removed(pre, tmp_path):

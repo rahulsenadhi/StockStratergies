@@ -215,8 +215,8 @@ export const DETAIL_ROWS = {
 } as const;
 export const priceChartLabel = (sessions: number, savedTo: string): string =>
   `Closing price · last ${sessions} sessions (saved to ${savedTo})`;
-export const TOP5_CARD_TITLE = "Model's top 5 for this month";
-export const TOP5_CARD_SUB = "The stocks the model would hold this month. A model list, not an instruction.";
+export const TOP5_CARD_TITLE = "Top 5 by today's ranking";
+export const TOP5_CARD_SUB = "What the model would pick if it rebalanced today. It rebalances at month end. A model list, not an instruction.";
 export const TOP5_TITLE = "Model top 5";
 export const TOP5_META = "RS score";
 export const exchangeLine = (symbol: string): string => `${symbol} · NSE`;

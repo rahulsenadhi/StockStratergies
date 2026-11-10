@@ -30,3 +30,17 @@ describe("IndicatorChartView", () => {
     expect(text).not.toMatch(/NaN|null|undefined/);
   });
 });
+
+describe("axis formatters", () => {
+  it("abbreviates large volume values Indian style", async () => {
+    const { abbreviateIndian, priceAxisText } = await import("@/lib/desk/format");
+    expect(abbreviateIndian(200000000)).toBe("20.0 Cr");
+    expect(abbreviateIndian(20000000)).toBe("2.0 Cr");
+    expect(abbreviateIndian(4530000)).toBe("45.3 L");
+    expect(abbreviateIndian(12500)).toBe("12.5 K");
+    expect(abbreviateIndian(-4530000)).toBe("-45.3 L");
+    expect(abbreviateIndian(55.123)).toBe("55.12");
+    expect(priceAxisText(2450.6)).toBe("₹2451");
+    expect(priceAxisText(99.5)).toBe("₹99.50");
+  });
+});

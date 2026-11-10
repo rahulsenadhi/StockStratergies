@@ -141,6 +141,9 @@ def _since_line(rec: _ChartRecorder) -> str | None:
     return rec.captions[0] if rec.captions else None
 
 
+CHART_FAILED_NOTE = 'Chart could not be prepared for this stock in the last update.'
+
+
 def _empty(symbol: str, note: str) -> dict:
     return {'version': CHARTS_VERSION, 'symbol': symbol, 'rows': ROWS, 'traces': [], 'shapes': [],
             'badges': [], 'since_line': None, 'note': note}
@@ -154,8 +157,8 @@ def build_chart(symbol: str, trades) -> dict:
     try:
         md._render_me_detail(symbol, trades)
     except Exception as exc:
-        print(f'warning: {symbol} chart not saved ({exc})', file=sys.stderr)
-        return _empty(symbol, f'Could not render chart: {type(exc).__name__}: {exc}')
+        print(f'warning: {symbol} chart not saved ({type(exc).__name__}: {exc})', file=sys.stderr)
+        return _empty(symbol, CHART_FAILED_NOTE)
     finally:
         md.st, md._plot = real_st, real_plot
     if not figs:

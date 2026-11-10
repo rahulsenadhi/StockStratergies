@@ -1,7 +1,7 @@
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { HONESTY_NOTE, SMALL_SAMPLE_NOTE, EXIT_EMPTY, holdExitRows, type ExitRec } from "@/lib/desk/exit-text";
+import { EXIT_CAPTION, HOLD_RESEARCH_NOTE, HONESTY_NOTE, SMALL_SAMPLE_NOTE, EXIT_EMPTY, holdExitRows, type ExitRec } from "@/lib/desk/exit-text";
 import type { RankRow } from "@/lib/desk/monthly-text";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }));
@@ -40,6 +40,13 @@ describe("holdExitRows", () => {
   });
 });
 
+describe("winRateLabel", () => {
+  it("names the hold and the tested sample", () => {
+    expect(holdExitRows(MOMENTUM).winRateLabel).toBe("Success rate if held exactly 65 days (31 trades tested)");
+    expect(holdExitRows(MONTHLY).winRateLabel).toBe("Success rate if held exactly 2 days (152 trades tested)");
+  });
+});
+
 describe("HONESTY_NOTE", () => {
   it("states past results are not a promise", () => {
     expect(HONESTY_NOTE(19)).toBe("Past results, not a promise. At the suggested hold, 19% of past trades still lost money.");
@@ -53,10 +60,11 @@ describe("HoldExitCard", () => {
   });
   it("renders the rows, targets, honesty note and extra rows", () => {
     const html = renderToStaticMarkup(h(HoldExitCard, { rec: MOMENTUM, title: "Hold and exit plan: Momentum",
-      extra: [{ label: "Trades in profit at exit", value: "81% of 31" }] }));
-    for (const s of ["Hold and exit plan: Momentum", "Suggested hold", "65 days", "Success rate at that hold", "81%",
+      extra: [{ label: "Trades in profit at their actual exit (144 trades)", value: "32%" }] }));
+    for (const s of ["Hold and exit plan: Momentum", "Researched hold", "65 days", "Success rate if held exactly 65 days (31 trades tested)", "81%",
+      EXIT_CAPTION, HOLD_RESEARCH_NOTE,
       "Median return at that hold", "Sell plan", "Sell at", "Sell this much", "Hit before (hist.)", "Stop level", "-10.1%",
-      "Based on 31 past trades", HONESTY_NOTE(19), "Trades in profit at exit", "81% of 31"]) {
+      "Based on 31 past trades", HONESTY_NOTE(19), "Trades in profit at their actual exit (144 trades)", "32%"]) {
       expect(html).toContain(s);
     }
     expect(html).not.toContain(SMALL_SAMPLE_NOTE);
@@ -77,8 +85,8 @@ describe("Top5Card", () => {
   const ranking = ["BAJFINANCE", "M&M", "HDFCBANK", "RELIANCE", "ULTRACEMCO", "ZZZ"].map((s, i) => row(i + 1, s));
   it("shows five rows in rank order with the sub-line", () => {
     const html = renderToStaticMarkup(h(Top5Card, { ranking, top5: ["BAJFINANCE", "M&M", "HDFCBANK", "RELIANCE", "ULTRACEMCO"], onSelect: () => {} }));
-    expect(html).toContain("Model&#x27;s top 5 for this month");
-    expect(html).toContain("A model list, not an instruction.");
+    expect(html).toContain("Top 5 by today&#x27;s ranking");
+    expect(html).toContain("What the model would pick if it rebalanced today. It rebalances at month end. A model list, not an instruction.");
     const order = ["BAJFINANCE Ltd", "M&amp;M Ltd", "HDFCBANK Ltd", "RELIANCE Ltd", "ULTRACEMCO Ltd"].map((s) => html.indexOf(s));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
@@ -90,8 +98,10 @@ describe("holdExitExtras", () => {
   it("follows the health numbers of the current view", async () => {
     const { holdExitExtras } = await import("@/lib/desk/momentum-text");
     const rows = holdExitExtras({ win_rate: 81, n_trades: 31, safe_20d_pct: 74 } as never);
+    expect(holdExitExtras({ win_rate: 32, n_trades: 144, safe_20d_pct: 1 } as never)[0])
+      .toEqual({ label: "Trades in profit at their actual exit (144 trades)", value: "32%" });
     expect(rows).toEqual([
-      { label: "Trades in profit at exit", value: "81% of 31" },
+      { label: "Trades in profit at their actual exit (31 trades)", value: "81%" },
       { label: "Stayed above entry 20+ days", value: "74%" },
     ]);
     expect(holdExitExtras({ win_rate: null, n_trades: null, safe_20d_pct: null } as never)[0].value).toBe("—");

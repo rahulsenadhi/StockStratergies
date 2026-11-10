@@ -6,14 +6,14 @@ vi.mock("@/lib/use-job-stream", () => ({ runJobStream: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 import { runJobStream } from "@/lib/use-job-stream";
-import { performUpdate } from "@/lib/desk/use-strategy-update";
+import { dismissJob, performUpdate, resetJobState, startJob } from "@/lib/desk/use-strategy-update";
 import type { UpdateResult } from "@/lib/desk/run-update";
 import { PageUpdateButtonView } from "@/components/desk/page-update-button";
 
 const mockJob = vi.mocked(runJobStream);
 const ok = { strategy: "Monthly", ok: true, failedStep: null, errorTail: "" };
 
-beforeEach(() => mockJob.mockReset());
+beforeEach(() => { mockJob.mockReset(); resetJobState(); });
 
 describe("performUpdate", () => {
   it("posts the strategy and returns the results", async () => {
@@ -68,5 +68,62 @@ describe("PageUpdateButtonView", () => {
   });
   it("shows the busy error", () => {
     expect(render({ error: "An update is already running." })).toContain("An update is already running.");
+  });
+});
+
+describe("shared job store", () => {
+  const consumers = async () => {
+    const { useStrategyUpdate } = await import("@/lib/desk/use-strategy-update");
+    const React = await import("react");
+    const seen: ReturnType<typeof useStrategyUpdate>[] = [];
+    const C = () => { seen.push(useStrategyUpdate()); return null; };
+    return { seen, C, React };
+  };
+  it("shows one running job, its lines and results to every consumer", async () => {
+    let release!: () => void;
+    mockJob.mockImplementation(async (_u, _b, handlers) => {
+      handlers?.onLine?.("step 1");
+      await new Promise<void>((r) => { release = r; });
+      return { ok: true, status: 200, data: { results: [ok] } };
+    });
+    const p = startJob("Monthly");
+    const { seen, C, React } = await consumers();
+    renderToStaticMarkup(React.createElement(React.Fragment, null, React.createElement(C), React.createElement(C)));
+    expect(seen).toHaveLength(2);
+    for (const s of seen) { expect(s.running).toBe("Monthly"); expect(s.lines).toEqual(["step 1"]); }
+    expect(await startJob("all")).toBe(false);
+    release();
+    await p;
+    seen.length = 0;
+    renderToStaticMarkup(React.createElement(React.Fragment, null, React.createElement(C), React.createElement(C)));
+    for (const s of seen) { expect(s.running).toBeNull(); expect(s.results).toEqual([ok]); expect(s.error).toBeNull(); }
+    dismissJob();
+    seen.length = 0;
+    renderToStaticMarkup(React.createElement(C));
+    expect(seen[0].results).toBeNull();
+  });
+  it("keeps a failure after the starting component is gone, and shows the 409 busy message", async () => {
+    mockJob.mockResolvedValue({ ok: false, status: 409, data: { error: "An update is already running." } });
+    await startJob("Momentum");
+    const { seen, C, React } = await consumers();
+    renderToStaticMarkup(React.createElement(C));
+    expect(seen[0].error).toBe("An update is already running.");
+    expect(seen[0].running).toBeNull();
+  });
+  it("disables both buttons while one job runs", async () => {
+    let release!: () => void;
+    mockJob.mockImplementation(async () => {
+      await new Promise<void>((r) => { release = r; });
+      return { ok: true, status: 200, data: { results: [] } };
+    });
+    const p = startJob("Monthly");
+    const { PageUpdateButton } = await import("@/components/desk/page-update-button");
+    const html = renderToStaticMarkup(h("div", null, h(PageUpdateButton, { strategy: "Monthly", label: "Update Monthly data" }),
+      h(PageUpdateButton, { strategy: "Momentum", label: "Update Momentum data" })));
+    expect(html.match(/disabled/g)?.length).toBe(2);
+    expect(html).toContain("Updating…");
+    expect(html).toContain("Update Momentum data");
+    release();
+    await p;
   });
 });

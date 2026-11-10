@@ -98,3 +98,20 @@ export function bigValueParts(text: string): { head: string; dec: string | null 
   const at = text.indexOf(".");
   return at < 0 ? { head: text, dec: null } : { head: text.slice(0, at), dec: text.slice(at) };
 }
+
+const LAKH = 1e5;
+const CRORE = 1e7;
+
+/** Indian-style short form for large axis values: 12.5 K, 45.3 L, 2.0 Cr. Below 1000 shown with two decimals. */
+export function abbreviateIndian(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= CRORE) return `${(value / CRORE).toFixed(1)} Cr`;
+  if (abs >= LAKH) return `${(value / LAKH).toFixed(1)} L`;
+  if (abs >= 1000) return `${(value / 1000).toFixed(1)} K`;
+  return value.toFixed(2);
+}
+
+/** Price-pane axis text: rupee sign, no decimals from 1000 up. */
+export function priceAxisText(p: number): string {
+  return `₹${Math.abs(p) >= 1000 ? p.toFixed(0) : p.toFixed(2)}`;
+}

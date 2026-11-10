@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { runJobStream } from "@/lib/use-job-stream";
 import type { UpdateStrategy } from "@/lib/desk/update-steps";
@@ -32,12 +32,21 @@ export async function performUpdate(
   }
 }
 
-// One running flag shared by every button on the page, so they disable each other.
-let runningTarget: UpdateTarget | null = null;
+export interface JobState {
+  running: UpdateTarget | null;
+  lines: string[];
+  results: UpdateResult[] | null;
+  error: string | null;
+}
+
+// One job state shared by every button on the page and the sidebar, so a job started from any of
+// them (and its result or failure) is seen by all, even after the starting component unmounts.
+const IDLE: JobState = { running: null, lines: [], results: null, error: null };
+let state: JobState = IDLE;
 const listeners = new Set<() => void>();
 
-function setRunningTarget(next: UpdateTarget | null): void {
-  runningTarget = next;
+function setState(next: JobState): void {
+  state = next;
   listeners.forEach((l) => l());
 }
 
@@ -46,27 +55,32 @@ function subscribe(listener: () => void): () => void {
   return () => { listeners.delete(listener); };
 }
 
+/** Start a job unless one is running; resolves when it finishes. Exported for tests. */
+export async function startJob(strategy: UpdateTarget): Promise<boolean> {
+  if (state.running !== null) return false;
+  setState({ running: strategy, lines: [], results: null, error: null });
+  const outcome = await performUpdate(strategy, (l) =>
+    setState({ ...state, lines: [...state.lines, l].slice(-MAX_LINES) }));
+  setState({ running: null, lines: state.lines, results: outcome.results, error: outcome.error });
+  return true;
+}
+
+export function dismissJob(): void {
+  setState({ ...state, results: null, lines: [] });
+}
+
+/** Test helper: back to idle. */
+export function resetJobState(): void {
+  setState(IDLE);
+}
+
 export function useStrategyUpdate() {
   const router = useRouter();
-  const running = useSyncExternalStore(subscribe, () => runningTarget, () => null);
-  const [lines, setLines] = useState<string[]>([]);
-  const [results, setResults] = useState<UpdateResult[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const job = useSyncExternalStore(subscribe, () => state, () => state);
 
   const start = useCallback(async (strategy: UpdateTarget) => {
-    if (runningTarget !== null) return;
-    setRunningTarget(strategy);
-    setLines([]);
-    setResults(null);
-    setError(null);
-    const outcome = await performUpdate(strategy, (l) => setLines((prev) => [...prev, l].slice(-MAX_LINES)));
-    setResults(outcome.results);
-    setError(outcome.error);
-    setRunningTarget(null);
-    router.refresh();
+    if (await startJob(strategy)) router.refresh();
   }, [router]);
 
-  const dismiss = useCallback(() => { setResults(null); setLines([]); }, []);
-
-  return { running, lines, results, error, start, dismiss };
+  return { ...job, start, dismiss: dismissJob };
 }
