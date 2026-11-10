@@ -33,7 +33,10 @@ export function deskChartOptions(height: number, priceFormatter: (p: number) => 
   return {
     height,
     autoSize: true,
-    layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: muted, fontFamily: "inherit" },
+    layout: {
+      background: { type: ColorType.Solid, color: "transparent" }, textColor: muted, fontFamily: "inherit",
+      panes: { separatorColor: line, separatorHoverColor: line, enableResize: false },
+    },
     grid: { vertLines: { visible: false }, horzLines: { color: line } },
     rightPriceScale: { borderVisible: false },
     timeScale: { borderVisible: false },
