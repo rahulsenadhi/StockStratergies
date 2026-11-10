@@ -63,7 +63,7 @@ export function runMonitor(extra: string[], p: PortfolioPaths = portfolioPaths()
     let stdout = "";
     let stderr = "";
     let settled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    // `timer` is declared after spawn succeeds; finish() is never called before then.
     const finish = (r: PyResult) => {
       if (settled) return;
       settled = true;
@@ -77,10 +77,11 @@ export function runMonitor(extra: string[], p: PortfolioPaths = portfolioPaths()
         env: { ...process.env, PYTHONUNBUFFERED: "1", PYTHONIOENCODING: "utf-8", PYTHONUTF8: "1" },
       });
     } catch (e) {
-      finish({ code: null, stdout: "", stderr: e instanceof Error ? e.message : String(e) });
+      settled = true;
+      resolve({ code: null, stdout: "", stderr: e instanceof Error ? e.message : String(e) });
       return;
     }
-    timer = setTimeout(() => {
+    const timer = setTimeout(() => {
       try { child.kill(); } catch { /* already gone */ }
       finish({ code: null, stdout, stderr: "portfolio monitor timed out" });
     }, PY_TIMEOUT_MS);

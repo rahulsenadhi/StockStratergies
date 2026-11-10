@@ -7,7 +7,7 @@ describe("desk nav", () => {
     expect(NAV.map((g) => [g.group, g.items.map((i) => i.label)])).toEqual([
       ["", ["Home"]],
       ["STRATEGIES", ["Browse strategies", "Create a strategy"]],
-      ["FIND STOCKS", ["Monthly stock rotation", "Newly listed stocks (IPO)", "Price strength (Momentum)",
+      ["FIND STOCKS", ["My portfolio", "Monthly stock rotation", "Newly listed stocks (IPO)", "Price strength (Momentum)",
         "After earnings (PEAD)", "Stocks to review"]],
       ["EVALUATE", ["Understand past trades", "Compare past results"]],
     ]);

@@ -4,7 +4,7 @@ import { useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity, ArrowLeftRight, ArrowUpRight, CalendarDays, ChevronsLeft, ChevronsRight, CirclePlus, FolderOpen,
+  Activity, ArrowLeftRight, ArrowUpRight, Briefcase, CalendarDays, ChevronsLeft, ChevronsRight, CirclePlus, FolderOpen,
   LayoutDashboard, ListChecks, Menu, Moon, RefreshCw, Rocket, Sun, TrendingUp, type LucideIcon,
 } from "lucide-react";
 import { NAV, navHref, type NavIcon } from "@/lib/desk/nav";
@@ -13,7 +13,7 @@ import { UpdatePanel } from "@/components/desk/update-panel";
 import { THEME_KEY, type Theme } from "@/lib/desk/theme";
 
 const ICONS: Record<NavIcon, LucideIcon> = {
-  LayoutDashboard, FolderOpen, CirclePlus, RefreshCw, Rocket, TrendingUp, CalendarDays, ListChecks, Activity, ArrowLeftRight,
+  LayoutDashboard, FolderOpen, CirclePlus, RefreshCw, Rocket, TrendingUp, CalendarDays, ListChecks, Activity, ArrowLeftRight, Briefcase,
 };
 
 function subscribeTheme(onChange: () => void): () => void {

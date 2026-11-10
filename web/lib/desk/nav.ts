@@ -6,7 +6,7 @@ export const STREAMLIT_URL = process.env.NEXT_PUBLIC_STREAMLIT_URL ?? "http://lo
 
 export type NavIcon =
   | "LayoutDashboard" | "FolderOpen" | "CirclePlus" | "RefreshCw" | "Rocket"
-  | "TrendingUp" | "CalendarDays" | "ListChecks" | "Activity" | "ArrowLeftRight";
+  | "TrendingUp" | "CalendarDays" | "ListChecks" | "Activity" | "ArrowLeftRight" | "Briefcase";
 
 export interface NavItem {
   label: string;
@@ -31,6 +31,7 @@ export const NAV: NavGroup[] = [
   {
     group: "FIND STOCKS",
     items: [
+      { label: "My portfolio", icon: "Briefcase", href: "/portfolio" },
       { label: "Monthly stock rotation", icon: "RefreshCw", href: "/monthly" },
       { label: "Newly listed stocks (IPO)", icon: "Rocket", href: null },
       { label: "Price strength (Momentum)", icon: "TrendingUp", href: "/momentum" },

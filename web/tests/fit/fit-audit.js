@@ -4,7 +4,7 @@
 // "ALL PASS" or the failing checks. See README.md in this folder.
 async (page) => {
   const BASE = "http://localhost:3000";
-  const PAGES = ["/", "/monthly", "/momentum"];
+  const PAGES = ["/", "/monthly", "/momentum", "/portfolio"];
   const VIEWPORTS = [[1280, 600], [1280, 560], [1024, 700], [1920, 1000], [390, 844]];
   const lines = [];
   let failures = 0;
@@ -97,7 +97,8 @@ async (page) => {
         // (b) phone: tapping the third ranking row scrolls the rail into view.
         if (phone) {
           await page.evaluate(() => { document.querySelector(".desk-main").scrollTop = 0; });
-          await page.locator(".rd-table tbody tr").nth(2).click();
+          // Scope to the ranking beside the rail; other cards (e.g. Sell plan) also render .rd-table.
+          await page.locator(".desk-split .rd-table tbody tr").nth(2).click();
           await page.waitForTimeout(500);
           const [top, vh] = await page.evaluate(() => [document.querySelector(".desk-rail").getBoundingClientRect().top, innerHeight]);
           if (!(top >= 0 && top < vh)) fail.push(`row tap left the rail off screen (top ${Math.round(top)})`);

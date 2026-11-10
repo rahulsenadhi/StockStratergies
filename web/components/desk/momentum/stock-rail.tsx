@@ -1,6 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { purchaseHref } from "@/lib/desk/portfolio-text";
 import { EmptyState, SectionHead, StatusPill } from "@/components/desk/primitives";
 import { RailChart } from "@/components/desk/momentum/rail-chart";
 import { STREAMLIT_URL } from "@/lib/desk/nav";
@@ -45,6 +47,7 @@ export function StockRail({ stock, detail, colour }: { stock: RailStock; detail:
   return (
     <>
       <section className="rd-list" aria-label={`${stock.company} detail`}>
+        <div className="rd-li"><Link className="desk-btn" href={purchaseHref(stock.symbol, stock.signal ? `momentum_edge:${stock.symbol}:${stock.signal.signal}` : undefined)}>I bought this</Link></div>
         <div className="rd-li"><span className="rd-li__sub">{`${stock.symbol} · ${exchangeOf(stock.symbol)}`}</span></div>
         <div className="rd-li"><span className="desk-rail__title">{stock.company}</span></div>
         <div className="rd-li">

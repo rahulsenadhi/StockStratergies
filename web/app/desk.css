@@ -272,3 +272,43 @@ details[open] > .desk-summary::after { content: "▴"; }
 /* Hold and exit plan card: stat rows left, sell plan right; stacks on narrow widths. */
 .hx-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 20px; align-items: start; }
 @media (max-width: 760px) { .hx-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* Portfolio uses the desk's cards, tables and disclosures; long records wrap in place. */
+.portfolio-desk { gap: 22px; }
+.portfolio-copy { margin: 4px 0; font-size: var(--rd-fs-base); line-height: 1.55; overflow-wrap: anywhere; }
+.portfolio-error { color: var(--rd-loss); font-size: var(--rd-fs-base); overflow-wrap: anywhere; }
+.portfolio-error p { margin: 4px 0; }
+.portfolio-forms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.portfolio-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.portfolio-fieldset > .desk-btn { margin-top: 14px; }
+.portfolio-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.portfolio-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; font-size: var(--rd-fs-sm); }
+.portfolio-field--wide { grid-column: 1 / -1; }
+.portfolio-field input, .portfolio-field select, .portfolio-field textarea { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--rd-line); border-radius: 8px; background: var(--rd-card); color: var(--rd-text); font: inherit; }
+.portfolio-field textarea { resize: vertical; }
+.portfolio-field :is(input, select, textarea):focus-visible { outline: 2px solid var(--rd-info); outline-offset: 2px; }
+.portfolio-search { list-style: none; margin: 0; padding: 0; border: 1px solid var(--rd-line); border-radius: 8px; }
+.portfolio-search button { display: block; width: 100%; border: 0; border-bottom: 1px solid var(--rd-line); background: transparent; color: var(--rd-text); padding: 8px; text-align: left; font: inherit; cursor: pointer; }
+.portfolio-search button:hover { background: var(--rd-hover); }
+.portfolio-search span { display: block; color: var(--rd-text-muted); margin-top: 3px; }
+.portfolio-history-row { padding: 10px 0; border-bottom: 1px solid var(--rd-line); overflow-wrap: anywhere; }
+.portfolio-confirm { padding: 10px; border: 1px solid var(--rd-warn); border-radius: 8px; }
+.portfolio-alert, .portfolio-pending { align-items: flex-start; gap: 12px; }
+/* Base .desk-btn is width:100%; inside portfolio rows a button sizes to its label so text keeps the space. */
+.portfolio-desk .desk-btn { width: auto; }
+.portfolio-alert .rd-li__main, .portfolio-pending .rd-li__main { flex: 1 1 auto; }
+.portfolio-alert .rd-li__main > .rd-pill { align-self: flex-start; }
+.portfolio-alert .desk-btn, .portfolio-pending .desk-btn { flex-shrink: 0; }
+.portfolio-fact { gap: 16px; align-items: baseline; }
+.portfolio-fact > * { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.portfolio-fact .rd-li__val { text-align: right; }
+.portfolio-rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+/* Right-column items stack tightly; the last row absorbs the tall left card's extra height. */
+.portfolio-rail { grid-template-rows: repeat(5, auto) 1fr; }
+.portfolio-rail > :first-child { grid-row: span 6; }
+.portfolio-desk .rd-name__title, .portfolio-pending .rd-li__title, .portfolio-pending .rd-li__sub { white-space: normal; overflow-wrap: anywhere; }
+.portfolio-holdings .rd-name__sub { display: block; }
+#add-purchase, #record-sale { scroll-margin-top: 58px; }
+@media (max-width: 1599px) { .portfolio-holdings .rd-col--p3 { display: none; } }
+@media (max-width: 1000px) { .portfolio-forms, .portfolio-rail { grid-template-columns: minmax(0, 1fr); } .portfolio-rail > :first-child { grid-row: auto; } }
+@media (max-width: 639px) { .portfolio-alert, .portfolio-pending { flex-wrap: wrap; } .portfolio-holdings .rd-pill { white-space: normal; } }
