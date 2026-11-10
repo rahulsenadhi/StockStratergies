@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { SectionHead, StatusPill } from "@/components/desk/primitives";
 import { TransactionHistory } from "@/components/desk/portfolio/transaction-history";
-import { actionTone, charges, count, drawdown, held, money, needsConfirmation, num, percent, RECONSTRUCTED_LABEL, stamp, str, UNKNOWN_DATE, type Evaluation, type PortfolioPosition, type Transaction } from "@/lib/desk/portfolio-text";
+import { actionTone, charges, count, drawdown, held, money, num, percent, RECONSTRUCTED_LABEL, stamp, str, UNKNOWN_DATE, type Evaluation, type PortfolioPosition, type Transaction } from "@/lib/desk/portfolio-text";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return <div className="rd-li portfolio-fact"><span className="rd-li__sub">{label}</span><span className="rd-li__val">{children}</span></div>;
@@ -16,7 +16,7 @@ export function HoldingRail({ position: p, transactions, evaluations, busy, onVo
   return <aside className="desk-stack portfolio-rail" aria-label={`${p.name} holding detail`}>
     <section className="desk-card desk-stack">
       <SectionHead title={p.name} right={<StatusPill label={p.closed ? "Closed" : ev.action} tone={p.closed ? "muted" : actionTone(ev.action)} />} />
-      <p className="rd-note">{p.symbol} · {p.exchange}{needsConfirmation(p.symbol) ? " · please confirm company identity" : ""}</p>
+      <p className="rd-note">{p.symbol} · {p.exchange}</p>
       {p.symbol === "TMCV.NS" ? <p className="rd-note">Tata Motors CV · ISIN INE1TAE01010</p> : null}
       {!p.closed ? <><p className="portfolio-copy">{ev.explanation}</p><strong>Rule: {ev.rule ?? (ev.action === "HOLD" ? "No exit triggered" : ev.data_status)}</strong></> : <p className="rd-note">This position is fully closed. No current exit check is needed.</p>}
       <div className="rd-list">

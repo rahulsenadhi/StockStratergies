@@ -106,4 +106,3 @@ export const PENDING_HOLDINGS = [
   { symbol: "PFOCUS.NS", name: "Prime Focus Limited" },
   { symbol: "TMCV.NS", name: "Tata Motors CV · ISIN INE1TAE01010" },
 ];
-export const needsConfirmation = (symbol: string) => symbol === "TMCV.NS" || symbol === "JAYBARMARU.NS";

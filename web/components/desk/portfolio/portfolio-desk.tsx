@@ -9,7 +9,7 @@ import { ClosedPositions, HoldingsTable } from "@/components/desk/portfolio/hold
 import { MonitorStatus } from "@/components/desk/portfolio/monitor-status";
 import { TransactionForm, type SaveTransaction } from "@/components/desk/portfolio/transaction-form";
 import { TransactionHistory } from "@/components/desk/portfolio/transaction-history";
-import { list, needsConfirmation, PENDING_HOLDINGS, purchaseHref, record, str, type PortfolioView } from "@/lib/desk/portfolio-text";
+import { list, PENDING_HOLDINGS, purchaseHref, record, str, type PortfolioView } from "@/lib/desk/portfolio-text";
 
 export function PortfolioDesk({ data, add = "", signal = "" }: { data: PortfolioView; add?: string; signal?: string }) {
   const router = useRouter();
@@ -65,7 +65,7 @@ export function PortfolioDesk({ data, add = "", signal = "" }: { data: Portfolio
     <details className="desk-disclosure"><summary>All transaction history · {data.transactions.length}</summary><div><TransactionHistory transactions={data.transactions} busy={busy || writeDisabled} onVoid={voidTransaction} /></div></details>
     {data.ledgerReadable && data.transactions.length === 0 ? <section className="desk-card desk-stack"><SectionHead title="Holdings pending your details" />
       <p className="rd-note">These are the seven companies you named. No transactions have been created here. Use an opening balance if the buy date or charges are unknown.</p>
-      <div className="rd-list">{PENDING_HOLDINGS.map((p) => <div className="rd-li portfolio-pending" key={p.symbol}><span className="rd-li__main"><span className="rd-li__title">{p.name}</span><span className="rd-li__sub">{p.symbol} · NSE{needsConfirmation(p.symbol) ? " · please confirm" : ""}</span></span><Link className="desk-btn" href={purchaseHref(p.symbol)}>Add purchase</Link></div>)}</div>
+      <div className="rd-list">{PENDING_HOLDINGS.map((p) => <div className="rd-li portfolio-pending" key={p.symbol}><span className="rd-li__main"><span className="rd-li__title">{p.name}</span><span className="rd-li__sub">{p.symbol} · NSE</span></span><Link className="desk-btn" href={purchaseHref(p.symbol)}>Add purchase</Link></div>)}</div>
     </section> : null}
   </div>;
 }

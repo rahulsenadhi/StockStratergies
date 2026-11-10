@@ -104,7 +104,8 @@ describe("portfolio page rendering", () => {
     const html = render(view());
     expect(html).toContain("Holdings pending your details");
     for (const p of PENDING_HOLDINGS) expect(html).toContain(p.symbol);
-    expect(html.match(/please confirm/g)?.length).toBe(2);
+    // TMCV and JAYBARMARU identities were confirmed by the user on 2026-11-09.
+    expect(html).not.toContain("please confirm");
     expect(html).toContain("No transactions have been created here");
     expect(html).toContain("No open holdings recorded");
     expect(html).toContain(SCHEDULER_NOTICE);
@@ -128,6 +129,7 @@ describe("portfolio page rendering", () => {
     const html = render(view({ positions: [exit] }));
     expect(html).toContain('rd-pill--loss">EXIT');
     expect(html).toContain("Rule: Hard stop");
+    expect(html).not.toContain("please confirm");
     expect(html).toContain("Close 285.20 is below the hard stop 302.49.");
   });
 

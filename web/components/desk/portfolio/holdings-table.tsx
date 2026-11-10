@@ -1,12 +1,12 @@
 "use client";
 import { DeskTable } from "@/components/desk/desk-table";
 import { StatusPill } from "@/components/desk/primitives";
-import { actionTone, count, drawdown, held, money, needsConfirmation, percent, type PortfolioPosition } from "@/lib/desk/portfolio-text";
+import { actionTone, count, drawdown, held, money, percent, type PortfolioPosition } from "@/lib/desk/portfolio-text";
 import type { DeskColumn } from "@/lib/desk/table";
 
 const columns: DeskColumn<PortfolioPosition>[] = [
   { key: "name", label: "Company / symbol", kind: "name", priority: 1, sortValue: (p) => p.name,
-    render: (p) => <span className="rd-name"><span className="rd-name__title">{p.name}</span><span className="rd-name__sub">{p.symbol} · {p.exchange}{needsConfirmation(p.symbol) ? " · please confirm" : ""}</span></span> },
+    render: (p) => <span className="rd-name"><span className="rd-name__title">{p.name}</span><span className="rd-name__sub">{p.symbol} · {p.exchange}</span></span> },
   { key: "qty", label: "Qty", kind: "num", priority: 2, sortValue: (p) => p.open_qty, render: (p) => count(p.open_qty) },
   { key: "avg", label: "Avg price", kind: "num", priority: 3, sortValue: (p) => p.avg_price, render: (p) => money(p.avg_price) },
   { key: "close", label: "Last close", kind: "num", priority: 2, sortValue: (p) => p.evaluation.last_close,
