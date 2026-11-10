@@ -437,7 +437,7 @@ export function countsLine(counts: { ath: number; clean: number; fast: number })
   return `All-time-high entries ${counts.ath} · Clean charts ${counts.clean} · Fast recovery ${counts.fast}`;
 }
 
-export const OLD_APP_LINK = "Full indicator chart and single-stock test: open in the old app";
+export const OLD_APP_LINK = "Single-stock backtest: open in the old app";
 export const EMPTY_NO_SIGNALS = {
   title: "No signals found today",
   reason:

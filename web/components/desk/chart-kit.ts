@@ -24,14 +24,7 @@ export function useThemeName(): string {
   );
 }
 
-/** "#7c9cff" + 0.07 -> "rgba(124,156,255,0.07)" (Python _hex_rgba, used for the 7% area fill). */
-export function hexRgba(hex: string, alpha: number): string {
-  const h = hex.replace("#", "");
-  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
-  const n = Number.parseInt(full.slice(0, 6), 16);
-  if (Number.isNaN(n)) return hex;
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
-}
+export { hexRgba } from "@/lib/desk/colour";
 
 /** Shared desk chart look (Home GrowthChart and the Monthly charts): no grid columns, no scroll/zoom. */
 export function deskChartOptions(height: number, priceFormatter: (p: number) => string): DeepPartial<ChartOptions> {

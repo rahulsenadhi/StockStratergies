@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { DeskTable, NameCell } from "@/components/desk/desk-table";
 import { ChangePill, EmptyState, SectionHead, StatusPill } from "@/components/desk/primitives";
 import { Tabs } from "@/components/desk/tabs";
+import { IndicatorChart } from "@/components/desk/momentum/indicator-chart";
 import { signalTone, StockRail, type RailStock } from "@/components/desk/momentum/stock-rail";
 import {
   EMPTY_NO_SIGNALS, HIST_NOTE, RAIL_PLACEHOLDER, countsLine, exchangeOf, RECENT_NOTE, SETUPS_META, SETUPS_TITLE, recentCells, signalCells, tabLabels, tabRows,
@@ -13,6 +14,7 @@ import type { DeskColumn } from "@/lib/desk/table";
 
 /** Below this width the rail stacks under the table, so a row tap scrolls the rail into view. */
 const STACKED_MAX_WIDTH = 1200;
+const CHART_TITLE = "Price chart and indicators";
 
 const sub = (r: SignalRow) => (r.company === r.symbol ? exchangeOf(r.symbol) : `${r.symbol} · ${exchangeOf(r.symbol)}`);
 const cells = signalCells;
@@ -127,6 +129,7 @@ export function SetupsDesk({ data, view, initial }: SetupsDeskProps) {
   }
 
   return (
+    <div className="desk-stack" style={{ gap: 24 }}>
     <div className="desk-split">
       <section className="desk-stack" style={{ gap: 8 }} aria-label={SETUPS_TITLE}>
         <SectionHead title={SETUPS_TITLE} meta={SETUPS_META}
@@ -145,6 +148,13 @@ export function SetupsDesk({ data, view, initial }: SetupsDeskProps) {
           : <EmptyState title={`No saved details for ${stock.symbol}.`} />)
           : <EmptyState title={RAIL_PLACEHOLDER.title} reason={RAIL_PLACEHOLDER.reason} />}
       </div>
+    </div>
+    {selected && (
+      <section className="desk-stack" style={{ gap: 8 }} aria-label={CHART_TITLE}>
+        <SectionHead title={CHART_TITLE} meta={`${selected} · candles, averages, volume, RSI, MACD`} />
+        <IndicatorChart symbol={selected} />
+      </section>
+    )}
     </div>
   );
 }

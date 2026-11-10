@@ -246,6 +246,6 @@ describe("exchangeOf / countsLine / old-app link", () => {
     expect(countsLine({ ath: 4, clean: 21, fast: 9 })).toBe("All-time-high entries 4 · Clean charts 21 · Fast recovery 9");
   });
   test("old-app link text is the approved wording", () => {
-    expect(OLD_APP_LINK).toBe("Full indicator chart and single-stock test: open in the old app");
+    expect(OLD_APP_LINK).toBe("Single-stock backtest: open in the old app");
   });
 });
