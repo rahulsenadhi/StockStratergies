@@ -16,6 +16,9 @@ describe("IndicatorChartView", () => {
     expect(html).toContain(CHART_EMPTY.title);
     expect(html).not.toContain("aria-label=\"Price chart");
   });
+  it("tells the user to run a data update when the saved file is unusable", () => {
+    expect(render({ status: "empty", reason: null })).toContain(CHART_EMPTY.reason);
+  });
   it("shows the saved note as the reason", () => {
     expect(render({ status: "empty", reason: "Too few bars" })).toContain("Too few bars");
   });

@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 let dir: string;
+const savedDataDir = process.env.DATA_DIR;
 let GET: (r: Request) => Promise<Response>;
 const req = (q: string) => new Request(`http://localhost/api/desk/momentum-chart${q}`);
 
@@ -14,11 +15,18 @@ beforeAll(async () => {
     fs.writeFileSync(path.join(dir, "ui_momentum_charts", `${n}.json`), JSON.stringify(body));
   file("M&M", { version: 1, symbol: "M&M", rows: [], traces: [], shapes: [], badges: [], since_line: null, note: null });
   file("NOTEONLY", { version: 1, symbol: "NOTEONLY", note: "Not enough history" });
+  file("BAJAJ-AUTO", { version: 1, symbol: "BAJAJ-AUTO", traces: [] });
+  file("index", { version: 1, symbol: "index", traces: [] });
+  file("CON", { version: 1, symbol: "CON", traces: [] });
   file("OLD", { version: 9, symbol: "OLD", traces: [] });
   process.env.DATA_DIR = dir;
   ({ GET } = await import("@/app/api/desk/momentum-chart/route"));
 });
-afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+afterAll(() => {
+  if (savedDataDir === undefined) delete process.env.DATA_DIR;
+  else process.env.DATA_DIR = savedDataDir;
+  fs.rmSync(dir, { recursive: true, force: true });
+});
 
 describe("GET /api/desk/momentum-chart", () => {
   it("returns a saved chart for a symbol with an ampersand, uncached", async () => {
@@ -47,7 +55,20 @@ describe("GET /api/desk/momentum-chart", () => {
     expect(res.status).toBe(404);
     expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
-  it("returns 500 for a file with an unknown version", async () => {
-    expect((await GET(req("?symbol=OLD"))).status).toBe(500);
+  it("serves a symbol with a hyphen", async () => {
+    const res = await GET(req("?symbol=BAJAJ-AUTO"));
+    expect(res.status).toBe(200);
+    expect((await res.json()).symbol).toBe("BAJAJ-AUTO");
+  });
+  it("rejects Windows device names and INDEX with 400", async () => {
+    for (const sym of ["CON", "NUL", "COM1", "LPT9", "AUX.TXT", "PRN.BO", "INDEX", "INDEX.X"]) {
+      expect((await GET(req(`?symbol=${sym}`))).status, sym).toBe(400);
+    }
+  });
+  it("answers an old-version file like a missing one, with the reason, so the page shows its empty state", async () => {
+    const res = await GET(req("?symbol=OLD"));
+    expect(res.status).toBe(404);
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
+    expect((await res.json()).reason).toBe("version");
   });
 });

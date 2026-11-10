@@ -31,6 +31,8 @@ export type ChartState =
 
 const DASH: Record<string, LineStyle> = { solid: LineStyle.Solid, dot: LineStyle.Dotted, dash: LineStyle.Dashed };
 
+const chartHeight = (plan: ChartPlan) => PRICE_PANE_HEIGHT + (plan.paneCount - 1) * SUB_PANE_HEIGHT;
+
 function addSeries(chart: ReturnType<typeof createChart>, s: SeriesSpec, text: string): ISeriesApi<SeriesType> {
   const common = { priceLineVisible: false, lastValueVisible: false };
   if (s.kind === "candles") {
@@ -50,7 +52,7 @@ function addSeries(chart: ReturnType<typeof createChart>, s: SeriesSpec, text: s
 
 /** Draw a plan on a new chart; the caller removes the chart. */
 function draw(el: HTMLElement, plan: ChartPlan): ReturnType<typeof createChart> {
-  const height = PRICE_PANE_HEIGHT + (plan.paneCount - 1) * SUB_PANE_HEIGHT;
+  const height = chartHeight(plan);
   const base = deskChartOptions(height, (p: number) => (Math.abs(p) >= 1000 ? p.toFixed(0) : p.toFixed(2)));
   const chart = createChart(el, { ...base, height, handleScroll: false, handleScale: false });
   const text = readCss("--rd-text", "#1D1D1B");
@@ -79,7 +81,7 @@ function draw(el: HTMLElement, plan: ChartPlan): ReturnType<typeof createChart> 
 function ChartCanvas({ plan, label }: { plan: ChartPlan; label: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const theme = useThemeName();
-  const height = PRICE_PANE_HEIGHT + (plan.paneCount - 1) * SUB_PANE_HEIGHT;
+  const height = chartHeight(plan);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;

@@ -12,6 +12,14 @@ export type ChartResult =
   | { ok: true; chart: MomentumChartFile }
   | { ok: false; reason: "missing" | "invalid" | "version" };
 
+/** Windows device names (and the folder's own index.json) must never be served as a stock. */
+const RESERVED = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]|INDEX)$/;
+
+/** True for a symbol the desk uses: matches the pattern and is not a reserved file name. */
+export function isValidSymbol(symbol: string): boolean {
+  return SYMBOL_PATTERN.test(symbol) && !RESERVED.test(symbol.split(".")[0].toUpperCase());
+}
+
 const optionalArray = (v: unknown) => v === undefined || Array.isArray(v);
 
 /** Read one saved chart. A file holding only `note` is valid (the page shows it as an empty state). Never throws. */
@@ -19,7 +27,7 @@ export async function loadMomentumChart(
   symbol: string,
   dataDir: string = process.env.DATA_DIR ?? "..",
 ): Promise<ChartResult> {
-  if (!SYMBOL_PATTERN.test(symbol)) return { ok: false, reason: "missing" };
+  if (!isValidSymbol(symbol)) return { ok: false, reason: "missing" };
   const file = path.join(dataDir, CHART_DIR, `${symbol}.json`);
   const res = await loadVersionedJson(file, CHART_VERSION, (v) =>
     optionalArray(v.traces) && optionalArray(v.shapes) && optionalArray(v.badges));

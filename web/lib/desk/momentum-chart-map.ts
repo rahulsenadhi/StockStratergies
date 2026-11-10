@@ -77,32 +77,6 @@ export interface ChartPlan {
 
 const FALLBACK_COLOUR = "#94A3B8";
 
-/** cp1252 characters for bytes 0x80-0x9F (the other bytes match their character code). */
-const CP1252_HIGH = "€‚ƒ„…†‡ˆ‰Š‹ŒŽ"
-  + "‘’“”•–—˜™š›œžŸ";
-
-/** Byte for each character cp1252 can hold; used to undo UTF-8 text that was read as cp1252. */
-const CP1252 = new Map<string, number>();
-for (let b = 0; b < 256; b++) CP1252.set(b >= 0x80 && b < 0xa0 ? CP1252_HIGH[b - 0x80] : String.fromCharCode(b), b);
-
-/**
- * Undo "â‚¹" style text (UTF-8 decoded as cp1252). Text that does not round-trip to valid UTF-8 is
- * returned unchanged, so clean text is never altered.
- */
-export function repairText(text: string): string {
-  const bytes: number[] = [];
-  for (const ch of text) {
-    const b = CP1252.get(ch);
-    if (b === undefined) return text;
-    bytes.push(b);
-  }
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(bytes));
-  } catch {
-    return text;
-  }
-}
-
 /** Date of the first session shown for a period, or null with no candles. */
 export function windowStart(chart: MomentumChartFile, period: Period): string | null {
   const price = (chart.traces ?? []).find((t) => t.type === "candlestick");
@@ -171,12 +145,12 @@ export function mapChart(chart: MomentumChartFile, period: Period, toggles: Char
     .filter((s) => s.kind === "hline" && isNum(s.value) && paneOf(s.row) >= 0)
     .map((s) => ({
       pane: paneOf(s.row), row: s.row, value: s.value as number, colour: s.colour, dash: s.dash,
-      title: s.label ? repairText(s.label) : "",
+      title: s.label ?? "",
     }));
 
   return {
     series, lines, markers, paneCount: rows.length,
-    sinceLine: chart.since_line ? repairText(chart.since_line) : null,
-    badges: (chart.badges ?? []).map((b) => ({ ...b, value: repairText(b.value), sub: repairText(b.sub) })),
+    sinceLine: chart.since_line || null,
+    badges: chart.badges ?? [],
   };
 }

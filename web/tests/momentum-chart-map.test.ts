@@ -1,11 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  PERIOD_BARS, mapChart, repairText, windowStart, type ChartToggles, type MomentumChartFile,
+  PERIOD_BARS, mapChart, windowStart, type ChartToggles, type MomentumChartFile,
 } from "@/lib/desk/momentum-chart-map";
 
-// Text a cp1252 mix-up produced from UTF-8 (what the saved files hold today).
-const RUPEE_BAD = "â‚¹";
-const TRI_BAD = "â–²";
 
 const dates = Array.from({ length: 800 }, (_, i) => `d${String(i).padStart(4, "0")}`);
 const lastN = (n: number) => dates.slice(-n);
@@ -15,7 +12,7 @@ const line = (name: string, row: number) => ({
 });
 const CHART = {
   version: 1, symbol: "X", rows: ["price", "rsi", "macd", "volume"], note: null, generated_at: "t",
-  since_line: `Since ${TRI_BAD} +1%`,
+  since_line: "Since ▲ +1%",
   badges: [{ label: "RSI(14)", value: "60", sub: "Bullish", colour: "#22C55E" }],
   traces: [
     { name: "Price", type: "candlestick", row: 1, colour: "#22C55E", colour_down: "#EF4444", dash: "solid",
@@ -31,7 +28,7 @@ const CHART = {
       points: [[dates[10], 1], [dates[790], 2]] },
   ],
   shapes: [
-    { kind: "hline", row: 1, value: 50, colour: "red", dash: "dash", label: `52W High ${RUPEE_BAD}50` },
+    { kind: "hline", row: 1, value: 50, colour: "red", dash: "dash", label: "52W High ₹50" },
     { kind: "hline", row: 2, value: 70, colour: "red", dash: "dot", label: null },
     { kind: "vline", row: 1, value: dates[790], colour: "blue", dash: "dash", label: null },
   ],
@@ -87,7 +84,7 @@ describe("mapChart", () => {
       expect.objectContaining({ pane: 1, value: 70, title: "" }),
     ]);
   });
-  it("repairs the since line text", () => {
+  it("passes the since line through unchanged", () => {
     expect(plan.sinceLine).toBe("Since ▲ +1%");
   });
   it("maps a gap value to a whitespace point", () => {
@@ -95,16 +92,5 @@ describe("mapChart", () => {
       ? { ...t, points: t.points.map((p, i) => (i === 799 ? [p[0], null] : p)) } : t)) } as MomentumChartFile;
     const s = mapChart(withGap, "1M", ALL).series.find((x) => x.name === "SMA 50");
     expect(s?.data[20]).toEqual({ time: dates[799] });
-  });
-});
-
-describe("repairText", () => {
-  it("fixes UTF-8 text that was decoded as cp1252", () => {
-    expect(repairText(`52W High ${RUPEE_BAD}12,329`)).toBe("52W High ₹12,329");
-    expect(repairText("a Â· b")).toBe("a · b");
-  });
-  it("leaves clean text alone", () => {
-    expect(repairText("52W High ₹12,329 · Âbc")).toBe("52W High ₹12,329 · Âbc");
-    expect(repairText("plain")).toBe("plain");
   });
 });

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SYMBOL_PATTERN, loadMomentumChart } from "@/lib/desk/momentum-chart";
+import { isValidSymbol, loadMomentumChart } from "@/lib/desk/momentum-chart";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +10,9 @@ const reply = (body: object, status: number) => NextResponse.json(body, { status
 export async function GET(request: Request) {
   const symbol = new URL(request.url).searchParams.get("symbol");
   if (!symbol) return reply({ ok: false, error: "symbol is required" }, 404);
-  if (!SYMBOL_PATTERN.test(symbol)) return reply({ ok: false, error: "invalid symbol" }, 400);
+  if (!isValidSymbol(symbol)) return reply({ ok: false, error: "invalid symbol" }, 400);
   const res = await loadMomentumChart(symbol);
   if (res.ok) return reply(res.chart, 200);
-  if (res.reason === "missing") return reply({ ok: false, error: "no saved chart" }, 404);
-  return reply({ ok: false, error: `saved chart is ${res.reason}` }, 500);
+  // A missing, old-version or unreadable file all mean "no usable chart": the page shows its empty state.
+  return reply({ ok: false, reason: res.reason, error: "no usable saved chart" }, 404);
 }
