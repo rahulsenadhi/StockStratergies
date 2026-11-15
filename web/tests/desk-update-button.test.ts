@@ -66,8 +66,10 @@ describe("PageUpdateButtonView", () => {
     expect(html).toContain("Updating…");
     expect(html).toContain("fetching");
   });
-  it("shows the busy error", () => {
-    expect(render({ error: "An update is already running." })).toContain("An update is already running.");
+  it("shows the busy error with a Dismiss button", () => {
+    const html = render({ error: "An update is already running." });
+    expect(html).toContain("An update is already running.");
+    expect(html).toContain("Dismiss");
   });
 });
 
@@ -101,6 +103,14 @@ describe("shared job store", () => {
     seen.length = 0;
     renderToStaticMarkup(React.createElement(C));
     expect(seen[0].results).toBeNull();
+  });
+  it("Dismiss clears a failure message too", async () => {
+    mockJob.mockResolvedValue({ ok: false, status: 500, data: { error: "Update could not start." } });
+    await startJob("Momentum");
+    dismissJob();
+    const { seen, C, React } = await consumers();
+    renderToStaticMarkup(React.createElement(C));
+    expect(seen[0].error).toBeNull();
   });
   it("keeps a failure after the starting component is gone, and shows the 409 busy message", async () => {
     mockJob.mockResolvedValue({ ok: false, status: 409, data: { error: "An update is already running." } });

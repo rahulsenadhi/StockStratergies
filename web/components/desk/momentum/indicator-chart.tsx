@@ -34,6 +34,8 @@ const DASH: Record<string, LineStyle> = { solid: LineStyle.Solid, dot: LineStyle
 
 /** Volume/OBV and other lower panes: large values in K, L, Cr instead of raw digits. */
 const SUB_PANE_FORMAT = { type: "custom", formatter: abbreviateIndian, minMove: 0.01 } as const;
+/** Price pane (candles and price-pane lines): rupee axis text. */
+const PRICE_PANE_FORMAT = { type: "custom", formatter: priceAxisText, minMove: 0.01 } as const;
 
 const chartHeight = (plan: ChartPlan) => PRICE_PANE_HEIGHT + (plan.paneCount - 1) * SUB_PANE_HEIGHT;
 
@@ -43,6 +45,7 @@ function addSeries(chart: ReturnType<typeof createChart>, s: SeriesSpec, text: s
     return chart.addSeries(CandlestickSeries, {
       upColor: s.colour, borderUpColor: s.colour, wickUpColor: s.colour,
       downColor: s.colourDown, borderDownColor: s.colourDown, wickDownColor: s.colourDown, ...common,
+      priceFormat: PRICE_PANE_FORMAT,
     }, s.pane);
   }
   if (s.kind === "hist") {
@@ -50,14 +53,14 @@ function addSeries(chart: ReturnType<typeof createChart>, s: SeriesSpec, text: s
   }
   const color = s.colour.toUpperCase() === NEAR_WHITE.toUpperCase() ? text : s.colour;
   return chart.addSeries(LineSeries, {
-    ...common, color, lineWidth: 1, ...(s.pane > 0 ? { priceFormat: SUB_PANE_FORMAT } : {}), lineStyle: DASH[s.dash] ?? LineStyle.Solid, crosshairMarkerVisible: false,
+    ...common, color, lineWidth: 1, priceFormat: s.pane > 0 ? SUB_PANE_FORMAT : PRICE_PANE_FORMAT, lineStyle: DASH[s.dash] ?? LineStyle.Solid, crosshairMarkerVisible: false,
   }, s.pane);
 }
 
 /** Draw a plan on a new chart; the caller removes the chart. */
 function draw(el: HTMLElement, plan: ChartPlan): ReturnType<typeof createChart> {
   const height = chartHeight(plan);
-  const base = deskChartOptions(height, priceAxisText);
+  const base = deskChartOptions(height);
   const chart = createChart(el, { ...base, height, handleScroll: false, handleScale: false });
   const text = readCss("--rd-text", "#1D1D1B");
   const apis = plan.series.map((s) => {

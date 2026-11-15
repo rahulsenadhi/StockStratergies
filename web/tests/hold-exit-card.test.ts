@@ -49,7 +49,7 @@ describe("winRateLabel", () => {
 
 describe("HONESTY_NOTE", () => {
   it("states past results are not a promise", () => {
-    expect(HONESTY_NOTE(19)).toBe("Past results, not a promise. At the suggested hold, 19% of past trades still lost money.");
+    expect(HONESTY_NOTE(19)).toBe("Past results, not a promise. At the researched hold, 19% of past trades still lost money.");
     expect(HONESTY_NOTE(19)).not.toMatch(/no loss|guarantee|100%/i);
   });
 });

@@ -27,7 +27,8 @@ export function useThemeName(): string {
 export { hexRgba } from "@/lib/desk/colour";
 
 /** Shared desk chart look (Home GrowthChart and the Monthly charts): no grid columns, no scroll/zoom. */
-export function deskChartOptions(height: number, priceFormatter: (p: number) => string): DeepPartial<ChartOptions> {
+/** `priceFormatter` applies to every pane; omit it when panes need different formats (set priceFormat per series). */
+export function deskChartOptions(height: number, priceFormatter?: (p: number) => string): DeepPartial<ChartOptions> {
   const muted = readCss("--rd-text-muted", "#77756E");
   const line = readCss("--rd-line", "#E7E4DD");
   return {
@@ -42,7 +43,7 @@ export function deskChartOptions(height: number, priceFormatter: (p: number) => 
     timeScale: { borderVisible: false },
     handleScroll: false,
     handleScale: false,
-    localization: { priceFormatter },
+    ...(priceFormatter ? { localization: { priceFormatter } } : {}),
   };
 }
 

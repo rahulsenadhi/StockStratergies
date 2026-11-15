@@ -31,7 +31,11 @@ export function PageUpdateButtonView(p: ViewProps) {
           {p.lines.map((l, i) => <div key={i}>{l}</div>)}
         </div>
       ) : null}
-      {p.error ? <p className="rd-note" role="alert" style={{ color: "var(--rd-loss)" }}>{p.error}</p> : null}
+      {p.error ? (
+        <p className="rd-note" role="alert" style={{ color: "var(--rd-loss)" }}>
+          {p.error} <button type="button" className="desk-link" onClick={p.onDismiss}>Dismiss</button>
+        </p>
+      ) : null}
       {p.results ? (
         <div className="rd-list" role="status">
           <div className="rd-list__head">

@@ -66,7 +66,7 @@ export async function startJob(strategy: UpdateTarget): Promise<boolean> {
 }
 
 export function dismissJob(): void {
-  setState({ ...state, results: null, lines: [] });
+  setState({ ...state, results: null, lines: [], error: null });
 }
 
 /** Test helper: back to idle. */
@@ -76,6 +76,9 @@ export function resetJobState(): void {
 
 export function useStrategyUpdate() {
   const router = useRouter();
+  // Server snapshot = live state on purpose: jobs start only in the browser, so the server copy is
+  // always IDLE, and a full page load starts the browser copy fresh, so hydration always sees IDLE too.
+  // Client-side navigation mounts with getSnapshot (no hydration), so the shared job shows at once.
   const job = useSyncExternalStore(subscribe, () => state, () => state);
 
   const start = useCallback(async (strategy: UpdateTarget) => {

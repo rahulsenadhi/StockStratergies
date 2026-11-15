@@ -57,7 +57,11 @@ export function UpdatePanel({ ages }: { ages: SavedAge[] }) {
           {lines.map((l, i) => <div key={i}>{l}</div>)}
         </div>
       ) : null}
-      {error ? <p className="rd-note" role="alert" style={{ color: "var(--rd-loss)" }}>{error}</p> : null}
+      {error ? (
+        <p className="rd-note" role="alert" style={{ color: "var(--rd-loss)" }}>
+          {error} <button type="button" className="desk-link" onClick={dismiss}>Dismiss</button>
+        </p>
+      ) : null}
       {results ? (
         <div className="rd-list" role="status">
           <div className="rd-list__head">

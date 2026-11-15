@@ -71,7 +71,7 @@ export const HOLD_RESEARCH_NOTE = "Hold research uses all past trades.";
 
 /** Plain statement that the numbers are history, never a promise. */
 export const HONESTY_NOTE = (lossPct: number) =>
-  `Past results, not a promise. At the suggested hold, ${lossPct}% of past trades still lost money.`;
+  `Past results, not a promise. At the researched hold, ${lossPct}% of past trades still lost money.`;
 
 /** Display text for the Hold and exit plan card, from the saved exit_rec. */
 export function holdExitRows(rec: ExitRec) {
