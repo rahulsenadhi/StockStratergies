@@ -85,13 +85,25 @@ def _pnl_line(position: dict) -> str | None:
     return f"Your holding: {qty} shares, {pct:+.1f}% (₹{pnl:+,.0f})"
 
 
+def _levels_line(levels: dict) -> str | None:
+    parts = []
+    ema, dist, stop = levels.get("ema220"), levels.get("ema_distance_pct"), levels.get("hard_stop")
+    if ema is not None:
+        parts.append(f"220-day EMA ₹{ema:,.2f}" + (f" (close {dist:+.1f}% from it)" if dist is not None else ""))
+    if stop is not None:
+        parts.append(f"hard stop ₹{stop:,.2f}")
+    return "Rule levels: " + ", ".join(parts) if parts else None
+
+
 def alert_message(alert: dict, position: dict | None) -> dict:
     sym = alert["symbol"]
     pos = position or {}
-    close = (pos.get("evaluation") or {}).get("last_close")
+    ev = pos.get("evaluation") or {}
+    close, bar_date = ev.get("last_close"), ev.get("last_bar_date")
     lines = [f"{sym} ({pos['name']})" if pos.get("name") else sym, alert.get("message")]
-    if close is not None and alert.get("trigger_bar_date"):
-        lines.append(f"Last close {alert['trigger_bar_date']}: ₹{close:,.2f}")
+    if close is not None and bar_date:          # the price and its own date, never the alert's older date
+        lines.append(f"Last close {bar_date}: ₹{close:,.2f}")
+    lines.append(_levels_line(ev.get("levels") or {}))
     lines.append(_pnl_line(pos) if pos else None)
     lines.append(HONESTY_LINE)
     rule = f" - {alert['rule']}" if alert.get("rule") else ""
@@ -183,7 +195,7 @@ def _sent_pairs(log_path: Path) -> set[tuple[str, str]]:
     if not log_path.exists():
         return set()
     done = set()
-    for line in log_path.read_text(encoding="utf-8").splitlines():
+    for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
         try:
             row = json.loads(line)
         except ValueError:

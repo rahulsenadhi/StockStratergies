@@ -41,9 +41,11 @@ def test_only_current_unacknowledged_alerts_are_sent():
 
 def _alert_and_position():
     alert = {"id": "x1", "symbol": "BHARATGEAR.NS", "action": "EXIT", "rule": "Close below 220-day EMA",
-             "trigger_bar_date": "2026-11-13", "message": "Close 98.54 is below the 220-day EMA 106.53."}
+             "trigger_bar_date": "2026-11-13", "message": "The model exits at the next session's open."}
     pos = {"symbol": "BHARATGEAR.NS", "name": "Bharat Gears", "open_qty": 1051,
-           "unrealised_pnl": -2399.0, "unrealised_pnl_pct": -2.3, "evaluation": {"last_close": 98.54}}
+           "unrealised_pnl": -2399.0, "unrealised_pnl_pct": -2.3,
+           "evaluation": {"last_close": 98.54, "last_bar_date": "2026-11-13",
+                          "levels": {"ema220": 106.53, "ema_distance_pct": -7.5, "hard_stop": 85.71}}}
     return alert, pos
 
 
@@ -212,3 +214,24 @@ def test_secret_in_error_is_redacted(tmp_path, monkeypatch):
                               secrets=notify.secrets_of(cfg))
     assert "123:abc" not in problems[0] and "***" in problems[0]
     assert "123:abc" not in log.read_text(encoding="utf-8")
+
+
+def test_alert_message_uses_evaluation_date_and_shows_rule_levels():
+    alert = {"id": "x2", "symbol": "ANDHRSUGAR.NS", "action": "EXIT", "rule": "ema220",
+             "trigger_bar_date": "2026-11-06", "message": "The model exits at the next session's open."}
+    pos = {"symbol": "ANDHRSUGAR.NS", "name": "Andhra Sugars", "open_qty": 1571,
+           "unrealised_pnl": -14000.0, "unrealised_pnl_pct": -9.3,
+           "evaluation": {"last_close": 82.1, "last_bar_date": "2026-11-13",
+                          "levels": {"ema220": 86.12, "ema_distance_pct": -4.67, "hard_stop": 81.17}}}
+    body = notify.alert_message(alert, pos)["body"]
+    assert "Last close 2026-11-13: ₹82.10" in body and "2026-11-06: ₹" not in body
+    assert "Rule levels: 220-day EMA ₹86.12 (close -4.7% from it), hard stop ₹81.17" in body
+
+
+def test_sent_log_with_bad_bytes_is_still_read(tmp_path):
+    log = tmp_path / "n.jsonl"
+    log.write_bytes(b"\xff\xfe junk\n" + json.dumps({"key": "k1", "channel": "telegram", "ok": True}).encode() + b"\n")
+    calls = []
+    notify.deliver([{"key": "k1", "subject": "s", "body": "b"}],
+                   {"telegram": lambda s, b: calls.append(s)}, log, NOW)
+    assert calls == []

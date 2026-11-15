@@ -170,3 +170,37 @@ def test_test_message_flag_sends_one_message_per_channel(tmp_path):
     assert subjects(sent) == [("telegram", "Test message from NSE Strategy Hub"),
                               ("email", "Test message from NSE Strategy Hub")]
     assert mon.calls == []
+
+
+FRIDAY = datetime(2026, 11, 13, 16, 20, tzinfo=IST)
+
+
+def test_old_session_on_a_weekday_is_a_failure_even_with_summary_off(tmp_path):
+    root = setup_root(tmp_path, settings={"notifications": {"daily_summary": False}})
+    sent, senders = recorder()
+    run(root, fake_monitor(root, ui_doc([position("A.NS", bar="2026-11-12")])), senders, now=FRIDAY)
+    problem = [b for c, s, b in sent if c == "telegram" and s == "Holdings check problem 2026-11-13"]
+    assert problem and "No price bar for 2026-11-13" in problem[0] and "2026-11-12" in problem[0]
+
+
+def test_weekend_run_is_not_a_failure(tmp_path):
+    root = setup_root(tmp_path)
+    sent, senders = recorder()
+    run(root, fake_monitor(root, ui_doc([position("A.NS", bar="2026-11-13")])), senders)   # NOW is a Saturday
+    assert not any(s.startswith("Holdings check problem") for _, s in subjects(sent))
+
+
+def test_unexpected_crash_after_monitor_still_sends_failure(tmp_path):
+    root = setup_root(tmp_path)
+    sent, senders = recorder()
+    bad_alerts = {"version": 1, "state": {}, "alerts": ["junk"], "acknowledgements": []}
+    rc = run(root, fake_monitor(root, ui_doc([position("A.NS")]), alerts=bad_alerts), senders)
+    problem = [b for c, s, b in sent if c == "telegram" and s.startswith("Holdings check problem")]
+    assert problem and "crashed" in problem[0] and rc == 1
+
+
+def test_system_exit_from_monitor_is_reported(tmp_path):
+    root = setup_root(tmp_path)
+    sent, senders = recorder()
+    run(root, fake_monitor(root, raises=SystemExit(2)), senders)
+    assert any(s.startswith("Holdings check problem") for c, s in subjects(sent) if c == "telegram")

@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from core import notify
@@ -48,7 +48,7 @@ def _run_monitor(root: Path, monitor) -> list[str]:
         monitor = portfolio_monitor.main
     try:
         rc = monitor(["--dir", str(root / "portfolio"), "--out", str(root / "ui_portfolio.json")])
-    except Exception as exc:
+    except (Exception, SystemExit) as exc:
         return [f"Holdings check crashed: {type(exc).__name__}: {exc}"]
     return [] if rc == 0 else [f"Holdings check ended with exit code {rc}."]
 
@@ -76,17 +76,43 @@ def _check_results(ui: dict | None) -> list[str]:
     return reasons
 
 
+def _session(ui: dict | None, today: str) -> str:
+    """Latest bar date across holdings; with no holdings there is nothing to call stale."""
+    bars = [(p.get("evaluation") or {}).get("last_bar_date") for p in (ui or {}).get("positions") or []]
+    bars = [b for b in bars if b]
+    return max(bars) if bars else today
+
+
+def _no_new_bar(ui: dict | None, today: str) -> list[str]:
+    """A weekday with no bar for today: holiday, or the download failed (Yahoo can return empty)."""
+    session = _session(ui, today)
+    if ui is None or session >= today or date.fromisoformat(today).weekday() >= 5:
+        return []
+    return [f"No price bar for {today}: market holiday, or the price download failed. "
+            f"Holdings were checked on {session} prices, so a sell signal from today could be missing."]
+
+
 def _messages(root: Path, ui: dict | None, reasons: list[str], today: str, settings: dict) -> list[dict]:
     alerts_doc = _read_json(root / "portfolio" / "alerts.json") or {}
     by_symbol = {p.get("symbol"): p for p in (ui or {}).get("positions") or []}
     msgs = [notify.alert_message(a, by_symbol.get(a["symbol"])) for a in notify.alerts_to_send(alerts_doc)]
     msgs += [notify.failure_message(r, today) for r in reasons]
     if ui is not None and settings.get("notifications", {}).get("daily_summary", True):
-        bars = [(p.get("evaluation") or {}).get("last_bar_date") for p in ui.get("positions") or []]
-        bars = [b for b in bars if b]
-        session = max(bars) if bars else today      # no holdings: nothing to call stale
-        msgs.append(notify.summary_message(ui, session, today))
+        msgs.append(notify.summary_message(ui, _session(ui, today), today))
     return msgs
+
+
+def _daily(root: Path, now: datetime, today: str, fetch, monitor, senders: dict, log: Path,
+           secrets: list[str]) -> list[str]:
+    print("holdings_check: refreshing Nifty prices")
+    reasons = _refresh_nifty(root, now, fetch)
+    print("holdings_check: checking holdings")
+    reasons += _run_monitor(root, monitor)
+    ui = _read_json(root / "ui_portfolio.json")
+    reasons += _check_results(ui) + _no_new_bar(ui, today)
+    msgs = _messages(root, ui, reasons, today, _settings(root))
+    print(f"holdings_check: sending {len(msgs)} message(s)")
+    return notify.deliver(msgs, senders, log, now, secrets)
 
 
 def _settings(root: Path) -> dict:
@@ -122,15 +148,16 @@ def main(argv: list[str] | None = None, *, now: datetime | None = None, root: Pa
         problems = notify.deliver([msg], senders, log, now, secrets)
     else:
         today = completed_cutoff(now).isoformat()
-        print("holdings_check: refreshing Nifty prices")
-        reasons = _refresh_nifty(root, now, fetch)
-        print("holdings_check: checking holdings")
-        reasons += _run_monitor(root, monitor)
-        ui = _read_json(root / "ui_portfolio.json")
-        reasons += _check_results(ui)
-        msgs = _messages(root, ui, reasons, today, _settings(root))
-        print(f"holdings_check: sending {len(msgs)} message(s)")
-        problems = notify.deliver(msgs, senders, log, now, secrets)
+        try:
+            problems = _daily(root, now, today, fetch, monitor, senders, log, secrets)
+        except BaseException as exc:  # report any crash through the failure message when possible
+            reason = notify._redact(f"Holdings check crashed unexpectedly: {type(exc).__name__}: {exc}", secrets)
+            print(f"holdings_check: {reason}")
+            try:
+                problems = notify.deliver([notify.failure_message(reason, today)], senders, log, now, secrets)
+            except Exception as exc2:
+                problems = [notify._redact(f"could not send the crash notice: {type(exc2).__name__}: {exc2}", secrets)]
+            problems = problems or [reason]     # a crash always makes the run fail (exit 1)
     for p in problems:
         print(f"holdings_check: send failed: {p}")
     print(f"holdings_check: done at {stamp}, {len(problems)} send problem(s)")
