@@ -10,6 +10,9 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import smtplib
+import urllib.request
+from email.message import EmailMessage
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
@@ -120,6 +123,51 @@ def failure_message(reason: str, today: str) -> dict:
     digest = hashlib.sha1(reason.encode("utf-8")).hexdigest()[:8]
     return {"key": f"failure:{today}:{digest}", "subject": f"Holdings check problem {today}",
             "body": f"{reason}\nOpen the app and press Check holdings now, or check holdings_check.log."}
+
+
+# ---------------------------------------------------------------- senders
+
+TELEGRAM_URL = "https://api.telegram.org/bot{token}/sendMessage"
+SMTP_HOST, SMTP_PORT = "smtp.gmail.com", 465
+TIMEOUT_SECONDS = 20
+
+
+def _telegram_sender(token: str, chat_id: str) -> Sender:
+    def send(subject: str, body: str) -> None:
+        data = json.dumps({"chat_id": chat_id, "text": f"{subject}\n\n{body}"}).encode("utf-8")
+        req = urllib.request.Request(TELEGRAM_URL.format(token=token), data=data, method="POST",
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:
+            reply = json.loads(resp.read().decode("utf-8"))
+        if not reply.get("ok"):
+            raise RuntimeError(f"Telegram refused the message: {reply.get('description', 'no reason given')}")
+    return send
+
+
+def _email_sender(user: str, password: str, to: str) -> Sender:
+    def send(subject: str, body: str) -> None:
+        msg = EmailMessage()
+        msg["Subject"], msg["From"], msg["To"] = subject, user, to
+        msg.set_content(body)
+        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=TIMEOUT_SECONDS) as smtp:
+            smtp.login(user, password)
+            smtp.send_message(msg)
+    return send
+
+
+def make_senders(config: dict[str, dict[str, str]]) -> dict[str, Sender]:
+    senders: dict[str, Sender] = {}
+    if "telegram" in config:
+        senders["telegram"] = _telegram_sender(config["telegram"]["token"], config["telegram"]["chat_id"])
+    if "email" in config:
+        e = config["email"]
+        senders["email"] = _email_sender(e["user"], e["password"], e["to"])
+    return senders
+
+
+def secrets_of(config: dict[str, dict[str, str]]) -> list[str]:
+    """Values that must never appear in a log or a returned problem."""
+    return [v for v in (config.get("telegram", {}).get("token"), config.get("email", {}).get("password")) if v]
 
 
 # ---------------------------------------------------------------- delivery

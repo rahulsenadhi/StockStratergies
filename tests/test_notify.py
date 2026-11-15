@@ -126,3 +126,89 @@ def test_settings_default_daily_summary_on(tmp_path):
     (tmp_path / "s.json").write_text('{"notifications": {"daily_summary": false}}', encoding="utf-8")
     s = load_settings(tmp_path / "s.json")
     assert s["notifications"]["daily_summary"] is False and "charges" in s
+
+
+class _Resp:
+    def __init__(self, payload):
+        self.payload = payload
+        self.status = 200
+
+    def read(self):
+        return json.dumps(self.payload).encode("utf-8")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_telegram_sender_posts_send_message(monkeypatch):
+    seen = {}
+
+    def fake_urlopen(req, timeout):
+        seen["url"], seen["data"], seen["timeout"] = req.full_url, json.loads(req.data), timeout
+        seen["ctype"] = req.get_header("Content-type")
+        return _Resp({"ok": True})
+    monkeypatch.setattr(notify.urllib.request, "urlopen", fake_urlopen)
+    notify.make_senders({"telegram": {"token": "123:abc", "chat_id": "42"}})["telegram"]("Subj", "Body")
+    assert seen["url"] == "https://api.telegram.org/bot123:abc/sendMessage"
+    assert seen["data"] == {"chat_id": "42", "text": "Subj\n\nBody"} and seen["timeout"] == 20
+    assert seen["ctype"] == "application/json"
+
+
+def test_telegram_ok_false_raises(monkeypatch):
+    import pytest
+    monkeypatch.setattr(notify.urllib.request, "urlopen",
+                        lambda req, timeout: _Resp({"ok": False, "description": "chat not found"}))
+    with pytest.raises(RuntimeError, match="chat not found"):
+        notify.make_senders({"telegram": {"token": "t", "chat_id": "1"}})["telegram"]("S", "B")
+
+
+def test_email_sender_uses_gmail_ssl(monkeypatch):
+    seen = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            seen["host"], seen["port"], seen["timeout"] = host, port, timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def login(self, user, password):
+            seen["login"] = (user, password)
+
+        def send_message(self, msg):
+            seen["msg"] = msg
+    monkeypatch.setattr(notify.smtplib, "SMTP_SSL", FakeSMTP)
+    cfg = {"email": {"user": "bot@x.com", "password": "pw", "to": "me@x.com"}}
+    notify.make_senders(cfg)["email"]("Subj", "Body")
+    msg = seen["msg"]
+    assert (seen["host"], seen["port"], seen["timeout"]) == ("smtp.gmail.com", 465, 20)
+    assert seen["login"] == ("bot@x.com", "pw")
+    assert msg["Subject"] == "Subj" and msg["To"] == "me@x.com" and msg["From"] == "bot@x.com"
+    assert msg.get_content().strip() == "Body"
+
+
+def test_make_senders_only_for_configured_channels():
+    assert set(notify.make_senders({"telegram": {"token": "t", "chat_id": "1"}})) == {"telegram"}
+    assert notify.make_senders({}) == {}
+
+
+def test_secret_in_error_is_redacted(tmp_path, monkeypatch):
+    cfg = {"telegram": {"token": "123:abc", "chat_id": "42"},
+           "email": {"user": "bot@x.com", "password": "hunter2", "to": "me@x.com"}}
+    assert set(notify.secrets_of(cfg)) == {"123:abc", "hunter2"}
+
+    def boom(req, timeout):
+        raise urllib.error.URLError(f"failed {req.full_url}")
+    monkeypatch.setattr(notify.urllib.request, "urlopen", boom)
+    log = tmp_path / "n.jsonl"
+    senders = {"telegram": notify.make_senders(cfg)["telegram"]}
+    problems = notify.deliver([notify.failure_message("x", "2026-11-14")], senders, log, NOW,
+                              secrets=notify.secrets_of(cfg))
+    assert "123:abc" not in problems[0] and "***" in problems[0]
+    assert "123:abc" not in log.read_text(encoding="utf-8")
