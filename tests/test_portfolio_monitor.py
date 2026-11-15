@@ -261,6 +261,33 @@ def test_append_never_overwrites_corrupt_ledger(env, capsys):
     assert (d / "ledger.json").read_text(encoding="utf-8") == "{broken"
 
 
+def test_refresh_behind_fetches_only_holdings_behind_nifty(tmp_path, monkeypatch):
+    from core import incremental
+    for sym, last in (("OLD.NS", "2026-11-04"), ("NEW.NS", "2026-11-06")):
+        (tmp_path / f"{sym}.csv").write_text(f"Date,Open,High,Low,Close,Volume\n{last},1,1,1,1,1\n",
+                                             encoding="utf-8")
+    monkeypatch.setattr(pm, "find_csv", lambda s: tmp_path / f"{s}.csv")
+    calls = []
+    monkeypatch.setattr(incremental, "refresh_tickers",
+                        lambda syms, folder, today, fn, **k: calls.append((syms, today)) or
+                        {s: "failed(empty)" for s in syms})
+    problems = pm.refresh_behind(["OLD.NS", "NEW.NS"], NIFTY, NOW)
+    assert calls == [(["OLD.NS"], date(2026, 11, 9))]
+    assert problems == ["OLD.NS: price refresh failed(empty)"]
+
+
+def test_refresh_behind_never_raises(tmp_path, monkeypatch):
+    from core import incremental
+    (tmp_path / "OLD.NS.csv").write_text("Date,Close\n2026-11-04,1\n", encoding="utf-8")
+    monkeypatch.setattr(pm, "find_csv", lambda s: tmp_path / f"{s}.csv")
+
+    def boom(*a, **k):
+        raise ConnectionError("offline")
+    monkeypatch.setattr(incremental, "refresh_tickers", boom)
+    assert pm.refresh_behind(["OLD.NS"], NIFTY, NOW) == ["price refresh failed: ConnectionError: offline"]
+    assert pm.refresh_behind(["OLD.NS"], None, NOW) == []
+
+
 def test_ack_marks_alert_and_touches_only_alerts(env, capsys):
     d, _ = env
     add(d, buy("APLAPOLLO.NS", d="2026-10-01"))

@@ -6,7 +6,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   actionTone, drawdown, held, mapAlert, mapEvaluation, mapPosition, mapTransaction, money, purchaseHref,
-  PENDING_HOLDINGS, RECONSTRUCTED_LABEL, SCHEDULER_NOTICE, UNKNOWN_DATE, type PortfolioView,
+  PENDING_HOLDINGS, RECONSTRUCTED_LABEL, ruleText, SCHEDULER_NOTICE, UNKNOWN_DATE, type PortfolioView,
 } from "@/lib/desk/portfolio-text";
 import { loadPortfolioView, readEvaluations } from "@/lib/desk/portfolio-view";
 import type { PortfolioPaths } from "@/lib/desk/portfolio";
@@ -61,6 +61,14 @@ describe("portfolio mappers", () => {
     expect(p.open_qty).toBe(0);
     expect(mapTransaction({ id: "t1", type: "VOID", voids: "t0" })).toMatchObject({ id: "t1", voids: "t0", trade_date: null });
     expect(mapAlert({ id: "a1", acknowledged_at: "" }).acknowledged_at).toBeNull();
+  });
+
+  it("shows the old-bar rule result on STALE rows", () => {
+    const stale = mapEvaluation({ action: "STALE", data_status: "STALE", last_bar_date: "2026-11-09",
+      levels: { rule_result: { action: "EXIT", rule: "EMA220 break", note: "informational only" } } });
+    expect(ruleText(stale)).toBe("Prices end 2026-11-09; on that bar: EXIT (EMA220 break)");
+    expect(ruleText(mapEvaluation({ action: "STALE", data_status: "STALE" }))).toBe("STALE");
+    expect(ruleText(mapEvaluation({ action: "HOLD", data_status: "OK" }))).toBe("No exit triggered");
   });
 
   it("maps actions to tones", () => {

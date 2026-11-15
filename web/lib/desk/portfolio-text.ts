@@ -12,6 +12,8 @@ export interface Evaluation {
   incomplete_bar_ignored: boolean; volume_ratio20: Num; drawdown_from_peak: Num; held_days: Num;
   reconstructed_first_exit: { date: string; rule: string; close: Num; level: Num } | null;
   reconstruction_note: string | null;
+  /** Set only on STALE rows: what the rules say on the old bar. Not a signal to act on. */
+  rule_result: { action: string; rule: string | null } | null;
 }
 export interface PortfolioPosition {
   symbol: string; name: string; exchange: string; open_qty: number; avg_price: Num; avg_price_incl_charges: Num;
@@ -42,7 +44,7 @@ export const num = (v: unknown): Num => typeof v === "number" && Number.isFinite
 const nullable = (v: unknown) => str(v) || null;
 
 export function mapEvaluation(value: unknown): Evaluation {
-  const v = record(value), l = record(v.levels), r = record(v.reconstructed_first_exit);
+  const v = record(value), l = record(v.levels), r = record(v.reconstructed_first_exit), rr = record(l.rule_result);
   return { symbol: str(v.symbol), action: str(v.action) || "DATA UNAVAILABLE", rule: nullable(v.rule),
     explanation: str(v.explanation) || "No saved evaluation. Check holdings now.", last_close: num(v.last_close),
     last_bar_date: nullable(v.last_bar_date), data_status: str(v.data_status) || "DATA UNAVAILABLE", evaluated_at: nullable(v.evaluated_at),
@@ -51,7 +53,16 @@ export function mapEvaluation(value: unknown): Evaluation {
     incomplete_bar_ignored: v.incomplete_bar_ignored === true, volume_ratio20: num(v.volume_ratio20),
     drawdown_from_peak: num(v.drawdown_from_peak), held_days: num(v.held_days),
     reconstructed_first_exit: str(r.date) ? { date: str(r.date), rule: str(r.rule), close: num(r.close), level: num(r.level) } : null,
-    reconstruction_note: nullable(v.reconstruction_note) };
+    reconstruction_note: nullable(v.reconstruction_note),
+    rule_result: str(rr.action) ? { action: str(rr.action), rule: nullable(rr.rule) } : null };
+}
+/** Rule column text; STALE rows show the old-bar result so the user sees what is pending. */
+export function ruleText(e: Evaluation): string {
+  if (e.action === "STALE" && e.rule_result) {
+    const verdict = e.rule_result.rule ? `${e.rule_result.action} (${e.rule_result.rule})` : e.rule_result.action;
+    return `Prices end ${e.last_bar_date ?? "unknown"}; on that bar: ${verdict}`;
+  }
+  return e.rule ?? (e.action === "HOLD" ? "No exit triggered" : e.data_status);
 }
 export function mapPosition(value: unknown): PortfolioPosition {
   const v = record(value);

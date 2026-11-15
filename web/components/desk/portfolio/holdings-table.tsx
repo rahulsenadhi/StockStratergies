@@ -1,7 +1,7 @@
 "use client";
 import { DeskTable } from "@/components/desk/desk-table";
 import { StatusPill } from "@/components/desk/primitives";
-import { actionTone, count, drawdown, held, money, percent, type PortfolioPosition } from "@/lib/desk/portfolio-text";
+import { actionTone, count, drawdown, held, money, percent, ruleText, type PortfolioPosition } from "@/lib/desk/portfolio-text";
 import type { DeskColumn } from "@/lib/desk/table";
 
 const columns: DeskColumn<PortfolioPosition>[] = [
@@ -17,7 +17,7 @@ const columns: DeskColumn<PortfolioPosition>[] = [
   { key: "held", label: "Held", kind: "text", priority: 3, sortValue: (p) => p.evaluation.held_days, render: held },
   { key: "drawdown", label: "Drawdown", kind: "num", priority: 3, sortValue: (p) => p.evaluation.drawdown_from_peak, render: drawdown },
   { key: "action", label: "Action", kind: "pill", priority: 1, sortValue: (p) => p.evaluation.action, render: (p) => <StatusPill label={p.evaluation.action} tone={actionTone(p.evaluation.action)} /> },
-  { key: "rule", label: "Rule", kind: "text", priority: 3, render: (p) => p.evaluation.rule ?? (p.evaluation.action === "HOLD" ? "No exit triggered" : p.evaluation.data_status) },
+  { key: "rule", label: "Rule", kind: "text", priority: 3, render: (p) => ruleText(p.evaluation) },
 ];
 export function HoldingsTable({ positions, selected, onSelect }: { positions: PortfolioPosition[]; selected: string | null; onSelect: (p: PortfolioPosition) => void }) {
   return <div className="portfolio-holdings"><DeskTable rows={positions} columns={columns} getRowId={(p) => p.symbol} caption="Open holdings" selectedId={selected} onRowClick={onSelect} empty="No open holdings recorded." /></div>;

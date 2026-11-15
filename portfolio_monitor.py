@@ -70,6 +70,33 @@ def load_bars(symbol: str):
     return None if p is None else _dashboard()._compute_full_indicators(str(p))
 
 
+def refresh_behind(symbols, nifty, now: datetime) -> list[str]:
+    """Re-fetch holdings whose saved bars end before Nifty's last session.
+
+    The bulk downloader marks a symbol fresh for a day even when Yahoo returned no new
+    bars, so a holding can stay behind until tomorrow; this closes that gap.  Only
+    completed bars are fetched.  Returns per-symbol problems (never raises).
+    """
+    if nifty is None:
+        return []
+    from core import incremental
+    behind: dict[Path, list[str]] = {}
+    for sym in symbols:
+        p = find_csv(sym)
+        last = incremental.last_stored_date(p) if p else None
+        if p is not None and last is not None and last < nifty:
+            behind.setdefault(p.parent, []).append(sym)
+    problems = []
+    for folder, syms in behind.items():
+        try:
+            status = incremental.refresh_tickers(syms, folder, completed_cutoff(now),
+                                                 incremental.yf_fetch, max_workers=4)
+        except Exception as exc:  # network trouble must not stop the check
+            return problems + [f"price refresh failed: {type(exc).__name__}: {exc}"]
+        problems += [f"{s}: price refresh {st}" for s, st in status.items() if st.startswith("failed")]
+    return problems
+
+
 def nifty_session_date(now: datetime):
     """Last completed session = last date in ^NSEI.csv (bar dated today only after 15:45 IST)."""
     import pandas as pd
@@ -170,7 +197,8 @@ def _doc(now: datetime, ok: bool, errors: list[str], rows=(), closed=(), alerts=
             "scheduler": "none"}
 
 
-def run(pdir: Path, ledger_path: Path, out: Path, now: datetime, loader, nifty) -> int:
+def run(pdir: Path, ledger_path: Path, out: Path, now: datetime, loader, nifty,
+        refresher=None) -> int:
     loaded = {}
     for kind, loader_fn, path in (("settings", ensure_settings, pdir / "settings.json"),
                                   ("ledger", load_ledger, ledger_path),
@@ -190,6 +218,9 @@ def run(pdir: Path, ledger_path: Path, out: Path, now: datetime, loader, nifty) 
         errors_pre = ["Market calendar unavailable: data/nse_bse/^NSEI.csv missing or unreadable"]
     else:
         errors_pre = []
+    if refresher is not None and open_pos:
+        for problem in refresher(list(open_pos), nifty, now):
+            print(f"portfolio_monitor: {problem}", file=sys.stderr)
     pairs, errors = _evaluate_all(open_pos, _strategies(ledger), nifty, now, settings, loader)
     errors = errors_pre + errors
     evals = [ev.to_dict() for _, ev in pairs]
@@ -303,7 +334,8 @@ def main(argv: list[str] | None = None, *, now: datetime | None = None,
         return validate_only(args.validate_only)
     return run(args.dir, args.ledger or args.dir / "ledger.json", args.out,
                now or datetime.now(IST), bars_loader or load_bars,
-               nifty_last_date if nifty_last_date is not None else nifty_session_date)
+               nifty_last_date if nifty_last_date is not None else nifty_session_date,
+               refresher=refresh_behind if bars_loader is None else None)
 
 
 if __name__ == "__main__":
