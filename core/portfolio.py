@@ -53,6 +53,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     },
     "bands": {"hard_stop_pct": 15.0, "ema_review_pct": 3.0, "stop_review_pct": 3.0},
     "monitor": {"experimental_reduce": False},
+    "notifications": {"daily_summary": True},
 }
 
 

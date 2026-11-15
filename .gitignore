@@ -52,3 +52,7 @@ ui_portfolio.json.tmp
 
 # user portfolio data (never committed)
 /portfolio/
+
+# Alert channel keys (Telegram bot token, Gmail app password) and the scheduled check log
+.env
+holdings_check.log
